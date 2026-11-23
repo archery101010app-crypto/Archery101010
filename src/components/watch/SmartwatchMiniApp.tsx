@@ -29,6 +29,7 @@ import BleHeartRateModal from "./BleHeartRateModal";
 import {
   BleHeartRateStatus,
   getBleHeartRateStatus,
+  requestWatchAppHeartRate,
   subscribeBleHeartRate
 } from "@/lib/scoring/bleHeartRateService";
 import AnalysisDianaSvg from "@/components/analysis/AnalysisDianaSvg";
@@ -94,9 +95,11 @@ export default function SmartwatchMiniApp({
   // 6-Digit Cloud Watch Pairing state
   const [pairingCode, setPairingCode] = useState<string>("");
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
+  const [isRegeneratingCode, setIsRegeneratingCode] = useState<boolean>(false);
   const [cloudStatus, setCloudStatus] = useState<CloudWatchPairingStatus>({
     pairingCode: "",
     cloudConnected: false,
+    cloudSyncError: "",
     watchLinked: false,
     watchSource: null,
     lastCloudSyncAt: 0,
@@ -578,15 +581,23 @@ export default function SmartwatchMiniApp({
     }
   }, [liveSnapshot, triggerHaptic]);
 
-  // Honest Watch Connection State: ONLY true when a watch with the companion app is genuinely connected OR Cloud Watch session is linked!
+  // Honest Watch Connection State: true when native companion watch is connected (CapabilityClient
+  // OR active Bluetooth PONG/message in the last 3m) OR 6-Digit Cloud Watch session is linked!
+  const nowConnMs = Date.now();
+  const hasRecentNativeActivity =
+    watchConnStatus.bridgeReady &&
+    ((watchConnStatus.lastPongAt > 0 && nowConnMs - watchConnStatus.lastPongAt <= 3 * 60 * 1000) ||
+      (watchConnStatus.lastMessageAt > 0 &&
+        nowConnMs - watchConnStatus.lastMessageAt <= 3 * 60 * 1000));
   const hasNativeWatchAppConnected =
     watchConnStatus.bridgeReady &&
-    watchConnStatus.connectedNodesCount > 0 &&
-    (watchConnStatus.watchAppInstalledCount ?? 0) > 0;
+    ((watchConnStatus.connectedNodesCount > 0 &&
+      (watchConnStatus.watchAppInstalledCount ?? 0) > 0) ||
+      hasRecentNativeActivity);
   const hasCloudWatchLinked =
     cloudStatus.watchLinked &&
     cloudStatus.lastWatchSeenAt > 0 &&
-    Date.now() - cloudStatus.lastWatchSeenAt <= 10 * 60 * 1000;
+    nowConnMs - cloudStatus.lastWatchSeenAt <= 10 * 60 * 1000;
   const isWatchConnected = hasNativeWatchAppConnected || hasCloudWatchLinked;
 
   // Dual-Key Biomechanical + High-Frequency Acoustic String-Snap Detector (Standalone /watch only)
@@ -1080,6 +1091,22 @@ export default function SmartwatchMiniApp({
     } catch {}
   };
 
+  const handleRegeneratePairingCode = async () => {
+    const uid = auth.currentUser?.uid || "";
+    if (!uid || isRegeneratingCode) return;
+    triggerHaptic(30);
+    setIsRegeneratingCode(true);
+    try {
+      const fresh = await getOrCreatePhoneWatchPairingCode(uid, true);
+      if (fresh) {
+        setPairingCode(fresh);
+        publishWatchState(activeState);
+      }
+    } finally {
+      setIsRegeneratingCode(false);
+    }
+  };
+
   const handleManualAnalysisStart = useCallback(() => {
     if (manualAnalysisStartRef.current) return;
     const now = Date.now();
@@ -1389,40 +1416,34 @@ export default function SmartwatchMiniApp({
                 </button>
               </div>
 
-              <div className="flex-1 flex items-center justify-center pointer-events-none z-[5] my-[2px]">
-                <AnalysisDianaSvg shot={lastAnalysisShot} sizePx={142} compactWatchMode />
-              </div>
+              <button
+                type="button"
+                onClick={handlePhysicalWatchButton}
+                aria-label={
+                  manualAnalysisStartMs
+                    ? tx("Finalizar tiro", "End shot")
+                    : tx("Iniciar tiro", "Start shot")
+                }
+                className="flex-1 flex items-center justify-center z-[5] my-[1px] cursor-pointer active:scale-[0.98] transition"
+              >
+                <AnalysisDianaSvg shot={lastAnalysisShot} sizePx={124} compactWatchMode />
+              </button>
 
               <div className="flex flex-col items-center gap-[5px] z-10 shrink-0 w-full">
-                <div className="grid grid-cols-2 gap-[6px] w-[184px]">
-                  <button
-                    type="button"
-                    disabled={Boolean(manualAnalysisStartMs)}
-                    onClick={handleManualAnalysisStart}
-                    className={`h-[26px] rounded-full text-[9px] font-black uppercase tracking-[0.07em] flex items-center justify-center gap-[4px] cursor-pointer active:scale-95 transition tabular-nums ${
-                      manualAnalysisStartMs
-                        ? "bg-[#09131E] border border-[#00BFFF]/45 text-white/60"
-                        : "bg-[#00BFFF] text-black"
-                    }`}
-                  >
-                    <span>▶</span>
-                    <span>{tx("Inicio", "Start")}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={!manualAnalysisStartMs}
-                    onClick={handleManualAnalysisStop}
-                    className={`h-[26px] rounded-full text-[9px] font-black uppercase tracking-[0.07em] flex items-center justify-center gap-[4px] cursor-pointer active:scale-95 transition tabular-nums ${
-                      manualAnalysisStartMs
-                        ? "bg-[#FF1E1E] text-white border border-white/25"
-                        : "bg-[#11151E] border border-white/[0.10] text-white/40"
-                    }`}
-                  >
-                    <span>■</span>
-                    <span>{tx("Final", "End")}</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handlePhysicalWatchButton}
+                  className={`w-[184px] h-[44px] rounded-full text-[14px] font-black uppercase tracking-[0.07em] flex items-center justify-center gap-[6px] cursor-pointer active:scale-95 transition tabular-nums border ${
+                    manualAnalysisStartMs
+                      ? "bg-[#FF1E1E] text-white border-white/35"
+                      : "bg-[#00BFFF] text-black border-white/20"
+                  }`}
+                >
+                  <span>{manualAnalysisStartMs ? "■" : "▶"}</span>
+                  <span>
+                    {manualAnalysisStartMs ? tx("Final", "End") : tx("Inicio", "Start")}
+                  </span>
+                </button>
 
                 <div className="flex items-center gap-[5px]">
                   {[0, 1].map((idx) => (
@@ -2149,6 +2170,15 @@ export default function SmartwatchMiniApp({
                   setIsSyncingWatch(true);
                   publishWatchState(activeState);
                   pingNativeWatch();
+                  requestWatchAppHeartRate();
+                  const curUid = auth.currentUser?.uid || "";
+                  if (curUid) {
+                    getOrCreatePhoneWatchPairingCode(curUid, false)
+                      .then((c) => {
+                        if (c) setPairingCode(c);
+                      })
+                      .catch(() => {});
+                  }
                   setTimeout(() => setIsSyncingWatch(false), 700);
                 }}
                 aria-label={tx("SYNC · Sincronizar reloj", "SYNC · Sync watch")}
@@ -2171,39 +2201,75 @@ export default function SmartwatchMiniApp({
           </div>
 
           {/* 6-Digit Cloud Watch Pairing Bar (links Sports Smartwatch or /watch in 5 seconds) */}
-          {pairingCode && (
-            <div className="w-full bg-[#07090E] border border-white/10 rounded-[13px] px-3 py-2 flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-[7.5px] font-extrabold tracking-[0.11em] text-[#8E96A4] uppercase whitespace-nowrap">
-                  {tx("CÓDIGO NUBE · RELOJ DEPORTIVO", "CLOUD CODE · SPORTS WATCH")}
-                </div>
-                <div className="text-[9px] font-bold text-white/80 break-words leading-tight">
-                  {hasCloudWatchLinked
-                    ? tx("● Reloj vinculado en vivo", "● Watch linked live")
-                    : tx(
-                        "Ingresa este código en tu reloj o /watch",
-                        "Enter this code on your watch or /watch"
-                      )}
-                </div>
+          <div className="w-full bg-[#07090E] border border-white/10 rounded-[13px] px-3 py-2 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[7.5px] font-extrabold tracking-[0.11em] text-[#8E96A4] uppercase whitespace-nowrap">
+                {tx("CÓDIGO NUBE · RELOJ DEPORTIVO", "CLOUD CODE · SPORTS WATCH")}
               </div>
+              <div
+                className={`text-[9.5px] font-bold break-words leading-tight ${
+                  hasCloudWatchLinked
+                    ? "text-[#00C853]"
+                    : cloudStatus.cloudSyncError
+                    ? "text-[#FFE500]"
+                    : "text-white/85"
+                }`}
+              >
+                {hasCloudWatchLinked
+                  ? tx("● Reloj vinculado en vivo", "● Watch linked live")
+                  : cloudStatus.cloudSyncError === "AUTH_REQUIRED"
+                  ? tx(
+                      "Inicia sesión para activar el código en nube",
+                      "Sign in to enable the cloud code"
+                    )
+                  : cloudStatus.cloudSyncError
+                  ? tx(
+                      "Sin conexión a nube · Toca ↻ para reintentar",
+                      "Cloud offline · Tap ↻ to retry"
+                    )
+                  : cloudStatus.cloudConnected && pairingCode
+                  ? tx(
+                      "● Código activo en nube · ingrésalo en tu reloj",
+                      "● Code live in cloud · enter on your watch"
+                    )
+                  : tx("Preparando código en nube...", "Preparing cloud code...")}
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {pairingCode && (
+                <button
+                  type="button"
+                  onClick={handleCopyPairingCode}
+                  className="bg-[#020305] border border-[#FFE500]/45 rounded-[9px] px-2.5 py-1 inline-flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95 transition"
+                  title={tx("Copiar código de 6 dígitos", "Copy 6-digit code")}
+                  aria-label={`${tx("Copiar código", "Copy code")} ${pairingCode}`}
+                >
+                  <span className="font-sans text-[13.5px] font-extrabold tracking-[0.16em] text-[#FFE500] tabular-nums">
+                    {pairingCode}
+                  </span>
+                  {copiedCode ? (
+                    <Check size={11} aria-hidden="true" className="text-[#00A8F3]" />
+                  ) : (
+                    <Copy size={11} aria-hidden="true" className="text-[#8E96A4]" />
+                  )}
+                </button>
+              )}
               <button
                 type="button"
-                onClick={handleCopyPairingCode}
-                className="bg-[#020305] border border-[#FFE500]/45 rounded-[9px] px-2.5 py-1 inline-flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95 transition"
-                title={tx("Copiar código de 6 dígitos", "Copy 6-digit code")}
-                aria-label={`${tx("Copiar código", "Copy code")} ${pairingCode}`}
+                onClick={handleRegeneratePairingCode}
+                disabled={isRegeneratingCode || !auth.currentUser?.uid}
+                className="w-[28px] h-[28px] rounded-[9px] bg-[#081320] border border-[#00A8F3]/45 text-white flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-40"
+                title={tx("Generar nuevo código en nube", "Generate new cloud code")}
+                aria-label={tx("Generar nuevo código de 6 dígitos", "Generate new 6-digit code")}
               >
-                <span className="font-sans text-[13.5px] font-extrabold tracking-[0.16em] text-[#FFE500] tabular-nums">
-                  {pairingCode}
-                </span>
-                {copiedCode ? (
-                  <Check size={11} aria-hidden="true" className="text-[#00A8F3]" />
-                ) : (
-                  <Copy size={11} aria-hidden="true" className="text-[#8E96A4]" />
-                )}
+                <RefreshCw
+                  size={11}
+                  aria-hidden="true"
+                  className={isRegeneratingCode ? "animate-spin" : ""}
+                />
               </button>
             </div>
-          )}
+          </div>
 
           {/* Universal Bluetooth Heart Rate Bar */}
           <div className="w-full bg-[#07090E] border border-white/10 rounded-[13px] px-3 py-2.5 flex items-center justify-between gap-2">

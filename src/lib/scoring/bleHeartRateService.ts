@@ -199,6 +199,8 @@ interface NativeBleBridge {
   disconnectDevice: (forget?: boolean) => void;
   tryAutoReconnectSaved?: () => void;
   getStatusJson?: () => string;
+  requestWatchHeartRate?: () => void;
+  getLastWearHeartRateJson?: () => string;
 }
 
 const sessionTracker = new BleHeartRateSessionTracker();
@@ -518,6 +520,14 @@ function ensureInitialized(): void {
         applyNativePayload(JSON.parse(initialRaw));
       }
     } catch {}
+    if (typeof bridge.getLastWearHeartRateJson === "function") {
+      try {
+        const cachedWear = bridge.getLastWearHeartRateJson();
+        if (cachedWear) {
+          applyWearPayload(JSON.parse(cachedWear));
+        }
+      } catch {}
+    }
   } else {
     emitStatus();
   }
@@ -749,10 +759,18 @@ export function stopBleHeartRateScan(): void {
 
 /** Asks the ARCHERY 101010 watch app (if open on a paired watch) to start streaming live pulse. */
 export function requestWatchAppHeartRate(): void {
-  const bridge = getNativeBridge() as (NativeBleBridge & { requestWatchHeartRate?: () => void }) | null;
+  const bridge = getNativeBridge();
   if (bridge && typeof bridge.requestWatchHeartRate === "function") {
     try {
       bridge.requestWatchHeartRate();
+    } catch {}
+  }
+  if (bridge && typeof bridge.getLastWearHeartRateJson === "function") {
+    try {
+      const cachedWear = bridge.getLastWearHeartRateJson();
+      if (cachedWear) {
+        applyWearPayload(JSON.parse(cachedWear));
+      }
     } catch {}
   }
 }

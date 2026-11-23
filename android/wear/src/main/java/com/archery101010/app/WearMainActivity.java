@@ -3,8 +3,13 @@ package com.archery101010.app;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.provider.Settings;
+import android.view.InputDevice;
+import android.view.MotionEvent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -31,7 +36,6 @@ import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.view.GestureDetector;
 import android.view.KeyEvent;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import com.google.android.gms.wearable.DataClient;
@@ -103,7 +107,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             return;
         }
         if ("/archery101010/hr_request".equals(path)) {
-            runOnUiThread(() -> startHeartRateStreaming(true));
+            runOnUiThread(() -> startHeartRateStreaming(true, true));
             return;
         }
         if (payload != null && !payload.isEmpty()) {
@@ -183,18 +187,27 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private String syncedBowWrist = "LEFT";
     private int syncedHeartRateBpm = 0;
 
-    // ── Live wrist pulse streaming to the phone (/archery101010/hr) ──
+    // ── Live wrist pulse streaming to the phone (/archery101010/hr + 6-Digit Cloud Firestore) ──
     private static final int REQ_HEART_RATE = 1011;
     private static final String PERM_READ_HEART_RATE = "android.permission.health.READ_HEART_RATE";
     private static final long HR_SEND_INTERVAL_MS = 1000L;
-    private static final long LOCAL_HR_FRESH_MS = 10_000L;
+    private static final long HR_CLOUD_PUSH_INTERVAL_MS = 8000L;
+    private static final long LOCAL_HR_FRESH_MS = 12_000L;
     private Sensor heartRateSensor;
     private boolean isHrSensorRegistered = false;
     private boolean hrPermissionRequestedThisRun = false;
+    private boolean hrPermissionPromptInFlight = false;
+    private int hrPermissionDeniedCount = 0;
+    private volatile String hrStatusCode = "idle"; // idle | permission_denied | no_sensor | reading | no_contact | ok
     private volatile int localSensorHrBpm = 0;
     private volatile long localSensorHrAtMs = 0L;
+    private volatile long localHrSumBpm = 0L;
+    private volatile int localHrSampleCount = 0;
+    private volatile int localAvgHrBpm = 0;
+    private volatile int localMaxHrBpm = 0;
     private long lastHrSentMs = 0L;
     private long lastHrStatusSentMs = 0L;
+    private long lastCloudHrPushMs = 0L;
     private String cachedWatchDisplayName = null;
 
     private final SensorEventListener heartRateListener = new SensorEventListener() {
@@ -204,20 +217,37 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             long now = System.currentTimeMillis();
             if (event.accuracy == SensorManager.SENSOR_STATUS_NO_CONTACT) {
                 localSensorHrBpm = 0;
+                hrStatusCode = "no_contact";
                 if (now - lastHrStatusSentMs >= 4000L) {
                     lastHrStatusSentMs = now;
                     sendHeartRateToPhone(0, "no_contact");
+                    runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
                 }
                 return;
             }
             int bpm = Math.round(event.values[0]);
             if (bpm < 30 || bpm > 245) return;
+            boolean isFirstReading = (localSensorHrBpm < 30);
             localSensorHrBpm = bpm;
             localSensorHrAtMs = now;
             syncedHeartRateBpm = bpm;
-            if (now - lastHrSentMs >= HR_SEND_INTERVAL_MS) {
+            hrStatusCode = "ok";
+            localHrSumBpm += bpm;
+            localHrSampleCount += 1;
+            localAvgHrBpm = (int) Math.round((double) localHrSumBpm / Math.max(1, localHrSampleCount));
+            if (bpm > localMaxHrBpm) {
+                localMaxHrBpm = bpm;
+            }
+            if (isFirstReading || (now - lastHrSentMs) >= HR_SEND_INTERVAL_MS) {
                 lastHrSentMs = now;
                 sendHeartRateToPhone(bpm, "ok");
+                runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+            }
+            if (hasPairingCode && pairingCode.length() == 6 && !isEditingCode
+                    && (isFirstReading || (now - lastCloudHrPushMs) >= HR_CLOUD_PUSH_INTERVAL_MS)) {
+                lastCloudHrPushMs = now;
+                lastCloudHeartbeatTouchMs = now;
+                touchWatchHeartbeatInFirestore(pairingCode, now);
             }
         }
 
@@ -229,12 +259,13 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         return localSensorHrBpm >= 30 && (System.currentTimeMillis() - localSensorHrAtMs) < LOCAL_HR_FRESH_MS;
     }
 
+    private String getRequiredHeartRatePermission() {
+        return Build.VERSION.SDK_INT >= 36 ? PERM_READ_HEART_RATE : Manifest.permission.BODY_SENSORS;
+    }
+
     private boolean hasHeartRatePermission() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true;
-        if (Build.VERSION.SDK_INT >= 36) {
-            return checkSelfPermission(PERM_READ_HEART_RATE) == PackageManager.PERMISSION_GRANTED;
-        }
-        return checkSelfPermission(Manifest.permission.BODY_SENSORS) == PackageManager.PERMISSION_GRANTED;
+        return checkSelfPermission(getRequiredHeartRatePermission()) == PackageManager.PERMISSION_GRANTED;
     }
 
     private String getWatchDisplayName() {
@@ -255,6 +286,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             JSONObject obj = new JSONObject();
             obj.put("type", "HR");
             obj.put("bpm", bpm);
+            if (localAvgHrBpm >= 30) obj.put("avgBpm", localAvgHrBpm);
+            if (localMaxHrBpm >= 30) obj.put("maxBpm", localMaxHrBpm);
             obj.put("status", status);
             obj.put("deviceName", getWatchDisplayName());
             obj.put("_ts", System.currentTimeMillis());
@@ -262,34 +295,98 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         } catch (Exception ignored) {}
     }
 
-    private synchronized void startHeartRateStreaming(boolean allowPermissionPrompt) {
-        if (sensorManager == null) return;
-        if (heartRateSensor == null) {
-            heartRateSensor = sensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE);
-        }
-        if (heartRateSensor == null) {
-            sendHeartRateToPhone(0, "no_sensor");
+    private void requestHeartRatePermissionInteractive() {
+        if (hasHeartRatePermission()) {
+            heartRateSensor = null;
+            startHeartRateStreaming(false, false);
             return;
         }
-        if (!hasHeartRatePermission()) {
-            if (allowPermissionPrompt && !hrPermissionRequestedThisRun && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                hrPermissionRequestedThisRun = true;
-                String perm = Build.VERSION.SDK_INT >= 36 ? PERM_READ_HEART_RATE : Manifest.permission.BODY_SENSORS;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            String perm = getRequiredHeartRatePermission();
+            boolean shouldShow = false;
+            try {
+                shouldShow = shouldShowRequestPermissionRationale(perm);
+            } catch (Exception ignored) {}
+            if (hrPermissionDeniedCount >= 2 && !shouldShow) {
                 try {
-                    requestPermissions(new String[]{perm}, REQ_HEART_RATE);
+                    Intent settingsIntent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                    settingsIntent.setData(Uri.fromParts("package", getPackageName(), null));
+                    settingsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(settingsIntent);
+                    return;
                 } catch (Exception ignored) {}
+            }
+            hrPermissionRequestedThisRun = true;
+            hrPermissionPromptInFlight = true;
+            try {
+                requestPermissions(new String[]{perm}, REQ_HEART_RATE);
+            } catch (Exception ignored) {
+                hrPermissionPromptInFlight = false;
+            }
+        }
+    }
+
+    private synchronized void startHeartRateStreaming(boolean allowPermissionPrompt) {
+        startHeartRateStreaming(allowPermissionPrompt, false);
+    }
+
+    private synchronized void startHeartRateStreaming(boolean allowPermissionPrompt, boolean forcePrompt) {
+        if (sensorManager == null) return;
+        // CRITICAL (Samsung Galaxy Watch / Wear OS 4-6): ALWAYS check & request HR permission FIRST
+        // BEFORE calling getDefaultSensor(TYPE_HEART_RATE), because Wear OS hides/returns null
+        // for TYPE_HEART_RATE while BODY_SENSORS / READ_HEART_RATE is not granted!
+        if (!hasHeartRatePermission()) {
+            hrStatusCode = "permission_denied";
+            if (allowPermissionPrompt && !hrPermissionPromptInFlight
+                    && (forcePrompt || !hrPermissionRequestedThisRun)
+                    && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                hrPermissionRequestedThisRun = true;
+                hrPermissionPromptInFlight = true;
+                final String perm = getRequiredHeartRatePermission();
+                runOnUiThread(() -> {
+                    try {
+                        requestPermissions(new String[]{perm}, REQ_HEART_RATE);
+                    } catch (Exception ignored) {
+                        hrPermissionPromptInFlight = false;
+                    }
+                });
             } else {
                 sendHeartRateToPhone(0, "permission_denied");
             }
+            runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+            return;
+        }
+
+        if (heartRateSensor == null) {
+            heartRateSensor = sensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE);
+            if (heartRateSensor == null) {
+                try {
+                    List<Sensor> hrList = sensorManager.getSensorList(Sensor.TYPE_HEART_RATE);
+                    if (hrList != null && !hrList.isEmpty()) {
+                        heartRateSensor = hrList.get(0);
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+        if (heartRateSensor == null) {
+            hrStatusCode = "no_sensor";
+            sendHeartRateToPhone(0, "no_sensor");
+            runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
             return;
         }
         if (!isHrSensorRegistered) {
             try {
                 isHrSensorRegistered = sensorManager.registerListener(
                         heartRateListener, heartRateSensor, SensorManager.SENSOR_DELAY_NORMAL);
+                if (isHrSensorRegistered && localSensorHrBpm < 30) {
+                    hrStatusCode = "reading";
+                }
             } catch (Exception ignored) {
                 isHrSensorRegistered = false;
             }
+            runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+        } else if (isLocalHeartRateFresh()) {
+            sendHeartRateToPhone(localSensorHrBpm, "ok");
         }
     }
 
@@ -370,6 +467,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private boolean isEditingCode = false;
     private int editDigitPos = 0;
     private volatile boolean isCloudSynced = false;
+    private volatile String cloudLinkStatus = ""; // "" | LINKING | SYNCED | NOT_FOUND | NO_NET
     private final ExecutorService cloudExecutor = Executors.newSingleThreadExecutor();
 
     // Connection & sync race-condition guards
@@ -575,13 +673,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         return true;
     }
 
-    @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (event != null && event.getRepeatCount() > 0) {
-            return super.onKeyDown(keyCode, event);
-        }
-        boolean isHardwareStemOrAction =
-                keyCode == KeyEvent.KEYCODE_STEM_PRIMARY
+    private long lastRotaryActionMs = 0L;
+
+    private boolean isHardwareActionKeyCode(int keyCode) {
+        return keyCode == KeyEvent.KEYCODE_STEM_PRIMARY
                 || keyCode == KeyEvent.KEYCODE_STEM_1
                 || keyCode == KeyEvent.KEYCODE_STEM_2
                 || keyCode == KeyEvent.KEYCODE_STEM_3
@@ -589,9 +684,13 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 || keyCode == KeyEvent.KEYCODE_ENTER
                 || keyCode == KeyEvent.KEYCODE_BUTTON_START
                 || keyCode == KeyEvent.KEYCODE_BUTTON_A
-                || keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE;
+                || keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+                || keyCode == KeyEvent.KEYCODE_VOLUME_UP
+                || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN;
+    }
 
-        if (isHardwareStemOrAction) {
+    private boolean handlePhysicalWatchKeyAction(int keyCode) {
+        if (isHardwareActionKeyCode(keyCode)) {
             if (analysisMode) {
                 toggleManualAnalysisFromWatchHardware();
                 return true;
@@ -605,12 +704,90 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 }
                 return true;
             }
+            if (screenIndex == 4) {
+                long now = System.currentTimeMillis();
+                if (now - lastPhysicalButtonToggleMs >= 300L) {
+                    lastPhysicalButtonToggleMs = now;
+                    if (!isEditingCode) {
+                        isEditingCode = true;
+                        editDigitPos = 0;
+                        markUserActivity(true);
+                        triggerHaptic(20);
+                        if (canvasView != null) canvasView.invalidate();
+                    } else if (editDigitPos < 5) {
+                        editDigitPos++;
+                        markUserActivity(true);
+                        triggerHaptic(20);
+                        if (canvasView != null) canvasView.invalidate();
+                    } else {
+                        commitPairingDigits();
+                    }
+                }
+                return true;
+            }
         }
         if (keyCode == KeyEvent.KEYCODE_BACK && analysisMode && analysisPage == 0) {
             toggleManualAnalysisFromWatchHardware();
             return true;
         }
+        return false;
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event != null && event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+            if (handlePhysicalWatchKeyAction(event.getKeyCode())) {
+                return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (event != null && event.getRepeatCount() > 0) {
+            return super.onKeyDown(keyCode, event);
+        }
+        if (handlePhysicalWatchKeyAction(keyCode)) {
+            return true;
+        }
         return super.onKeyDown(keyCode, event);
+    }
+
+    @Override
+    public boolean onGenericMotionEvent(MotionEvent event) {
+        if (event != null && event.getAction() == MotionEvent.ACTION_SCROLL
+                && (event.isFromSource(InputDevice.SOURCE_ROTARY_ENCODER)
+                    || event.isFromSource(InputDevice.SOURCE_CLASS_POINTER))) {
+            float delta = -event.getAxisValue(MotionEvent.AXIS_SCROLL);
+            if (Math.abs(delta) >= 0.05f) {
+                long now = System.currentTimeMillis();
+                if (now - lastRotaryActionMs >= 160L) {
+                    lastRotaryActionMs = now;
+                    int dir = delta > 0f ? 1 : -1;
+                    if (screenIndex == 4 && !analysisMode) {
+                        adjustSelectedCodeDigit(dir);
+                        return true;
+                    }
+                    if (analysisMode) {
+                        analysisPage = (dir > 0) ? 1 : 0;
+                        syncBackNavigationCallback();
+                        markUserActivity(false);
+                        triggerHaptic(15);
+                        if (canvasView != null) canvasView.invalidate();
+                        return true;
+                    }
+                    screenIndex = (dir > 0) ? ((screenIndex + 1) % 5) : ((screenIndex + 4) % 5);
+                    isEditingCode = false;
+                    syncBackNavigationCallback();
+                    markUserActivity(false);
+                    triggerHaptic(15);
+                    if (canvasView != null) canvasView.invalidate();
+                    return true;
+                }
+            }
+        }
+        return super.onGenericMotionEvent(event);
     }
 
     private void syncBackNavigationCallback() {
@@ -693,12 +870,36 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
         canvasView = new WearCanvasView(this);
         setContentView(canvasView);
+        canvasView.requestFocus();
 
         ensureSensorAndHeartbeatActive();
         initWearCommunication();
-        startHeartRateStreaming(true);
+        syncBackNavigationCallback();
+        if (hasHeartRatePermission()) {
+            startHeartRateStreaming(false, false);
+        } else {
+            // Defer HR permission prompt until Wear OS Activity window attaches (Samsung One UI Watch)
+            canvasView.postDelayed(() -> {
+                if (!isFinishing() && !hasHeartRatePermission() && !hrPermissionRequestedThisRun) {
+                    startHeartRateStreaming(true, false);
+                }
+            }, 450L);
+        }
         if (hasPairingCode && pairingCode.length() == 6) {
             pollFirestoreCloud();
+        }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            if (canvasView != null) canvasView.requestFocus();
+            if (!hasHeartRatePermission() && !hrPermissionRequestedThisRun && !hrPermissionPromptInFlight) {
+                startHeartRateStreaming(true, false);
+            } else if (hasHeartRatePermission() && !isHrSensorRegistered) {
+                startHeartRateStreaming(false, false);
+            }
         }
     }
 
@@ -711,11 +912,17 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQ_HEART_RATE) {
+            hrPermissionPromptInFlight = false;
             if (hasHeartRatePermission()) {
-                startHeartRateStreaming(false);
+                hrPermissionDeniedCount = 0;
+                heartRateSensor = null; // Re-query freshly now that Wear OS granted HR permission
+                startHeartRateStreaming(false, false);
             } else {
+                hrPermissionDeniedCount++;
+                hrStatusCode = "permission_denied";
                 sendHeartRateToPhone(0, "permission_denied");
             }
+            if (canvasView != null) canvasView.invalidate();
             return;
         }
         if (requestCode == REQ_MIC_AUTO_SHOT) {
@@ -962,6 +1169,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     runOnUiThread(() -> {
                         if (canvasView != null) canvasView.invalidate();
                     });
+                    return;
+                }
+                if ("/archery101010/hr_request".equals(path)) {
+                    runOnUiThread(() -> startHeartRateStreaming(true, true));
                     return;
                 }
                 if (path.startsWith("/archery101010/")) {
@@ -1266,6 +1477,16 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     }
                 } catch (Exception ignored) {}
             }
+            String incomingPairingCode = obj.optString("pairingCode", rootObj.optString("pairingCode", "")).trim();
+            if (incomingPairingCode.matches("^[1-9][0-9]{5}$")
+                    && (!hasPairingCode || !incomingPairingCode.equals(pairingCode))) {
+                pairingCode = incomingPairingCode;
+                hasPairingCode = true;
+                parsePairingDigitsFromString(incomingPairingCode);
+                lastCloudHeartbeatTouchMs = 0L;
+                saveState();
+                pollFirestoreCloud();
+            }
             if (obj.has("analysisMode") || obj.has("practiceType")) {
                 boolean nextAnalysis = obj.optBoolean("analysisMode", "Análisis".equals(obj.optString("practiceType", "")));
                 if (nextAnalysis != analysisMode) {
@@ -1276,6 +1497,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                         heartbeatHandler.removeCallbacks(manualTimerRunnable);
                     }
                     syncShotDetectionSensors();
+                    runOnUiThread(this::syncBackNavigationCallback);
                 }
             }
             if (incomingArrows == 0) {
@@ -1413,12 +1635,14 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         pairingCode = sb.toString();
         hasPairingCode = true;
         isEditingCode = false;
+        isCloudSynced = false;
+        cloudLinkStatus = "LINKING";
         lastRemoteCloudSig = "";
+        lastCloudHeartbeatTouchMs = 0L;
         markUserActivity(true);
         saveState();
         triggerHaptic(45);
         pollFirestoreCloud();
-        syncTelemetryToPhone();
         if (canvasView != null) canvasView.invalidate();
     }
 
@@ -1498,15 +1722,41 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 docFields.put("watchHeartbeatAt", new JSONObject().put("integerValue", String.valueOf(nowMs)));
                 docFields.put("updatedAt", new JSONObject().put("integerValue", String.valueOf(nowMs)));
 
+                StringBuilder mask = new StringBuilder();
+                mask.append("updateMask.fieldPaths=lastWatchCmd")
+                    .append("&updateMask.fieldPaths=lastWatchCmdId")
+                    .append("&updateMask.fieldPaths=lastWatchCmdSeq")
+                    .append("&updateMask.fieldPaths=watchStepsCount")
+                    .append("&updateMask.fieldPaths=watchDistanceM")
+                    .append("&updateMask.fieldPaths=watchSource")
+                    .append("&updateMask.fieldPaths=watchHeartbeatAt")
+                    .append("&updateMask.fieldPaths=updatedAt");
+
+                int hrLive = isLocalHeartRateFresh() ? localSensorHrBpm : 0;
+                int hrAvg = localAvgHrBpm;
+                int hrMax = localMaxHrBpm;
+                if (hrLive >= 30 && hrLive <= 245) {
+                    docFields.put("watchHeartRateBpm", new JSONObject().put("integerValue", String.valueOf(hrLive)));
+                    mask.append("&updateMask.fieldPaths=watchHeartRateBpm");
+                }
+                if (hrAvg >= 30 && hrAvg <= 245) {
+                    docFields.put("watchAvgHeartRateBpm", new JSONObject().put("integerValue", String.valueOf(hrAvg)));
+                    mask.append("&updateMask.fieldPaths=watchAvgHeartRateBpm");
+                }
+                if (hrMax >= 30 && hrMax <= 245) {
+                    docFields.put("watchMaxHeartRateBpm", new JSONObject().put("integerValue", String.valueOf(hrMax)));
+                    mask.append("&updateMask.fieldPaths=watchMaxHeartRateBpm");
+                }
+
                 String urlStr = "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/"
                         + code
-                        + "?updateMask.fieldPaths=lastWatchCmd&updateMask.fieldPaths=lastWatchCmdId&updateMask.fieldPaths=lastWatchCmdSeq&updateMask.fieldPaths=watchStepsCount&updateMask.fieldPaths=watchDistanceM&updateMask.fieldPaths=watchSource&updateMask.fieldPaths=watchHeartbeatAt&updateMask.fieldPaths=updatedAt&currentDocument.exists=true";
+                        + "?" + mask + "&currentDocument.exists=true";
                 conn = (HttpURLConnection) new URL(urlStr).openConnection();
                 conn.setRequestMethod("POST");
                 conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
                 conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
-                conn.setConnectTimeout(5000);
-                conn.setReadTimeout(5000);
+                conn.setConnectTimeout(6000);
+                conn.setReadTimeout(6000);
                 conn.setDoOutput(true);
 
                 byte[] body = new JSONObject().put("fields", docFields).toString().getBytes(StandardCharsets.UTF_8);
@@ -1515,11 +1765,19 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 }
                 int rc = conn.getResponseCode();
                 boolean ok = rc >= 200 && rc < 300;
-                if (ok != isCloudSynced) {
-                    isCloudSynced = ok;
+                if (ok) {
+                    isCloudSynced = true;
+                    cloudLinkStatus = "SYNCED";
+                } else if (rc == 404 || rc == 401 || rc == 403) {
+                    isCloudSynced = false;
+                    cloudLinkStatus = "NOT_FOUND";
+                }
+                runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+            } catch (Exception ignored) {
+                if ("LINKING".equals(cloudLinkStatus)) {
+                    cloudLinkStatus = "NO_NET";
                     runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
                 }
-            } catch (Exception ignored) {
             } finally {
                 if (conn != null) conn.disconnect();
             }
@@ -1562,8 +1820,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     JSONObject fields = doc.optJSONObject("fields");
                     if (fields != null) {
                         isCloudSynced = true;
+                        cloudLinkStatus = "SYNCED";
                         long now = System.currentTimeMillis();
-                        if (now - lastCloudHeartbeatTouchMs >= 55_000L) {
+                        if (lastCloudHeartbeatTouchMs == 0L || (now - lastCloudHeartbeatTouchMs) >= 35_000L) {
                             lastCloudHeartbeatTouchMs = now;
                             touchWatchHeartbeatInFirestore(code, now);
                         }
@@ -1749,6 +2008,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                                     heartbeatHandler.removeCallbacks(manualTimerRunnable);
                                 }
                                 syncShotDetectionSensors();
+                                syncBackNavigationCallback();
                             }
                             if (fsArrows == 0) {
                                 lastAnalysisShotNum = 0;
@@ -1768,9 +2028,17 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     }
                 } else if (rc == 404 || rc == 401 || rc == 403) {
                     isCloudSynced = false;
+                    cloudLinkStatus = "NOT_FOUND";
+                    runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+                } else {
+                    isCloudSynced = false;
+                    cloudLinkStatus = "NO_NET";
                     runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
                 }
             } catch (Exception ignored) {
+                isCloudSynced = false;
+                cloudLinkStatus = "NO_NET";
+                runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
             } finally {
                 if (conn != null) conn.disconnect();
             }
@@ -1785,22 +2053,57 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 JSONObject docFields = new JSONObject();
                 docFields.put("watchSource", new JSONObject().put("stringValue", "WEAR_OS"));
                 docFields.put("watchHeartbeatAt", new JSONObject().put("integerValue", String.valueOf(nowMs)));
+                docFields.put("updatedAt", new JSONObject().put("integerValue", String.valueOf(nowMs)));
+
+                StringBuilder mask = new StringBuilder();
+                mask.append("updateMask.fieldPaths=watchSource")
+                    .append("&updateMask.fieldPaths=watchHeartbeatAt")
+                    .append("&updateMask.fieldPaths=updatedAt");
+
+                int hrLive = isLocalHeartRateFresh() ? localSensorHrBpm : 0;
+                int hrAvg = localAvgHrBpm;
+                int hrMax = localMaxHrBpm;
+                if (hrLive >= 30 && hrLive <= 245) {
+                    docFields.put("watchHeartRateBpm", new JSONObject().put("integerValue", String.valueOf(hrLive)));
+                    mask.append("&updateMask.fieldPaths=watchHeartRateBpm");
+                }
+                if (hrAvg >= 30 && hrAvg <= 245) {
+                    docFields.put("watchAvgHeartRateBpm", new JSONObject().put("integerValue", String.valueOf(hrAvg)));
+                    mask.append("&updateMask.fieldPaths=watchAvgHeartRateBpm");
+                }
+                if (hrMax >= 30 && hrMax <= 245) {
+                    docFields.put("watchMaxHeartRateBpm", new JSONObject().put("integerValue", String.valueOf(hrMax)));
+                    mask.append("&updateMask.fieldPaths=watchMaxHeartRateBpm");
+                }
+
                 String urlStr = "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/"
                         + code
-                        + "?updateMask.fieldPaths=watchSource&updateMask.fieldPaths=watchHeartbeatAt&currentDocument.exists=true";
+                        + "?" + mask + "&currentDocument.exists=true";
                 conn = (HttpURLConnection) new URL(urlStr).openConnection();
                 conn.setRequestMethod("POST");
                 conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
                 conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
-                conn.setConnectTimeout(4500);
-                conn.setReadTimeout(4500);
+                conn.setConnectTimeout(5500);
+                conn.setReadTimeout(5500);
                 conn.setDoOutput(true);
                 byte[] body = new JSONObject().put("fields", docFields).toString().getBytes(StandardCharsets.UTF_8);
                 try (OutputStream os = conn.getOutputStream()) {
                     os.write(body);
                 }
-                conn.getResponseCode();
+                int rc = conn.getResponseCode();
+                if (rc >= 200 && rc < 300) {
+                    isCloudSynced = true;
+                    cloudLinkStatus = "SYNCED";
+                } else if (rc == 404 || rc == 401 || rc == 403) {
+                    isCloudSynced = false;
+                    cloudLinkStatus = "NOT_FOUND";
+                }
+                runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
             } catch (Exception ignored) {
+                if ("LINKING".equals(cloudLinkStatus)) {
+                    cloudLinkStatus = "NO_NET";
+                    runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+                }
             } finally {
                 if (conn != null) conn.disconnect();
             }
@@ -1861,10 +2164,16 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 wakeLock.acquire(4 * 60 * 60 * 1000L);
             } catch (Exception ignored) {}
         }
+        if (canvasView != null) {
+            canvasView.requestFocus();
+        }
+        syncBackNavigationCallback();
         markUserActivity(false);
         ensureSensorAndHeartbeatActive();
         if (hasHeartRatePermission()) {
-            startHeartRateStreaming(false);
+            startHeartRateStreaming(false, false);
+        } else if (!hrPermissionRequestedThisRun && !hrPermissionPromptInFlight) {
+            startHeartRateStreaming(true, false);
         }
         sendToPhone("{\"type\":\"REQUEST_STATE\"}");
     }
@@ -1961,6 +2270,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         manualAnalysisStartMs = 0L;
         heartbeatHandler.removeCallbacks(manualTimerRunnable);
         recentStepBoutCount = 0;
+        localHrSumBpm = 0L;
+        localHrSampleCount = 0;
+        localAvgHrBpm = 0;
+        localMaxHrBpm = 0;
         lastAnalysisShotNum = 0;
         lastPrepX = new float[0];
         lastPrepY = new float[0];
@@ -2849,6 +3162,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         private final RectF btnCenterMetrics = new RectF();
         private final RectF btnCounterChassis = new RectF();
         private final RectF btnToggleDetector = new RectF();
+        private final RectF btnHeartRateAction = new RectF();
         private final RectF btnCloudMid = new RectF();
         private final RectF btnCloudSave = new RectF();
         private final RectF[] digitBoxes = new RectF[6];
@@ -3063,18 +3377,27 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     return;
                 }
                 if (analysisPage == 0) {
-                    if (btnLeftPrimary.contains(x, y)) {
-                        startManualAnalysisCapture(true);
-                        return;
-                    }
-                    if (btnRightSecondary.contains(x, y)) {
-                        stopManualAnalysisCapture(true);
+                    float scalePad = Math.max(0.75f, Math.min(getWidth(), getHeight()) / 240f) * 8f;
+                    if (x >= (btnLeftPrimary.left - scalePad) && x <= (btnLeftPrimary.right + scalePad)
+                            && y >= (btnLeftPrimary.top - scalePad) && y <= (btnLeftPrimary.bottom + scalePad)) {
+                        toggleManualAnalysisFromWatchHardware();
                         return;
                     }
                     if (btnToggleDetector.contains(x, y)) {
                         analysisPage = 1;
                         syncBackNavigationCallback();
                         triggerHaptic(20);
+                        invalidate();
+                        return;
+                    }
+                    if (btnCenterMetrics.contains(x, y)) {
+                        toggleManualAnalysisFromWatchHardware();
+                        return;
+                    }
+                } else if (analysisPage == 1) {
+                    if (btnHeartRateAction.contains(x, y)) {
+                        triggerHaptic(25);
+                        requestHeartRatePermissionInteractive();
                         invalidate();
                         return;
                     }
@@ -3169,6 +3492,13 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     return;
                 }
             } else if (screenIndex == 2) {
+                if (btnHeartRateAction.contains(x, y)) {
+                    markUserActivity(true);
+                    triggerHaptic(25);
+                    requestHeartRatePermissionInteractive();
+                    invalidate();
+                    return;
+                }
                 if (btnLeftPrimary.contains(x, y)) {
                     markUserActivity(true);
                     triggerHaptic(25);
@@ -3426,13 +3756,13 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
 
         private void drawAnalysisDianaScreen(Canvas canvas, float cx, float cy, int h, float scale, boolean isRound) {
-            int targetLogoW = Math.round((isRound ? 94f : 104f) * scale);
+            int targetLogoW = Math.round((isRound ? 88f : 98f) * scale);
             Bitmap logo = getSupersampledLogo(targetLogoW);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.WHITE);
             paint.setAlpha(255);
             if (logo != null) {
-                canvas.drawBitmap(logo, Math.round(cx - logo.getWidth() / 2f), Math.round(14f * scale), paint);
+                canvas.drawBitmap(logo, Math.round(cx - logo.getWidth() / 2f), Math.round(11f * scale), paint);
             }
 
             // Top Live Status Pill (tap jumps to Shot Data screen)
@@ -3451,7 +3781,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             float textW = paint.measureText(pillText);
             float pillW = Math.max(96f * scale, textW + 19f * scale);
             float pillH = 14.5f * scale;
-            float pillTop = 25.5f * scale;
+            float pillTop = 22.5f * scale;
             btnToggleDetector.set(cx - pillW / 2f, pillTop, cx + pillW / 2f, pillTop + pillH);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(manualAnalysisRecording ? Color.parseColor("#171305") : Color.parseColor("#080B10"));
@@ -3471,9 +3801,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             Paint.FontMetrics fmTop = paint.getFontMetrics();
             canvas.drawText(pillText, startX + dotR * 2f + 4.0f * scale, btnToggleDetector.centerY() - (fmTop.ascent + fmTop.descent) / 2f, paint);
 
-            // Centered High-Contrast Outdoor Brand-Line Diana (62f radius -> zero overlap with top pill or bottom buttons)
-            float dCy = 113f * scale;
-            float outerR = 62f * scale;
+            // Centered High-Contrast Outdoor Brand-Line Diana (52f radius -> leaves full room for XL INICIO/FINAL button)
+            float dCy = 95f * scale;
+            float outerR = 52f * scale;
+            btnCenterMetrics.set(cx - outerR, dCy - outerR, cx + outerR, dCy + outerR);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.parseColor("#020306"));
             canvas.drawCircle(cx, dCy, outerR, paint);
@@ -3589,46 +3920,35 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 canvas.drawCircle(rx, ry, 3.6f * scale, paint);
             }
 
-            // Bottom Side-by-Side Tactile INICIO | FINAL Buttons (also triggered via Physical Watch Button)
-            float rowW = (isRound ? 150f : 168f) * scale;
-            float gap = 6f * scale;
-            float btnW = (rowW - gap) / 2f;
-            float btnH = 22.5f * scale;
-            float btnTop = h - 55f * scale;
-            float leftStart = cx - rowW / 2f;
+            // Single XL High-Visibility Toggle Button: ▶ INICIO (cyan) -> ■ FINAL (red)
+            // Mathematically centered inside the round Galaxy Watch lower bezel (44f tall = ~48dp touch target)
+            float btnW = (isRound ? 154f : 186f) * scale;
+            float btnH = 44f * scale;
+            float btnTop = 155f * scale;
+            float btnRadius = btnH / 2f;
 
-            btnLeftPrimary.set(leftStart, btnTop, leftStart + btnW, btnTop + btnH);
-            btnRightSecondary.set(leftStart + btnW + gap, btnTop, leftStart + rowW, btnTop + btnH);
+            btnLeftPrimary.set(cx - btnW / 2f, btnTop, cx + btnW / 2f, btnTop + btnH);
+            btnRightSecondary.setEmpty();
 
-            // Button 1: ▶ INICIO
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(manualAnalysisRecording ? Color.parseColor("#09131E") : Color.parseColor("#00BFFF"));
-            canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
-            if (manualAnalysisRecording) {
-                paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(1.0f * scale);
-                paint.setColor(Color.parseColor("#7300BFFF"));
-                canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
-            }
-            paint.setStyle(Paint.Style.FILL);
-            paint.setTypeface(outfitExtraBold);
-            paint.setTextSize(7.4f * scale);
-            paint.setColor(manualAnalysisRecording ? Color.parseColor("#99FFFFFF") : Color.BLACK);
-            drawCenteredText(canvas, tr("▶ INICIO", "▶ START"), btnLeftPrimary.centerX(), btnLeftPrimary.centerY());
+            paint.setColor(manualAnalysisRecording ? Color.parseColor("#FF1E1E") : Color.parseColor("#00BFFF"));
+            canvas.drawRoundRect(btnLeftPrimary, btnRadius, btnRadius, paint);
 
-            // Button 2: ■ FINAL
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(manualAnalysisRecording ? Color.parseColor("#FF1E1E") : Color.parseColor("#11151E"));
-            canvas.drawRoundRect(btnRightSecondary, btnH / 2f, btnH / 2f, paint);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.0f * scale);
-            paint.setColor(manualAnalysisRecording ? Color.parseColor("#59FFFFFF") : Color.parseColor("#1FFFFFFF"));
-            canvas.drawRoundRect(btnRightSecondary, btnH / 2f, btnH / 2f, paint);
+            paint.setStrokeWidth(1.4f * scale);
+            paint.setColor(manualAnalysisRecording ? Color.parseColor("#66FFFFFF") : Color.parseColor("#33FFFFFF"));
+            canvas.drawRoundRect(btnLeftPrimary, btnRadius, btnRadius, paint);
+
             paint.setStyle(Paint.Style.FILL);
             paint.setTypeface(outfitExtraBold);
-            paint.setTextSize(7.4f * scale);
-            paint.setColor(manualAnalysisRecording ? Color.WHITE : Color.parseColor("#66FFFFFF"));
-            drawCenteredText(canvas, tr("■ FINAL", "■ END"), btnRightSecondary.centerX(), btnRightSecondary.centerY());
+            paint.setTextSize(13.5f * scale);
+            paint.setColor(manualAnalysisRecording ? Color.WHITE : Color.BLACK);
+            drawCenteredText(
+                    canvas,
+                    manualAnalysisRecording ? tr("■ FINAL", "■ END") : tr("▶ INICIO", "▶ START"),
+                    btnLeftPrimary.centerX(),
+                    btnLeftPrimary.centerY()
+            );
         }
 
         private void drawAnalysisMetricsScreen(Canvas canvas, float cx, int h, float scale, boolean isRound, float wMult) {
@@ -3701,17 +4021,18 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 canvas.drawText(valStr, cL + 8f * scale, r2Top + 33f * scale, paint);
             }
 
-            // Row 3: Pulsaciones
+            // Row 3: Pulsaciones (interactive: tap to grant HR permission if missing)
             float r3Top = r2Top + r2H + 5f * scale;
             float r3H = 36f * scale;
-            rect.set(left, r3Top, right, r3Top + r3H);
+            boolean needsHrPermAna = !hasHeartRatePermission();
+            btnHeartRateAction.set(left, r3Top, right, r3Top + r3H);
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(Color.parseColor("#0A0D14"));
-            canvas.drawRoundRect(rect, 10f * scale, 10f * scale, paint);
+            paint.setColor(needsHrPermAna ? Color.parseColor("#141206") : Color.parseColor("#0A0D14"));
+            canvas.drawRoundRect(btnHeartRateAction, 10f * scale, 10f * scale, paint);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1f * scale);
-            paint.setColor(Color.parseColor("#1AFFFFFF"));
-            canvas.drawRoundRect(rect, 10f * scale, 10f * scale, paint);
+            paint.setStrokeWidth(1.1f * scale);
+            paint.setColor(needsHrPermAna ? Color.parseColor("#B3FFE500") : Color.parseColor("#1AFFFFFF"));
+            canvas.drawRoundRect(btnHeartRateAction, 10f * scale, 10f * scale, paint);
 
             paint.setStyle(Paint.Style.FILL);
             paint.setTypeface(outfitExtraBold);
@@ -3720,14 +4041,33 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setTextAlign(Paint.Align.LEFT);
             canvas.drawText(tr("PULSACIONES", "HEART RATE"), left + 10f * scale, r3Top + 14.5f * scale, paint);
             paint.setTypeface(outfitBold);
-            paint.setTextSize(7.0f * scale);
-            canvas.drawText(tr("En disparo", "At release"), left + 10f * scale, r3Top + 26.5f * scale, paint);
+            paint.setTextSize(6.8f * scale);
+            paint.setColor(needsHrPermAna ? Color.parseColor("#FFE500") : Color.parseColor("#94A3B8"));
+            canvas.drawText(
+                    needsHrPermAna ? tr("Toca para permitir", "Tap to allow") : tr("En vivo / disparo", "Live / release"),
+                    left + 10f * scale,
+                    r3Top + 26.5f * scale,
+                    paint
+            );
 
-            int dispHr = lastShotHrBpm > 0 ? lastShotHrBpm : syncedHeartRateBpm;
+            int dispHr = isLocalHeartRateFresh()
+                    ? localSensorHrBpm
+                    : (lastShotHrBpm > 0 ? lastShotHrBpm : syncedHeartRateBpm);
             paint.setTypeface(outfitExtraBold);
-            paint.setTextSize(15.0f * scale);
             paint.setTextAlign(Paint.Align.RIGHT);
-            canvas.drawText(dispHr >= 30 ? (dispHr + " BPM") : "—", right - 10f * scale, r3Top + 24f * scale, paint);
+            if (needsHrPermAna) {
+                paint.setTextSize(9.5f * scale);
+                paint.setColor(Color.parseColor("#FFE500"));
+                canvas.drawText(tr("PERMITIR", "ALLOW"), right - 10f * scale, r3Top + 22f * scale, paint);
+            } else if (dispHr >= 30) {
+                paint.setTextSize(14.5f * scale);
+                paint.setColor(Color.WHITE);
+                canvas.drawText(dispHr + " BPM", right - 10f * scale, r3Top + 23.5f * scale, paint);
+            } else {
+                paint.setTextSize(9.0f * scale);
+                paint.setColor(Color.parseColor("#94A3B8"));
+                canvas.drawText(tr("MIDIENDO...", "READING..."), right - 10f * scale, r3Top + 22f * scale, paint);
+            }
 
             // Footer above dots
             paint.setTypeface(outfitExtraBold);
@@ -4070,46 +4410,45 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
 
         /**
-         * SCREEN 2: BIOMETRICS (STEPS / DISTANCE / ACTIVE KCAL) (Mathematically centered: 39f..188f)
+         * SCREEN 2: BIOMETRICS (DISTANCE / STEPS / KCAL / LIVE HEART RATE + PERMISSION CTA)
          */
         private void drawBiometricsScreen(Canvas canvas, float cx, float scale, boolean isRound, float wMult) {
-            drawBrandHeaderAndPill(canvas, cx, scale, isRound, tr("BIOMETRÍA · PASOS", "BIOMETRICS · STEPS"), true);
+            drawBrandHeaderAndPill(canvas, cx, scale, isRound, tr("BIOMETRÍA · PULSO", "BIOMETRICS · PULSE"), true);
 
             float cardW = 166f * scale * wMult;
-            float cardH = 38.5f * scale;
+            float cardH = 33.5f * scale;
+            float badgeH = 14f * scale;
 
-            // Card 1: WALKED DISTANCE (mi/ft first when Imperial, m/km first when Metric + STEPS badge)
-            float card1Top = 77f * scale;
+            // Card 1: WALKED DISTANCE + STEPS
+            float card1Top = 73.5f * scale;
             rect.set(cx - cardW / 2f, card1Top, cx + cardW / 2f, card1Top + cardH);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.parseColor("#07090E"));
-            canvas.drawRoundRect(rect, 9.5f * scale, 9.5f * scale, paint);
+            canvas.drawRoundRect(rect, 9f * scale, 9f * scale, paint);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(1.0f * scale);
             paint.setColor(Color.parseColor("#7300A8F3"));
-            canvas.drawRoundRect(rect, 9.5f * scale, 9.5f * scale, paint);
+            canvas.drawRoundRect(rect, 9f * scale, 9f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
 
             paint.setTypeface(outfitBold);
-            paint.setTextSize(6.2f * scale);
+            paint.setTextSize(5.9f * scale);
             paint.setColor(Color.parseColor("#8E96A4"));
             paint.setTextAlign(Paint.Align.LEFT);
-            canvas.drawText(tr("DISTANCIA RECORRIDA", "WALKED DISTANCE"), rect.left + 9.5f * scale, card1Top + 13.5f * scale, paint);
+            canvas.drawText(tr("DISTANCIA RECORRIDA", "WALKED DISTANCE"), rect.left + 9f * scale, card1Top + 12f * scale, paint);
 
             paint.setTypeface(outfitExtraBold);
-            paint.setTextSize(11.6f * scale);
+            paint.setTextSize(10.8f * scale);
             paint.setColor(Color.WHITE);
-            canvas.drawText(getFormattedKmAndMi(), rect.left + 9.5f * scale, card1Top + 29.5f * scale, paint);
+            canvas.drawText(getFormattedKmAndMi(), rect.left + 9f * scale, card1Top + 26f * scale, paint);
 
-            // PASOS / STEPS Badge inside Card 1
             String stepsBadgeTxt = stepsCount > 0
                     ? (stepsCount + " " + tr("PASOS", "STEPS"))
                     : tr("PASOS", "STEPS");
             paint.setTypeface(outfitExtraBold);
-            paint.setTextSize(5.6f * scale);
-            float badgeW = Math.max(34f * scale, paint.measureText(stepsBadgeTxt) + 9f * scale);
-            float badgeH = 14.5f * scale;
-            RectF badgeRect = new RectF(rect.right - badgeW - 8.5f * scale, rect.centerY() - badgeH / 2f, rect.right - 8.5f * scale, rect.centerY() + badgeH / 2f);
+            paint.setTextSize(5.5f * scale);
+            float badgeW = Math.max(34f * scale, paint.measureText(stepsBadgeTxt) + 8.5f * scale);
+            RectF badgeRect = new RectF(rect.right - badgeW - 8f * scale, rect.centerY() - badgeH / 2f, rect.right - 8f * scale, rect.centerY() + badgeH / 2f);
             paint.setColor(Color.parseColor("#04101C"));
             canvas.drawRoundRect(badgeRect, 4f * scale, 4f * scale, paint);
             paint.setStyle(Paint.Style.STROKE);
@@ -4120,32 +4459,31 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setColor(Color.WHITE);
             drawCenteredText(canvas, stepsBadgeTxt, badgeRect.centerX(), badgeRect.centerY());
 
-            // Card 2: GASTO ENERGÉTICO / ACTIVE ENERGY (kcal + ACTIVA / ACTIVE badge)
-            float card2Top = 121.5f * scale;
+            // Card 2: GASTO ENERGÉTICO / ACTIVE ENERGY
+            float card2Top = 111f * scale;
             rect.set(cx - cardW / 2f, card2Top, cx + cardW / 2f, card2Top + cardH);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.parseColor("#07090E"));
-            canvas.drawRoundRect(rect, 9.5f * scale, 9.5f * scale, paint);
+            canvas.drawRoundRect(rect, 9f * scale, 9f * scale, paint);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(1.0f * scale);
             paint.setColor(Color.parseColor("#73FF1E1E"));
-            canvas.drawRoundRect(rect, 9.5f * scale, 9.5f * scale, paint);
+            canvas.drawRoundRect(rect, 9f * scale, 9f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
 
             paint.setTypeface(outfitBold);
-            paint.setTextSize(6.2f * scale);
+            paint.setTextSize(5.9f * scale);
             paint.setColor(Color.parseColor("#8E96A4"));
             paint.setTextAlign(Paint.Align.LEFT);
-            canvas.drawText(tr("GASTO ENERGÉTICO", "ACTIVE ENERGY"), rect.left + 9.5f * scale, card2Top + 13.5f * scale, paint);
+            canvas.drawText(tr("GASTO ENERGÉTICO", "ACTIVE ENERGY"), rect.left + 9f * scale, card2Top + 12f * scale, paint);
 
             paint.setTypeface(outfitExtraBold);
-            paint.setTextSize(13f * scale);
+            paint.setTextSize(12.0f * scale);
             paint.setColor(Color.WHITE);
-            canvas.drawText(getActiveKcal() + " kcal", rect.left + 9.5f * scale, card2Top + 29.5f * scale, paint);
+            canvas.drawText(getActiveKcal() + " kcal", rect.left + 9f * scale, card2Top + 26f * scale, paint);
 
-            // ACTIVA / ACTIVE Badge inside Card 2
             float badge2W = 36f * scale;
-            badgeRect.set(rect.right - badge2W - 8.5f * scale, rect.centerY() - badgeH / 2f, rect.right - 8.5f * scale, rect.centerY() + badgeH / 2f);
+            badgeRect.set(rect.right - badge2W - 8f * scale, rect.centerY() - badgeH / 2f, rect.right - 8f * scale, rect.centerY() + badgeH / 2f);
             paint.setColor(Color.parseColor("#101008"));
             canvas.drawRoundRect(badgeRect, 4f * scale, 4f * scale, paint);
             paint.setStyle(Paint.Style.STROKE);
@@ -4153,20 +4491,70 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setColor(Color.parseColor("#80FFE500"));
             canvas.drawRoundRect(badgeRect, 4f * scale, 4f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
-            paint.setTextSize(6.0f * scale);
+            paint.setTextSize(5.8f * scale);
             paint.setColor(Color.parseColor("#FFE500"));
             drawCenteredText(canvas, tr("ACTIVA", "ACTIVE"), badgeRect.centerX(), badgeRect.centerY());
 
-            // Bottom Sync Subtitle (tap triggers immediate telemetry sync)
-            btnLeftPrimary.set(cx - 75f * scale, 166f * scale, cx + 75f * scale, 190f * scale);
+            // Card 3: LIVE HEART RATE + INTERACTIVE PERMISSION BUTTON (tap to grant/retry HR sensor)
+            float card3Top = 148.5f * scale;
+            float card3H = 36f * scale;
+            boolean hasHrPerm = hasHeartRatePermission();
+            int liveHr = isLocalHeartRateFresh() ? localSensorHrBpm : 0;
+            btnHeartRateAction.set(cx - cardW / 2f, card3Top, cx + cardW / 2f, card3Top + card3H);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(!hasHrPerm ? Color.parseColor("#141206") : Color.parseColor("#07090E"));
+            canvas.drawRoundRect(btnHeartRateAction, 9.5f * scale, 9.5f * scale, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.1f * scale);
+            paint.setColor(!hasHrPerm
+                    ? Color.parseColor("#FFE500")
+                    : (liveHr >= 30 ? Color.parseColor("#8000C853") : Color.parseColor("#55FFFFFF")));
+            canvas.drawRoundRect(btnHeartRateAction, 9.5f * scale, 9.5f * scale, paint);
+            paint.setStyle(Paint.Style.FILL);
+
             paint.setTypeface(outfitBold);
-            paint.setTextSize(6.6f * scale);
+            paint.setTextSize(5.9f * scale);
+            paint.setColor(!hasHrPerm ? Color.parseColor("#FFE500") : Color.parseColor("#8E96A4"));
+            paint.setTextAlign(Paint.Align.LEFT);
+            canvas.drawText(
+                    !hasHrPerm ? tr("PERMISO DE PULSO", "PULSE PERMISSION") : tr("PULSACIONES", "HEART RATE"),
+                    btnHeartRateAction.left + 9f * scale,
+                    card3Top + 12.5f * scale,
+                    paint
+            );
+
+            paint.setTypeface(outfitExtraBold);
+            if (!hasHrPerm) {
+                paint.setTextSize(10.5f * scale);
+                paint.setColor(Color.WHITE);
+                canvas.drawText(tr("TOCA PARA PERMITIR", "TAP TO ALLOW"), btnHeartRateAction.left + 9f * scale, card3Top + 27.5f * scale, paint);
+            } else if (liveHr >= 30) {
+                paint.setTextSize(13.0f * scale);
+                paint.setColor(Color.WHITE);
+                canvas.drawText(liveHr + " BPM", btnHeartRateAction.left + 9f * scale, card3Top + 28f * scale, paint);
+                paint.setTextSize(6.2f * scale);
+                paint.setColor(Color.parseColor("#00C853"));
+                paint.setTextAlign(Paint.Align.RIGHT);
+                canvas.drawText(tr("● EN VIVO", "● LIVE"), btnHeartRateAction.right - 9f * scale, card3Top + 22f * scale, paint);
+            } else {
+                paint.setTextSize(10.0f * scale);
+                paint.setColor(Color.parseColor("#CBD5E1"));
+                String hrWaitStr = "no_contact".equals(hrStatusCode)
+                        ? tr("AJUSTA RELOJ", "ADJUST WATCH")
+                        : tr("MIDIENDO...", "MEASURING...");
+                canvas.drawText(hrWaitStr, btnHeartRateAction.left + 9f * scale, card3Top + 27.5f * scale, paint);
+            }
+
+            // Bottom Sync Subtitle (tap triggers immediate telemetry sync)
+            btnLeftPrimary.set(cx - 72f * scale, 187f * scale, cx + 72f * scale, 206f * scale);
+            paint.setTypeface(outfitBold);
+            paint.setTextSize(6.2f * scale);
             paint.setColor(Color.parseColor("#8E96A4"));
             drawCenteredText(
                     canvas,
-                    arrowCount + " " + tr("FLECHAS", "ARROWS") + " · " + Math.round(drawWeightLbs) + " LBS · " + tr("SYNC EN VIVO", "LIVE SYNC"),
+                    arrowCount + " " + tr("FL", "AR") + " · " + Math.round(drawWeightLbs) + " LBS · SYNC",
                     cx,
-                    175f * scale
+                    195.5f * scale
             );
         }
 
@@ -4274,22 +4662,65 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
 
         /**
-         * SCREEN 4: 6-DIGIT CLOUD CODE PAIRING (CÓDIGO NUBE / CLOUD CODE)
+         * SCREEN 4: 6-DIGIT CLOUD CODE PAIRING (XL Tactile Digits & Buttons + Honest Live Cloud Status)
          */
         private void drawCloudCodeScreen(Canvas canvas, float cx, float scale, boolean isRound, float wMult) {
-            String headerPill = isEditingCode
-                    ? (tr("EDITAR ", "EDIT ") + (editDigitPos + 1) + "/6")
-                    : (isCloudSynced
-                            ? tr("CÓDIGO NUBE · VINCULADO", "CLOUD CODE · SYNCED")
-                            : (hasPairingCode ? tr("CÓDIGO NUBE", "CLOUD CODE") : tr("TOCA PARA VINCULAR", "TAP TO LINK")));
-            drawBrandHeaderAndPill(canvas, cx, scale, isRound, headerPill, isEditingCode);
+            String headerPill;
+            boolean useYellowPill = false;
+            if (isEditingCode) {
+                headerPill = tr("DÍGITO ", "DIGIT ") + (editDigitPos + 1) + "/6";
+                useYellowPill = true;
+            } else if ("LINKING".equals(cloudLinkStatus)) {
+                headerPill = tr("VINCULANDO...", "LINKING...");
+                useYellowPill = true;
+            } else if ("NOT_FOUND".equals(cloudLinkStatus)) {
+                headerPill = tr("CÓDIGO INVÁLIDO", "INVALID CODE");
+                useYellowPill = true;
+            } else if ("NO_NET".equals(cloudLinkStatus)) {
+                headerPill = tr("SIN INTERNET", "NO INTERNET");
+                useYellowPill = true;
+            } else if (isCloudSynced) {
+                headerPill = tr("VINCULADO ✓", "SYNCED ✓");
+            } else {
+                headerPill = tr("CÓDIGO NUBE", "CLOUD CODE");
+            }
 
-            float dBoxW = 23f * scale * wMult;
-            float dBoxH = 38f * scale;
-            float dGap = 4f * scale;
+            // Compact top logo & status pill to maximize tactile area for 6 digits + XL buttons
+            int targetLogoW = Math.round((isRound ? 94f : 104f) * scale);
+            Bitmap logo = getSupersampledLogo(targetLogoW);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.WHITE);
+            paint.setAlpha(255);
+            if (logo != null) {
+                canvas.drawBitmap(logo, Math.round(cx - logo.getWidth() / 2f), Math.round(24f * scale), paint);
+            }
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(6.6f * scale);
+            float pTxtW = paint.measureText(headerPill);
+            float pW = Math.max(106f * scale, pTxtW + 22f * scale);
+            float pH = 15.5f * scale;
+            float pTop = 37f * scale;
+            btnToggleDetector.set(cx - pW / 2f, pTop, cx + pW / 2f, pTop + pH);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(useYellowPill ? Color.parseColor("#141206") : Color.parseColor("#040B12"));
+            canvas.drawRoundRect(btnToggleDetector, pH / 2f, pH / 2f, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.0f * scale);
+            paint.setColor("NOT_FOUND".equals(cloudLinkStatus) || "NO_NET".equals(cloudLinkStatus)
+                    ? Color.parseColor("#FF1E1E")
+                    : (useYellowPill ? Color.parseColor("#B3FFE500") : Color.parseColor("#8000A8F3")));
+            canvas.drawRoundRect(btnToggleDetector, pH / 2f, pH / 2f, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(canvas, headerPill, btnToggleDetector.centerX(), btnToggleDetector.centerY());
+
+            // 6 Large Tactile Digit Cells centered in widest equatorial band
+            float dBoxW = 25.5f * scale * wMult;
+            float dBoxH = 42f * scale;
+            float dGap = 3.5f * scale;
             float dTotalW = (dBoxW * 6f) + (dGap * 5f);
             float dStartX = cx - (dTotalW / 2f);
-            float dStartY = 76f * scale;
+            float dStartY = 62f * scale;
 
             for (int di = 0; di < 6; di++) {
                 float dx = dStartX + di * (dBoxW + dGap);
@@ -4297,41 +4728,41 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 boolean isSel = (di == editDigitPos);
 
                 paint.setStyle(Paint.Style.FILL);
-                paint.setColor(isSel ? Color.parseColor("#081523") : Color.parseColor("#0B0E15"));
-                canvas.drawRoundRect(digitBoxes[di], 5.5f * scale, 5.5f * scale, paint);
+                paint.setColor(isSel ? Color.parseColor("#08192B") : Color.parseColor("#0B0E15"));
+                canvas.drawRoundRect(digitBoxes[di], 6f * scale, 6f * scale, paint);
 
                 paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(1.2f * scale);
-                paint.setColor(isSel ? Color.parseColor("#00A8F3") : Color.parseColor("#FFE500"));
-                canvas.drawRoundRect(digitBoxes[di], 5.5f * scale, 5.5f * scale, paint);
+                paint.setStrokeWidth((isSel ? 1.6f : 1.1f) * scale);
+                paint.setColor(isSel ? Color.parseColor("#00BFFF") : Color.parseColor("#FFE500"));
+                canvas.drawRoundRect(digitBoxes[di], 6f * scale, 6f * scale, paint);
                 paint.setStyle(Paint.Style.FILL);
 
                 paint.setTypeface(outfitExtraBold);
-                paint.setTextSize(16.5f * scale);
+                paint.setTextSize(18f * scale);
                 paint.setColor(isSel ? Color.WHITE : Color.parseColor("#FFE500"));
                 drawCenteredText(canvas, String.valueOf(pairingDigits[di]), digitBoxes[di].centerX(), digitBoxes[di].centerY());
             }
 
-            // Control Row: [-] | [EDITAR > / EDIT >] | [+]
-            float ctrlY = 121f * scale;
-            float ctrlH = 23f * scale;
-            float ctrlW = 156f * scale * wMult;
+            // XL Control Row: [ − ] | [ SIG > ] | [ + ] (35f tall!)
+            float ctrlY = 110f * scale;
+            float ctrlH = 35f * scale;
+            float ctrlW = (isRound ? 174f : 196f) * scale;
             float cStartX = cx - ctrlW / 2f;
-            float smallW = 36f * scale;
+            float smallW = 50f * scale;
             float btnGap = 6f * scale;
             float midW = ctrlW - (2f * smallW) - (2f * btnGap);
 
             btnLeftPrimary.set(cStartX, ctrlY, cStartX + smallW, ctrlY + ctrlH);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.parseColor("#180709"));
-            canvas.drawRoundRect(btnLeftPrimary, ctrlH / 2f, ctrlH / 2f, paint);
+            canvas.drawRoundRect(btnLeftPrimary, 10f * scale, 10f * scale, paint);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.0f * scale);
+            paint.setStrokeWidth(1.3f * scale);
             paint.setColor(Color.parseColor("#FF1E1E"));
-            canvas.drawRoundRect(btnLeftPrimary, ctrlH / 2f, ctrlH / 2f, paint);
+            canvas.drawRoundRect(btnLeftPrimary, 10f * scale, 10f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
             paint.setTypeface(outfitExtraBold);
-            paint.setTextSize(11f * scale);
+            paint.setTextSize(16f * scale);
             paint.setColor(Color.WHITE);
             drawCenteredText(canvas, "−", btnLeftPrimary.centerX(), btnLeftPrimary.centerY());
 
@@ -4339,48 +4770,61 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             btnCloudMid.set(midX, ctrlY, midX + midW, ctrlY + ctrlH);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.parseColor("#0B0E15"));
-            canvas.drawRoundRect(btnCloudMid, ctrlH / 2f, ctrlH / 2f, paint);
+            canvas.drawRoundRect(btnCloudMid, 10f * scale, 10f * scale, paint);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.0f * scale);
+            paint.setStrokeWidth(1.2f * scale);
             paint.setColor(Color.parseColor("#475569"));
-            canvas.drawRoundRect(btnCloudMid, ctrlH / 2f, ctrlH / 2f, paint);
+            canvas.drawRoundRect(btnCloudMid, 10f * scale, 10f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
-            paint.setTextSize(7.4f * scale);
+            paint.setTextSize(9.2f * scale);
             paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, tr("EDITAR >", "EDIT >"), btnCloudMid.centerX(), btnCloudMid.centerY());
+            drawCenteredText(canvas, tr("SIG >", "NEXT >"), btnCloudMid.centerX(), btnCloudMid.centerY());
 
             float plusX = midX + midW + btnGap;
             btnRightSecondary.set(plusX, ctrlY, plusX + smallW, ctrlY + ctrlH);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.parseColor("#061523"));
-            canvas.drawRoundRect(btnRightSecondary, ctrlH / 2f, ctrlH / 2f, paint);
+            canvas.drawRoundRect(btnRightSecondary, 10f * scale, 10f * scale, paint);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.0f * scale);
-            paint.setColor(Color.parseColor("#00A8F3"));
-            canvas.drawRoundRect(btnRightSecondary, ctrlH / 2f, ctrlH / 2f, paint);
+            paint.setStrokeWidth(1.3f * scale);
+            paint.setColor(Color.parseColor("#00BFFF"));
+            canvas.drawRoundRect(btnRightSecondary, 10f * scale, 10f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
-            paint.setTextSize(11f * scale);
+            paint.setTextSize(16f * scale);
             paint.setColor(Color.WHITE);
             drawCenteredText(canvas, "+", btnRightSecondary.centerX(), btnRightSecondary.centerY());
 
-            // Bottom Save / Link CTA
-            float saveW = 148f * scale * wMult;
-            float saveH = 22.5f * scale;
-            float saveY = 151f * scale;
+            // XL Bottom Save / Link CTA (38f tall — impossible to miss!)
+            float saveW = (isRound ? 150f : 178f) * scale;
+            float saveH = 38f * scale;
+            float saveY = 152f * scale;
             btnCloudSave.set(cx - saveW / 2f, saveY, cx + saveW / 2f, saveY + saveH);
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(Color.parseColor("#061523"));
+            boolean isErrorState = "NOT_FOUND".equals(cloudLinkStatus) || "NO_NET".equals(cloudLinkStatus);
+            paint.setColor(isCloudSynced ? Color.parseColor("#051810") : Color.parseColor("#00BFFF"));
             canvas.drawRoundRect(btnCloudSave, saveH / 2f, saveH / 2f, paint);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.0f * scale);
-            paint.setColor(isCloudSynced ? Color.parseColor("#FFE500") : Color.parseColor("#00A8F3"));
+            paint.setStrokeWidth(1.3f * scale);
+            paint.setColor(isCloudSynced
+                    ? Color.parseColor("#00C853")
+                    : (isErrorState ? Color.parseColor("#FFE500") : Color.parseColor("#40FFFFFF")));
             canvas.drawRoundRect(btnCloudSave, saveH / 2f, saveH / 2f, paint);
             paint.setStyle(Paint.Style.FILL);
-            paint.setTextSize(7.4f * scale);
-            paint.setColor(Color.WHITE);
-            String saveCta = isEditingCode
-                    ? tr("LISTO", "DONE")
-                    : (isCloudSynced ? tr("VINCULADO · SYNC", "SYNCED · SYNC") : tr("CÓDIGO NUBE · VINCULAR", "LINK CLOUD CODE"));
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(10.8f * scale);
+            paint.setColor(isCloudSynced ? Color.WHITE : Color.BLACK);
+            String saveCta;
+            if ("LINKING".equals(cloudLinkStatus)) {
+                saveCta = tr("CONECTANDO...", "LINKING...");
+            } else if (isEditingCode) {
+                saveCta = tr("VINCULAR", "LINK NOW");
+            } else if (isErrorState) {
+                saveCta = tr("REINTENTAR", "RETRY");
+            } else if (isCloudSynced) {
+                saveCta = tr("VINCULADO ✓", "SYNCED ✓");
+            } else {
+                saveCta = tr("VINCULAR", "LINK CODE");
+            }
             drawCenteredText(canvas, saveCta, btnCloudSave.centerX(), btnCloudSave.centerY());
         }
     }

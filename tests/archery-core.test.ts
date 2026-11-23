@@ -1517,4 +1517,60 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     assert.equal(sampleViolations.length, 1, "Must catch hook called after early return");
     assert.ok(sampleViolations[0].includes("AFTER an early return"));
   });
+
+  it("enforces v2.154 Galaxy Watch Wear OS fixes: HR permission-first, Cloud HR sync, self-healing 6-digit code, physical buttons & XL button", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+
+    const wearSrc = fs.readFileSync(
+      path.resolve(
+        process.cwd(),
+        "android/wear/src/main/java/com/archery101010/app/WearMainActivity.java"
+      ),
+      "utf8"
+    );
+
+    // 1. Permission MUST be checked BEFORE getDefaultSensor(TYPE_HEART_RATE) inside startHeartRateStreaming
+    const hrMethodStart = wearSrc.indexOf(
+      "private synchronized void startHeartRateStreaming(boolean allowPermissionPrompt, boolean forcePrompt)"
+    );
+    assert.ok(hrMethodStart > 0, "startHeartRateStreaming overload must exist");
+    const hrMethodBody = wearSrc.slice(hrMethodStart, hrMethodStart + 1800);
+    const permIdx = hrMethodBody.indexOf("if (!hasHeartRatePermission())");
+    const sensorIdx = hrMethodBody.indexOf("getDefaultSensor(Sensor.TYPE_HEART_RATE)");
+    assert.ok(permIdx > 0 && sensorIdx > 0 && permIdx < sensorIdx, "HR permission check MUST run before getDefaultSensor(TYPE_HEART_RATE)");
+
+    // 2. Active Wear messageListener handles /archery101010/hr_request & Cloud sync pushes watchHeartRateBpm
+    const msgListenerStart = wearSrc.indexOf("messageListener = (MessageEvent event)");
+    assert.ok(msgListenerStart > 0);
+    assert.ok(
+      wearSrc.slice(msgListenerStart, msgListenerStart + 1600).includes("/archery101010/hr_request"),
+      "Active Wear messageListener must handle /archery101010/hr_request"
+    );
+    assert.ok(wearSrc.includes("watchHeartRateBpm"), "WearMainActivity must sync watchHeartRateBpm over 6-digit Cloud");
+    assert.ok(wearSrc.includes("cloudLinkStatus"), "WearMainActivity must track honest cloudLinkStatus");
+    assert.ok(wearSrc.includes("NOT_FOUND") && wearSrc.includes("NO_NET"), "WearMainActivity must surface invalid code / no internet errors");
+
+    // 3. Galaxy Watch physical button + rotary bezel + XL Analysis button (44f) & XL Cloud Code CTA (38f)
+    assert.ok(wearSrc.includes("public boolean dispatchKeyEvent(KeyEvent event)"));
+    assert.ok(wearSrc.includes("public boolean onGenericMotionEvent(MotionEvent event)"));
+    assert.ok(wearSrc.includes("canvasView.requestFocus()"));
+    assert.ok(wearSrc.includes("float btnH = 44f * scale;"), "Analysis XL toggle button must be >= 44f * scale");
+    assert.ok(wearSrc.includes("float saveH = 38f * scale;"), "Cloud Code CTA button must be >= 38f * scale");
+
+    // 4. Phone-side HR cache + self-healing 6-digit code rotation + clock-skew-proof heartbeat
+    const mainJava = fs.readFileSync(
+      path.resolve(process.cwd(), "android/app/src/main/java/com/archery101010/app/MainActivity.java"),
+      "utf8"
+    );
+    assert.ok(mainJava.includes("getLastWearHeartRateJson"), "MainActivity must cache & expose fresh Wear HR");
+
+    const bioSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/lib/scoring/biometricsEngine.ts"),
+      "utf8"
+    );
+    assert.ok(bioSrc.includes("allocateFreshPairingCode"), "biometricsEngine must auto-rotate stale/rejected 6-digit codes");
+    assert.ok(bioSrc.includes("lastObservedWatchHeartbeatAt"), "biometricsEngine must detect live heartbeat changes even with watch clock skew");
+    assert.ok(bioSrc.includes("pushPairingCodeToNativeWatchBridge"), "biometricsEngine must auto-share pairingCode over native watch bridge");
+  });
 });

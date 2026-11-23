@@ -155,6 +155,11 @@ public class WearDataLayerService extends WearableListenerService {
             return;
         }
 
+        if ("/archery101010/hr".equals(path)) {
+            prefs.edit().putLong("lastWatchPongTimeMs", now).apply();
+            return;
+        }
+
         if (payload == null || payload.isEmpty()) return;
 
         try {

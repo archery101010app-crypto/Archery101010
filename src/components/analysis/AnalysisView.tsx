@@ -274,14 +274,21 @@ export default function AnalysisView({
     at: 0
   });
 
+  const nowConnMs = Date.now();
+  const hasRecentNativePong =
+    watchConnStatus.bridgeReady &&
+    ((watchConnStatus.lastPongAt > 0 && nowConnMs - watchConnStatus.lastPongAt <= 3 * 60 * 1000) ||
+      (watchConnStatus.lastMessageAt > 0 &&
+        nowConnMs - watchConnStatus.lastMessageAt <= 3 * 60 * 1000));
   const hasNativeWatchConnected =
     watchConnStatus.bridgeReady &&
-    watchConnStatus.connectedNodesCount > 0 &&
-    (watchConnStatus.watchAppInstalledCount ?? 0) > 0;
+    ((watchConnStatus.connectedNodesCount > 0 &&
+      (watchConnStatus.watchAppInstalledCount ?? 0) > 0) ||
+      hasRecentNativePong);
   const hasCloudWatchConnected =
     cloudStatus.watchLinked &&
     cloudStatus.lastWatchSeenAt > 0 &&
-    Date.now() - cloudStatus.lastWatchSeenAt <= 3 * 60 * 1000;
+    nowConnMs - cloudStatus.lastWatchSeenAt <= 5 * 60 * 1000;
   const isWatchConnected = hasNativeWatchConnected || hasCloudWatchConnected;
 
   // Report whether Análisis is actively capturing/holding shots so idle visits never block OTA updates
@@ -624,11 +631,11 @@ export default function AnalysisView({
         .catch(() => {});
     };
 
-    if (auth.currentUser?.uid && auth.currentUser.uid === user?.uid) {
-      ensureCloudWatchReady(user.uid);
+    if (auth.currentUser?.uid) {
+      ensureCloudWatchReady(auth.currentUser.uid);
     }
     const unsubAuth = onAuthStateChanged(auth, (fbUser) => {
-      if (fbUser?.uid && fbUser.uid === user?.uid) {
+      if (fbUser?.uid) {
         ensureCloudWatchReady(fbUser.uid);
       }
     });
@@ -1124,16 +1131,12 @@ export default function AnalysisView({
                     </svg>
                   </div>
 
-                  {/* Watch Footer INICIO / FINAL Pills + Pagination Dots */}
-                  <div className="flex flex-col items-center gap-[3.5px] z-10 shrink-0 w-full px-1">
-                    <div className="grid grid-cols-2 gap-[4px] w-full">
-                      <span className="h-[17px] rounded-full bg-[#00BFFF] text-black text-[7px] font-black uppercase tracking-[0.06em] flex items-center justify-center">
-                        ▶ {tx("Inicio", "Start")}
-                      </span>
-                      <span className="h-[17px] rounded-full bg-[#FF1E1E] text-white text-[7px] font-black uppercase tracking-[0.06em] flex items-center justify-center">
-                        ■ {tx("Final", "End")}
-                      </span>
-                    </div>
+                  {/* Watch Footer XL INICIO/FINAL Pill + Pagination Dots */}
+                  <div className="flex flex-col items-center gap-[4px] z-10 shrink-0 w-full px-2">
+                    <span className="w-full h-[24px] rounded-full bg-[#00BFFF] text-black text-[9.5px] font-black uppercase tracking-[0.07em] flex items-center justify-center gap-1">
+                      <span>▶</span>
+                      <span>{tx("Inicio", "Start")}</span>
+                    </span>
                     <div className="flex items-center gap-[3.5px]" aria-hidden="true">
                       <span className="w-[9px] h-[3px] rounded-full bg-[#00BFFF]" />
                       <span className="w-[3px] h-[3px] rounded-full bg-white/25" />

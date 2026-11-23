@@ -3267,15 +3267,23 @@ public class MainActivity extends BridgeActivity {
         emitBleHrStatusToWebView(null);
     }
 
+    private volatile String lastWearHrJson = "";
+    private volatile long lastWearHrReceivedMs = 0L;
+
     private void emitWearHeartRateToWebView(final String payload, final String sourceNodeId) {
         try {
             JSONObject in = new JSONObject(payload);
             JSONObject out = new JSONObject();
             out.put("bpm", in.optInt("bpm", 0));
+            if (in.has("avgBpm")) out.put("avgBpm", in.optInt("avgBpm", 0));
+            if (in.has("maxBpm")) out.put("maxBpm", in.optInt("maxBpm", 0));
             out.put("status", in.optString("status", "ok"));
             out.put("deviceName", in.optString("deviceName", ""));
             out.put("nodeId", sourceNodeId != null ? sourceNodeId : "");
-            final String quotedJson = JSONObject.quote(out.toString());
+            final String outStr = out.toString();
+            lastWearHrJson = outStr;
+            lastWearHrReceivedMs = System.currentTimeMillis();
+            final String quotedJson = JSONObject.quote(outStr);
             runOnUiThread(() -> {
                 if (getBridge() != null && getBridge().getWebView() != null) {
                     String js = "if (window.__onNativeWearHrUpdate) { window.__onNativeWearHrUpdate(" + quotedJson + "); }";
@@ -3308,7 +3316,27 @@ public class MainActivity extends BridgeActivity {
                 byte[] req = ("{\"type\":\"HR_REQUEST\",\"_ts\":" + System.currentTimeMillis() + "}")
                     .getBytes(StandardCharsets.UTF_8);
                 broadcastToWearNodes("/archery101010/hr_request", req);
+                if (lastWearHrJson != null && !lastWearHrJson.isEmpty()
+                        && (System.currentTimeMillis() - lastWearHrReceivedMs) < 20_000L) {
+                    final String quotedJson = JSONObject.quote(lastWearHrJson);
+                    runOnUiThread(() -> {
+                        if (getBridge() != null && getBridge().getWebView() != null) {
+                            String js = "if (window.__onNativeWearHrUpdate) { window.__onNativeWearHrUpdate(" + quotedJson + "); }";
+                            getBridge().getWebView().evaluateJavascript(js, null);
+                        }
+                    });
+                }
             } catch (Exception ignored) {}
+        }
+
+        @Keep
+        @JavascriptInterface
+        public String getLastWearHeartRateJson() {
+            if (lastWearHrJson != null && !lastWearHrJson.isEmpty()
+                    && (System.currentTimeMillis() - lastWearHrReceivedMs) < 20_000L) {
+                return lastWearHrJson;
+            }
+            return "";
         }
 
         @Keep
