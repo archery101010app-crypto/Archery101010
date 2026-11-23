@@ -31,9 +31,23 @@ export interface ParsedHeartRatePacket {
   validPhysiological: boolean;
 }
 
+export type HeartRateSource = "ble" | "wear_os";
+
+/**
+ * Smartwatches paired to the phone (bonded, named "...Watch...") that do NOT advertise the
+ * standard 0x180D Heart Rate Service cannot stream pulse over plain Bluetooth. Their live pulse
+ * arrives through the ARCHERY 101010 watch app instead (Wearable Data Layer).
+ */
+export function isLikelyCompanionSmartwatch(dev: BleHrDiscoveredDevice | null | undefined): boolean {
+  if (!dev || dev.hasHrService) return false;
+  return Boolean(dev.isBondedOrConnected) && /\bwatch/i.test(String(dev.name || ""));
+}
+
 export interface BleHeartRateStatus {
   transport: "native_android" | "web_bluetooth" | "unsupported";
   supported: boolean;
+  /** Where live pulse samples currently come from: a BLE sensor or the ARCHERY 101010 watch app. */
+  source: HeartRateSource;
   state: BleHrConnectionState;
   deviceId: string;
   deviceName: string;
@@ -193,6 +207,7 @@ const listeners = new Set<(status: BleHeartRateStatus) => void>();
 let statusState: BleHeartRateStatus = {
   transport: "unsupported",
   supported: false,
+  source: "ble",
   state: "disconnected",
   deviceId: "",
   deviceName: "",
@@ -213,6 +228,86 @@ let webUserDisconnected = false;
 let webReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let staleSampleWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
 let lastNativeScanStartedAt = 0;
+
+// ── Watch-app pulse channel (ARCHERY 101010 watch app → phone via Wearable Data Layer) ──
+const WEAR_HR_LIVE_WINDOW_MS = 15_000;
+let wearHrLastAt = 0;
+let wearHrMuted = false;
+let wearHrTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
+
+function isWearHrLive(nowMs = Date.now()): boolean {
+  return statusState.source === "wear_os" && nowMs - wearHrLastAt < WEAR_HR_LIVE_WINDOW_MS;
+}
+
+function armWearHrTimeout(): void {
+  if (wearHrTimeoutTimer) clearTimeout(wearHrTimeoutTimer);
+  wearHrTimeoutTimer = setTimeout(() => {
+    wearHrTimeoutTimer = null;
+    if (statusState.source !== "wear_os") return;
+    if (Date.now() - wearHrLastAt < WEAR_HR_LIVE_WINDOW_MS) {
+      armWearHrTimeout();
+      return;
+    }
+    sessionTracker.clearCurrentReading();
+    statusState.source = "ble";
+    statusState.state = "disconnected";
+    statusState.contactDetected = null;
+    emitStatus();
+  }, WEAR_HR_LIVE_WINDOW_MS);
+}
+
+function applyWearPayload(payload: any): void {
+  if (!payload || typeof payload !== "object" || wearHrMuted) return;
+  // A dedicated BLE sensor that is already streaming always keeps priority
+  const bleLive = statusState.state === "connected" && statusState.source === "ble";
+  const wearStatus = String(payload.status || "ok");
+  const wearName =
+    typeof payload.deviceName === "string" && payload.deviceName.trim()
+      ? payload.deviceName.trim()
+      : "";
+
+  if (wearStatus !== "ok") {
+    if (bleLive) return;
+    if (wearStatus === "no_contact") {
+      statusState.contactDetected = false;
+      sessionTracker.clearCurrentReading();
+    } else if (wearStatus === "permission_denied") {
+      statusState.errorCode = "WEAR_HR_PERMISSION_DENIED";
+    } else if (wearStatus === "no_sensor") {
+      statusState.errorCode = "WEAR_HR_NO_SENSOR";
+    }
+    if (wearName && statusState.source === "wear_os") statusState.deviceName = wearName;
+    emitStatus();
+    return;
+  }
+
+  const bpm = Number(payload.bpm);
+  if (bleLive || !isValidHeartRateBpm(bpm)) return;
+
+  const now = Date.now();
+  const wasWearLive = isWearHrLive(now);
+  wearHrLastAt = now;
+  if (!wasWearLive) {
+    const bridge = getNativeBridge();
+    if (bridge && statusState.state === "scanning") {
+      try {
+        bridge.stopScan();
+      } catch {}
+    }
+  }
+  statusState.source = "wear_os";
+  statusState.state = "connected";
+  statusState.errorCode = "";
+  statusState.batteryPct = null;
+  statusState.contactDetected = true;
+  statusState.deviceId = `wear:${String(payload.nodeId || "watch")}`;
+  if (wearName) statusState.deviceName = wearName;
+  if (sessionTracker.recordSample(bpm, true, now)) {
+    armStaleSampleWatchdog();
+  }
+  armWearHrTimeout();
+  emitStatus();
+}
 
 function armStaleSampleWatchdog(): void {
   if (typeof window === "undefined") return;
@@ -316,6 +411,16 @@ function applyNativePayload(payload: any): void {
       }));
   }
 
+  // While the watch app is streaming live pulse, BLE scan/idle/error transitions must never
+  // overwrite it. Only a genuinely connected BLE sensor may take over.
+  if (isWearHrLive() && payload.state !== "connected") {
+    emitStatus();
+    return;
+  }
+  if (payload.state === "connected") {
+    statusState.source = "ble";
+  }
+
   if (typeof payload.state === "string") {
     statusState.state = payload.state as BleHrConnectionState;
     if (payload.state !== "connected") {
@@ -328,7 +433,7 @@ function applyNativePayload(payload: any): void {
   if (typeof payload.deviceName === "string" && payload.deviceName.trim()) {
     statusState.deviceName = payload.deviceName.trim();
   }
-  if (statusState.state === "connected" && (statusState.deviceId || statusState.deviceName)) {
+  if (statusState.state === "connected" && statusState.source === "ble" && (statusState.deviceId || statusState.deviceName)) {
     persistSavedSensorMeta(statusState.deviceId, statusState.deviceName);
   }
   if (typeof payload.batteryPct === "number" && payload.batteryPct >= 0 && payload.batteryPct <= 100) {
@@ -379,6 +484,14 @@ function ensureInitialized(): void {
   const win = window as unknown as {
     __onNativeBleHrUpdate?: (data: unknown) => void;
     __onNativeBleHrDevices?: (devices: unknown) => void;
+    __onNativeWearHrUpdate?: (data: unknown) => void;
+  };
+
+  win.__onNativeWearHrUpdate = (data: unknown) => {
+    try {
+      const parsed = typeof data === "string" ? JSON.parse(data) : data;
+      applyWearPayload(parsed);
+    } catch {}
   };
 
   win.__onNativeBleHrUpdate = (data: unknown) => {
@@ -548,10 +661,17 @@ function onWebGattDisconnected(): void {
  */
 export async function startBleHeartRateScanOrRequest(): Promise<void> {
   ensureInitialized();
+  wearHrMuted = false;
+  if (isWearHrLive()) {
+    // Live pulse is already flowing from the watch app; nothing to scan for.
+    emitStatus();
+    return;
+  }
   statusState.errorCode = "";
 
   const bridge = getNativeBridge();
   if (bridge) {
+    requestWatchAppHeartRate();
     const now = Date.now();
     if (statusState.state === "scanning" && now - lastNativeScanStartedAt < 2500) {
       return;
@@ -627,10 +747,33 @@ export function stopBleHeartRateScan(): void {
   }
 }
 
+/** Asks the ARCHERY 101010 watch app (if open on a paired watch) to start streaming live pulse. */
+export function requestWatchAppHeartRate(): void {
+  const bridge = getNativeBridge() as (NativeBleBridge & { requestWatchHeartRate?: () => void }) | null;
+  if (bridge && typeof bridge.requestWatchHeartRate === "function") {
+    try {
+      bridge.requestWatchHeartRate();
+    } catch {}
+  }
+}
+
 export function connectBleHeartRateDevice(deviceId: string, deviceName?: string): void {
   ensureInitialized();
   const bridge = getNativeBridge();
   if (!bridge) return;
+
+  const target = statusState.discoveredDevices.find((d) => d.id === deviceId);
+  if (isLikelyCompanionSmartwatch(target)) {
+    // Paired smartwatches don't expose standard Bluetooth pulse: route through the watch app.
+    wearHrMuted = false;
+    statusState.errorCode = "WEAR_APP_REQUIRED";
+    if (deviceName && !isWearHrLive()) statusState.deviceName = deviceName;
+    emitStatus();
+    requestWatchAppHeartRate();
+    return;
+  }
+
+  statusState.source = "ble";
   statusState.state = "connecting";
   statusState.errorCode = "";
   statusState.batteryPct = null;
@@ -652,6 +795,15 @@ export function disconnectBleHeartRateDevice(forgetSaved = false): void {
   if (webReconnectTimer) {
     clearTimeout(webReconnectTimer);
     webReconnectTimer = null;
+  }
+  if (statusState.source === "wear_os") {
+    wearHrMuted = true;
+    wearHrLastAt = 0;
+    statusState.source = "ble";
+  }
+  if (wearHrTimeoutTimer) {
+    clearTimeout(wearHrTimeoutTimer);
+    wearHrTimeoutTimer = null;
   }
 
   const bridge = getNativeBridge();

@@ -100,6 +100,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             });
             return;
         }
+        if ("/archery101010/hr_request".equals(path)) {
+            runOnUiThread(() -> startHeartRateStreaming(true));
+            return;
+        }
         if (payload != null && !payload.isEmpty()) {
             handleIncomingPhonePayload(payload);
         }
@@ -163,6 +167,126 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private String syncedBowType = "Barebow";
     private String syncedBowWrist = "LEFT";
     private int syncedHeartRateBpm = 0;
+
+    // ── Live wrist pulse streaming to the phone (/archery101010/hr) ──
+    private static final int REQ_HEART_RATE = 1011;
+    private static final String PERM_READ_HEART_RATE = "android.permission.health.READ_HEART_RATE";
+    private static final long HR_SEND_INTERVAL_MS = 1000L;
+    private static final long LOCAL_HR_FRESH_MS = 10_000L;
+    private Sensor heartRateSensor;
+    private boolean isHrSensorRegistered = false;
+    private boolean hrPermissionRequestedThisRun = false;
+    private volatile int localSensorHrBpm = 0;
+    private volatile long localSensorHrAtMs = 0L;
+    private long lastHrSentMs = 0L;
+    private long lastHrStatusSentMs = 0L;
+    private String cachedWatchDisplayName = null;
+
+    private final SensorEventListener heartRateListener = new SensorEventListener() {
+        @Override
+        public void onSensorChanged(SensorEvent event) {
+            if (event == null || event.values == null || event.values.length == 0) return;
+            long now = System.currentTimeMillis();
+            if (event.accuracy == SensorManager.SENSOR_STATUS_NO_CONTACT) {
+                localSensorHrBpm = 0;
+                if (now - lastHrStatusSentMs >= 4000L) {
+                    lastHrStatusSentMs = now;
+                    sendHeartRateToPhone(0, "no_contact");
+                }
+                return;
+            }
+            int bpm = Math.round(event.values[0]);
+            if (bpm < 30 || bpm > 245) return;
+            localSensorHrBpm = bpm;
+            localSensorHrAtMs = now;
+            syncedHeartRateBpm = bpm;
+            if (now - lastHrSentMs >= HR_SEND_INTERVAL_MS) {
+                lastHrSentMs = now;
+                sendHeartRateToPhone(bpm, "ok");
+            }
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+    };
+
+    private boolean isLocalHeartRateFresh() {
+        return localSensorHrBpm >= 30 && (System.currentTimeMillis() - localSensorHrAtMs) < LOCAL_HR_FRESH_MS;
+    }
+
+    private boolean hasHeartRatePermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true;
+        if (Build.VERSION.SDK_INT >= 36) {
+            return checkSelfPermission(PERM_READ_HEART_RATE) == PackageManager.PERMISSION_GRANTED;
+        }
+        return checkSelfPermission(Manifest.permission.BODY_SENSORS) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private String getWatchDisplayName() {
+        if (cachedWatchDisplayName != null) return cachedWatchDisplayName;
+        String name = null;
+        try {
+            name = android.provider.Settings.Global.getString(getContentResolver(), "device_name");
+        } catch (Exception ignored) {}
+        if (name == null || name.trim().isEmpty()) {
+            name = Build.MODEL;
+        }
+        cachedWatchDisplayName = name != null ? name.trim() : "";
+        return cachedWatchDisplayName;
+    }
+
+    private void sendHeartRateToPhone(int bpm, String status) {
+        try {
+            JSONObject obj = new JSONObject();
+            obj.put("type", "HR");
+            obj.put("bpm", bpm);
+            obj.put("status", status);
+            obj.put("deviceName", getWatchDisplayName());
+            obj.put("_ts", System.currentTimeMillis());
+            sendToPhone("/archery101010/hr", obj.toString(), false);
+        } catch (Exception ignored) {}
+    }
+
+    private synchronized void startHeartRateStreaming(boolean allowPermissionPrompt) {
+        if (sensorManager == null) return;
+        if (heartRateSensor == null) {
+            heartRateSensor = sensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE);
+        }
+        if (heartRateSensor == null) {
+            sendHeartRateToPhone(0, "no_sensor");
+            return;
+        }
+        if (!hasHeartRatePermission()) {
+            if (allowPermissionPrompt && !hrPermissionRequestedThisRun && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                hrPermissionRequestedThisRun = true;
+                String perm = Build.VERSION.SDK_INT >= 36 ? PERM_READ_HEART_RATE : Manifest.permission.BODY_SENSORS;
+                try {
+                    requestPermissions(new String[]{perm}, REQ_HEART_RATE);
+                } catch (Exception ignored) {}
+            } else {
+                sendHeartRateToPhone(0, "permission_denied");
+            }
+            return;
+        }
+        if (!isHrSensorRegistered) {
+            try {
+                isHrSensorRegistered = sensorManager.registerListener(
+                        heartRateListener, heartRateSensor, SensorManager.SENSOR_DELAY_NORMAL);
+            } catch (Exception ignored) {
+                isHrSensorRegistered = false;
+            }
+        }
+    }
+
+    private synchronized void stopHeartRateStreaming() {
+        if (sensorManager != null && isHrSensorRegistered) {
+            try {
+                sensorManager.unregisterListener(heartRateListener);
+            } catch (Exception ignored) {}
+        }
+        isHrSensorRegistered = false;
+        localSensorHrBpm = 0;
+    }
     private int lastAnalysisShotNum = 0;
     private float lastPrepSec = 0f;
     private float lastAimSec = 0f;
@@ -370,6 +494,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
         ensureSensorAndHeartbeatActive();
         initWearCommunication();
+        startHeartRateStreaming(true);
         if (hasPairingCode && pairingCode.length() == 6) {
             pollFirestoreCloud();
         }
@@ -383,6 +508,14 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_HEART_RATE) {
+            if (hasHeartRatePermission()) {
+                startHeartRateStreaming(false);
+            } else {
+                sendHeartRateToPhone(0, "permission_denied");
+            }
+            return;
+        }
         if (requestCode == REQ_MIC_AUTO_SHOT) {
             boolean granted = grantResults != null
                     && grantResults.length > 0
@@ -885,7 +1018,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 String bt = obj.optString("bowType", syncedBowType);
                 if (!bt.isEmpty()) syncedBowType = bt;
             }
-            if (obj.has("heartRateBpm")) {
+            if (obj.has("heartRateBpm") && !isLocalHeartRateFresh()) {
                 syncedHeartRateBpm = obj.optInt("heartRateBpm", 0);
             }
             if (obj.has("analysisCalibrationJson")) {
@@ -1334,7 +1467,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                             syncedArrowsPerEnd = fsPerEnd;
                             syncedEndsCount = fsEnds;
                             if (!fsBowType.isEmpty()) syncedBowType = fsBowType;
-                            if (fsHr >= 30 && fsHr <= 245) syncedHeartRateBpm = fsHr;
+                            if (fsHr >= 30 && fsHr <= 245 && !isLocalHeartRateFresh()) syncedHeartRateBpm = fsHr;
                             if (fsAnalysis != analysisMode) {
                                 analysisMode = fsAnalysis;
                                 syncShotDetectionSensors();
@@ -1452,6 +1585,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
         markUserActivity(false);
         ensureSensorAndHeartbeatActive();
+        if (hasHeartRatePermission()) {
+            startHeartRateStreaming(false);
+        }
         sendToPhone("{\"type\":\"REQUEST_STATE\"}");
     }
 
@@ -1467,6 +1603,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         if (idleNoSession) {
             heartbeatHandler.removeCallbacks(heartbeatRunnable);
             stopAcousticSnapAnalyzer();
+            stopHeartRateStreaming();
             if (sensorManager != null && isSensorRegistered) {
                 try {
                     sensorManager.unregisterListener(this);
@@ -1488,6 +1625,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
         heartbeatHandler.removeCallbacks(heartbeatRunnable);
         stopAcousticSnapAnalyzer();
+        stopHeartRateStreaming();
         if (sensorManager != null && isSensorRegistered) {
             try {
                 sensorManager.unregisterListener(this);

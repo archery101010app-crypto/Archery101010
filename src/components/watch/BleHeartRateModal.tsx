@@ -9,6 +9,7 @@ import {
   connectBleHeartRateDevice,
   disconnectBleHeartRateDevice,
   getBleHeartRateStatus,
+  isLikelyCompanionSmartwatch,
   startBleHeartRateScanOrRequest,
   stopBleHeartRateScan,
   subscribeBleHeartRate
@@ -163,8 +164,26 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
     }
     if (status.errorCode === "HR_BROADCAST_NOT_ENABLED") {
       return tx(
-        "Activa transmitir pulso en tu dispositivo",
-        "Enable heart rate broadcast on your device"
+        "Este dispositivo no transmite pulso. Activa Transmitir pulso en sus ajustes o abre ARCHERY 101010 en tu reloj.",
+        "This device isn't broadcasting pulse. Turn on Broadcast heart rate in its settings or open ARCHERY 101010 on your watch."
+      );
+    }
+    if (status.errorCode === "WEAR_APP_REQUIRED") {
+      return tx(
+        "Abre ARCHERY 101010 en tu reloj: el pulso llegará solo.",
+        "Open ARCHERY 101010 on your watch: pulse will arrive automatically."
+      );
+    }
+    if (status.errorCode === "WEAR_HR_PERMISSION_DENIED") {
+      return tx(
+        "Permite el sensor de pulso en la app del reloj.",
+        "Allow the heart rate sensor in the watch app."
+      );
+    }
+    if (status.errorCode === "WEAR_HR_NO_SENSOR") {
+      return tx(
+        "Tu reloj no tiene sensor de pulso disponible.",
+        "Your watch has no heart rate sensor available."
       );
     }
     if (status.errorCode === "CONNECT_FAILED") {
@@ -388,6 +407,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
               <div className="flex flex-col gap-2 max-h-[210px] overflow-y-auto pr-0.5">
                 {status.discoveredDevices.map((dev) => {
                   const isThisConnecting = isConnecting && status.deviceId === dev.id;
+                  const isCompanionWatch = isLikelyCompanionSmartwatch(dev);
                   return (
                     <div
                       key={dev.id}
@@ -401,6 +421,10 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
                           {dev.hasHrService ? (
                             <span className="text-[12px] font-bold uppercase tracking-wider text-[#00C853]">
                               {tx("● PULSO ACTIVO", "● HR READY")}
+                            </span>
+                          ) : isCompanionWatch ? (
+                            <span className={`text-[12px] font-bold uppercase tracking-wider text-[#FFE500]${isEs ? "" : " truncate"}`}>
+                              {tx("VÍA APP DEL RELOJ", "VIA WATCH APP")}
                             </span>
                           ) : dev.isBondedOrConnected ? (
                             <span className={`text-[12px] font-bold uppercase tracking-wider text-[#00BFFF]${isEs ? "" : " truncate"}`}>
@@ -422,13 +446,24 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
                           isEs ? "" : " max-w-[132px] truncate"
                         }`}
                       >
-                        {isThisConnecting ? tx("Conectando...", "Connecting...") : t("bleHrConnect")}
+                        {isThisConnecting
+                          ? tx("Conectando...", "Connecting...")
+                          : isCompanionWatch
+                          ? tx("Usar reloj", "Use watch")
+                          : t("bleHrConnect")}
                       </button>
                     </div>
                   );
                 })}
               </div>
             )}
+
+            <p className="text-[12.5px] font-medium text-[#94A3B8] leading-snug px-0.5">
+              {tx(
+                "¿Reloj inteligente? Abre ARCHERY 101010 en el reloj o activa Transmitir pulso en sus ajustes.",
+                "Smartwatch? Open ARCHERY 101010 on the watch or turn on Broadcast heart rate in its settings."
+              )}
+            </p>
           </div>
         )}
 

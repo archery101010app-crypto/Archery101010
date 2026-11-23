@@ -1209,4 +1209,38 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
       assert.equal(forbiddenBrands.test(content), false, `${rel} must never mention third-party brands`);
     }
   });
+
+  it("streams live pulse from paired smartwatches via the watch app when standard BLE broadcast is unavailable", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { isLikelyCompanionSmartwatch } = await import("../src/lib/scoring/bleHeartRateService.ts");
+
+    // 1. Paired smartwatches without 0x180D are routed through the watch app, real sensors are not
+    assert.equal(isLikelyCompanionSmartwatch({ id: "a", name: "Smart Watch7 (ZX3Z)", isBondedOrConnected: true }), true);
+    assert.equal(isLikelyCompanionSmartwatch({ id: "b", name: "Smart Watch7", isBondedOrConnected: true, hasHrService: true }), false);
+    assert.equal(isLikelyCompanionSmartwatch({ id: "c", name: "HR Strap 2", isBondedOrConnected: true }), false);
+    assert.equal(isLikelyCompanionSmartwatch({ id: "d", name: "AB Shutter3", isBondedOrConnected: true }), false);
+
+    // 2. Watch app reads the wrist pulse sensor (BODY_SENSORS ≤ API 35, READ_HEART_RATE API 36+) and streams /archery101010/hr
+    const wearManifest = fs.readFileSync(path.resolve(process.cwd(), "android/wear/src/main/AndroidManifest.xml"), "utf8");
+    assert.ok(wearManifest.includes("android.permission.health.READ_HEART_RATE"));
+    assert.ok(/BODY_SENSORS"\s+android:maxSdkVersion="35"/.test(wearManifest));
+    const wearSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "android/wear/src/main/java/com/archery101010/app/WearMainActivity.java"),
+      "utf8"
+    );
+    assert.ok(wearSrc.includes("Sensor.TYPE_HEART_RATE"));
+    assert.ok(wearSrc.includes("\"/archery101010/hr\""));
+    assert.ok(wearSrc.includes("\"/archery101010/hr_request\""));
+
+    // 3. Phone forwards watch pulse to the web layer and refreshes stale GATT caches before failing
+    const phoneSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "android/app/src/main/java/com/archery101010/app/MainActivity.java"),
+      "utf8"
+    );
+    assert.ok(phoneSrc.includes("__onNativeWearHrUpdate"));
+    assert.ok(phoneSrc.includes("refreshBleGattCacheInternal"));
+    const serviceSrc = fs.readFileSync(path.resolve(process.cwd(), "src/lib/scoring/bleHeartRateService.ts"), "utf8");
+    assert.ok(serviceSrc.includes("__onNativeWearHrUpdate"));
+  });
 });

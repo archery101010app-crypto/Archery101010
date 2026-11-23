@@ -1666,6 +1666,13 @@ public class MainActivity extends BridgeActivity {
             return;
         }
 
+        // Live pulse streamed by the ARCHERY 101010 watch app (watches without standard BLE pulse broadcast)
+        if ("/archery101010/hr".equals(path)) {
+            lastWatchPongTimeMs = now;
+            emitWearHeartRateToWebView(payload, sourceNodeId);
+            return;
+        }
+
         String cmdType = "";
         String cmdId = "";
         long cmdSeq = 0L;
@@ -2634,6 +2641,24 @@ public class MainActivity extends BridgeActivity {
                 : null;
 
             if (hrService == null || hrChar == null) {
+                // Android may serve a stale cached service table (e.g. pulse broadcast was just enabled
+                // on the watch). Refresh the GATT cache and rediscover once before giving up.
+                if (!bleGattCacheRefreshTried) {
+                    bleGattCacheRefreshTried = true;
+                    if (refreshBleGattCacheInternal(gatt)) {
+                        final BluetoothGatt refreshedGatt = gatt;
+                        bleMainHandler.postDelayed(() -> {
+                            if (refreshedGatt == activeBleGatt && isBleGattConnected) {
+                                try {
+                                    refreshedGatt.discoverServices();
+                                    return;
+                                } catch (Exception ignored) {}
+                            }
+                        }, 700L);
+                        return;
+                    }
+                }
+                bleGattCacheRefreshTried = false;
                 bleUserRequestedDisconnect = true;
                 bleConnectedOnce = false;
                 isBleGattConnected = false;
@@ -2649,6 +2674,7 @@ public class MainActivity extends BridgeActivity {
             }
 
             boolean hasCccd = hrChar.getDescriptor(BLE_CCCD_UUID) != null;
+            bleGattCacheRefreshTried = false;
             boolean notifyOk = enableCccdNotifications(gatt, hrChar);
             bleConnectRetryCount = 0;
             bleAutoReconnectAttempts = 0;
@@ -2779,6 +2805,7 @@ public class MainActivity extends BridgeActivity {
         }
         bleBatteryPct = null;
         bleUserRequestedDisconnect = false;
+        bleGattCacheRefreshTried = false;
         bleHrDeviceId = cleanAddr;
         bleHrDeviceName = cleanName;
         bleHrErrorCode = "";
@@ -2842,8 +2869,50 @@ public class MainActivity extends BridgeActivity {
         emitBleHrStatusToWebView(null);
     }
 
+    private void emitWearHeartRateToWebView(final String payload, final String sourceNodeId) {
+        try {
+            JSONObject in = new JSONObject(payload);
+            JSONObject out = new JSONObject();
+            out.put("bpm", in.optInt("bpm", 0));
+            out.put("status", in.optString("status", "ok"));
+            out.put("deviceName", in.optString("deviceName", ""));
+            out.put("nodeId", sourceNodeId != null ? sourceNodeId : "");
+            final String quotedJson = JSONObject.quote(out.toString());
+            runOnUiThread(() -> {
+                if (getBridge() != null && getBridge().getWebView() != null) {
+                    String js = "if (window.__onNativeWearHrUpdate) { window.__onNativeWearHrUpdate(" + quotedJson + "); }";
+                    getBridge().getWebView().evaluateJavascript(js, null);
+                }
+            });
+        } catch (Exception ignored) {}
+    }
+
+    /** Clears Android's cached GATT service table (hidden API) so freshly enabled pulse broadcast is discovered. */
+    private boolean refreshBleGattCacheInternal(BluetoothGatt gatt) {
+        if (gatt == null) return false;
+        try {
+            java.lang.reflect.Method refresh = gatt.getClass().getMethod("refresh");
+            Object res = refresh.invoke(gatt);
+            return res instanceof Boolean && (Boolean) res;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private volatile boolean bleGattCacheRefreshTried = false;
+
     @Keep
     public class ArcheryBleHeartRateBridge {
+        @Keep
+        @JavascriptInterface
+        public void requestWatchHeartRate() {
+            try {
+                byte[] req = ("{\"type\":\"HR_REQUEST\",\"_ts\":" + System.currentTimeMillis() + "}")
+                    .getBytes(StandardCharsets.UTF_8);
+                broadcastToWearNodes("/archery101010/hr_request", req);
+            } catch (Exception ignored) {}
+        }
+
         @Keep
         @JavascriptInterface
         public void startScan() {

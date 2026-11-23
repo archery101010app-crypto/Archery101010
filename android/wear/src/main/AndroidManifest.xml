@@ -7,6 +7,7 @@
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
     <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.heartrate" android:required="false" />
     <!-- Avoid implicit Play Store device filters (faketouch is implied as REQUIRED by default for every APK) -->
     <uses-feature android:name="android.hardware.faketouch" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -17,9 +18,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <!-- Strictly strip health/activity permissions so Google Play never classifies the app under Health Apps policy -->
+    <!-- Live wrist pulse for the phone's Pulsaciones panel (watches without standard BLE pulse broadcast).
+         Wear OS 5 and below: BODY_SENSORS. Wear OS 6+ (API 36): granular READ_HEART_RATE. -->
+    <uses-permission android:name="android.permission.BODY_SENSORS" android:maxSdkVersion="35" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" tools:node="remove" />
-    <uses-permission android:name="android.permission.BODY_SENSORS" tools:node="remove" />
 
     <application
         android:allowBackup="true"
@@ -45,6 +48,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Health permission usage rationale entry point (required for granular health permissions) -->
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".WearMainActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- Background WearableListenerService so Watch responds to phone pings & syncs state in background -->
         <service
