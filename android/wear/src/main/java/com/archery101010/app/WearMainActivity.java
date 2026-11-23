@@ -12,6 +12,7 @@ import android.graphics.Color;
 import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.hardware.Sensor;
@@ -121,6 +122,13 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private Vibrator vibrator;
     private PowerManager.WakeLock wakeLock;
     private boolean isSensorRegistered = false;
+    private boolean isSensorHighRateMode = false;
+    private volatile long lastWatchTapMs = 0L;
+    private double stepGravityMag = SensorManager.GRAVITY_EARTH;
+    private double stepSmoothLin = 0.0;
+    private boolean stepArmedForPeak = true;
+    private boolean stepPeakSeen = false;
+    private double stepLastMeanIv = 580.0;
 
     // Dual-Key Real-Time Acoustic String-Snap DSP state (100% on-device volatile memory, never recorded/saved)
     private volatile boolean isAcousticAnalyzerRunning = false;
@@ -445,6 +453,65 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private WearCanvasView canvasView;
+    private boolean isBackCallbackRegistered = false;
+    private Object wearBackInvokedCallback = null;
+
+    private boolean canHandleWatchBackNavigation() {
+        if (isEditingCode) return true;
+        if (analysisMode) return analysisPage > 0;
+        return screenIndex > 0;
+    }
+
+    private boolean handleWatchBackNavigation() {
+        if (isEditingCode) {
+            isEditingCode = false;
+        } else if (analysisMode && analysisPage > 0) {
+            analysisPage = 0;
+        } else if (!analysisMode && screenIndex > 0) {
+            screenIndex = screenIndex - 1;
+        } else {
+            return false;
+        }
+        markUserActivity(false);
+        triggerHaptic(20);
+        syncBackNavigationCallback();
+        if (canvasView != null) canvasView.invalidate();
+        return true;
+    }
+
+    private void syncBackNavigationCallback() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            boolean shouldRegister = canHandleWatchBackNavigation();
+            if (shouldRegister && !isBackCallbackRegistered) {
+                try {
+                    if (wearBackInvokedCallback == null) {
+                        wearBackInvokedCallback = (android.window.OnBackInvokedCallback) this::handleWatchBackNavigation;
+                    }
+                    getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                            android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                            (android.window.OnBackInvokedCallback) wearBackInvokedCallback
+                    );
+                    isBackCallbackRegistered = true;
+                } catch (Throwable ignored) {}
+            } else if (!shouldRegister && isBackCallbackRegistered && wearBackInvokedCallback != null) {
+                try {
+                    getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(
+                            (android.window.OnBackInvokedCallback) wearBackInvokedCallback
+                    );
+                } catch (Throwable ignored) {}
+                isBackCallbackRegistered = false;
+            }
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    public void onBackPressed() {
+        if (handleWatchBackNavigation()) {
+            return;
+        }
+        super.onBackPressed();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -477,7 +544,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         distanceWalkedM = prefs.getFloat("walkedMeters", 0f);
         syncedArrowsPerEnd = Math.max(1, prefs.getInt("syncedArrowsPerEnd", 6));
         syncedEndsCount = Math.max(1, prefs.getInt("syncedEndsCount", 12));
-        autoDetectEnabled = prefs.getBoolean("autoDetectEnabled_v2", false);
+        autoDetectEnabled = false;
+        prefs.edit().putBoolean("autoDetectEnabled_v2", false).apply();
         sensitivityLevel = Math.max(0, Math.min(2, prefs.getInt("sensitivityLevel", 1)));
         cmdSequence = prefs.getLong("cmdSequence", 0L);
         mPendingUnackedDelta = prefs.getInt("pendingUnackedDelta", 0);
@@ -686,39 +754,35 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private synchronized void syncShotDetectionSensors() {
-        if (sensorManager == null) return;
-        if (autoDetectEnabled || analysisMode) {
-            if (!isSensorRegistered && accelerometer != null) {
-                try {
-                    sensorManager.registerListener(this, accelerometer, SENSOR_RATE_100HZ_US);
-                    if (gyroscope != null) {
-                        sensorManager.registerListener(this, gyroscope, SENSOR_RATE_100HZ_US);
-                    }
-                    isSensorRegistered = true;
-                } catch (Exception ignored) {}
-            }
-            if (autoDetectEnabled) {
-                if (!hasMicPermission()) {
-                    stopAcousticSnapAnalyzer();
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !analysisMode) {
-                        requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_MIC_AUTO_SHOT);
-                    }
-                    return;
-                }
-                startAcousticSnapAnalyzer();
-            } else {
-                stopAcousticSnapAnalyzer();
-            }
-        } else {
-            pendingShotActive = false;
-            stopAcousticSnapAnalyzer();
-            if (isSensorRegistered) {
-                try {
-                    sensorManager.unregisterListener(this);
-                } catch (Exception ignored) {}
-                isSensorRegistered = false;
-            }
+        autoDetectEnabled = false;
+        stopAcousticSnapAnalyzer();
+        if (sensorManager == null || accelerometer == null) return;
+        boolean wantHighRate = analysisMode;
+        if (isSensorRegistered && isSensorHighRateMode == wantHighRate) {
+            return;
         }
+        if (isSensorRegistered) {
+            try {
+                sensorManager.unregisterListener(this);
+            } catch (Exception ignored) {}
+            isSensorRegistered = false;
+        }
+        try {
+            if (wantHighRate) {
+                sensorManager.registerListener(this, accelerometer, SENSOR_RATE_100HZ_US);
+                if (gyroscope != null) {
+                    sensorManager.registerListener(this, gyroscope, SENSOR_RATE_100HZ_US);
+                }
+                isSensorHighRateMode = true;
+            } else {
+                pendingShotActive = false;
+                // Keep 50Hz zero-permission accelerometer active so wrist footsteps & walked meters
+                // are accurately recorded even in 100% Manual Counter Mode!
+                sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
+                isSensorHighRateMode = false;
+            }
+            isSensorRegistered = true;
+        } catch (Exception ignored) {}
     }
 
     private void ensureSensorAndHeartbeatActive() {
@@ -852,9 +916,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 if (rootObj.has("sensitivityLevel")) {
                     sensitivityLevel = Math.max(0, Math.min(2, rootObj.optInt("sensitivityLevel", sensitivityLevel)));
                 }
-                if (rootObj.has("enabled")) {
-                    autoDetectEnabled = rootObj.optBoolean("enabled", autoDetectEnabled);
-                }
+                autoDetectEnabled = false;
                 lastActivityMs = System.currentTimeMillis();
                 syncShotDetectionSensors();
                 saveState();
@@ -1046,7 +1108,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 drawWeightLbs = (float) obj.optDouble("bowPoundageLbs", drawWeightLbs);
             }
             if (obj.has("autoDetectEnabled") && !hasUnackedLocalAction) {
-                autoDetectEnabled = obj.optBoolean("autoDetectEnabled", autoDetectEnabled);
+                autoDetectEnabled = false;
                 syncShotDetectionSensors();
             }
             saveState();
@@ -1458,7 +1520,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                                     }
                                 }
                                 if (autoNode != null) {
-                                    autoDetectEnabled = fsAuto;
+                                    autoDetectEnabled = false;
                                     syncShotDetectionSensors();
                                 }
                                 sensitivityLevel = fsSens;
@@ -1620,6 +1682,14 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
     @Override
     protected void onDestroy() {
+        if (Build.VERSION.SDK_INT >= 33 && isBackCallbackRegistered && wearBackInvokedCallback != null) {
+            try {
+                getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(
+                        (android.window.OnBackInvokedCallback) wearBackInvokedCallback
+                );
+            } catch (Throwable ignored) {}
+            isBackCallbackRegistered = false;
+        }
         if (activeInstanceRef != null && activeInstanceRef.get() == this) {
             activeInstanceRef = new WeakReference<>(null);
         }
@@ -1745,7 +1815,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private float getEffectiveWalkedMeters() {
-        return Math.max(0f, Math.max(distanceWalkedM, stepsCount * 0.76f));
+        return Math.max(0f, Math.max(distanceWalkedM, stepsCount * 0.78f));
     }
 
     private int getActiveKcal() {
@@ -1809,41 +1879,56 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         long lockDurationMs = (recentStepBoutCount >= 4) ? 9000L : 4800L;
         walkingLockUntilMs = Math.max(walkingLockUntilMs, now + lockDurationMs);
         stepsCount += stepDelta;
-        distanceWalkedM = Math.max(distanceWalkedM + (stepDelta * 0.76f), stepsCount * 0.76f);
+        distanceWalkedM = Math.max(distanceWalkedM + (stepDelta * 0.78f), stepsCount * 0.78f);
         saveState();
-        if ((now - lastTelemetrySyncTimeMs) >= 2500L) {
+        if ((now - lastTelemetrySyncTimeMs) >= 1800L) {
             syncTelemetryToPhone();
         }
         if (canvasView != null) canvasView.invalidate();
     }
 
     /**
-     * Zero-permission accelerometer step detector: requires rhythmic walking cadence (4+ evenly spaced peaks)
-     * so isolated bow raises, draws, or releases NEVER increment stepsCount and no ACTIVITY_RECOGNITION permission is needed.
+     * Zero-permission bipedal wrist step detector: requires rhythmic peak->valley walking cadence (4+ evenly spaced steps)
+     * so watch screen taps, isolated bow raises, draws, or releases NEVER increment stepsCount.
      */
     private void evaluateRhythmicAccelStep(long now) {
         long prevCandidate = accelCandidateStepCount > 0
             ? accelCandidateStepT[(accelCandidateStepCount - 1) % 4]
             : 0L;
         long dt = prevCandidate > 0L ? (now - prevCandidate) : 0L;
-        if (prevCandidate > 0L && dt < 340L) {
+        if (prevCandidate > 0L && dt < 300L) {
             return;
         }
-        if (prevCandidate > 0L && dt > 1450L) {
-            // Cadence broken: start a fresh candidate sequence without counting isolated motion
+        if (prevCandidate > 0L && dt > 1250L) {
+            double expectedDouble = stepLastMeanIv * 2.0;
+            if (accelRhythmicCadenceActive && dt <= 1950L && Math.abs(dt - expectedDouble) <= expectedDouble * 0.34) {
+                accelCandidateStepT[accelCandidateStepCount % 4] = prevCandidate + (dt / 2L);
+                accelCandidateStepCount++;
+                accelCandidateStepT[accelCandidateStepCount % 4] = now;
+                accelCandidateStepCount++;
+                recordDetectedSteps(now, 2);
+                return;
+            }
             accelCandidateStepCount = 0;
             accelRhythmicCadenceActive = false;
+            accelCandidateStepT[0] = now;
+            accelCandidateStepCount = 1;
+            return;
         }
 
         accelCandidateStepT[accelCandidateStepCount % 4] = now;
         accelCandidateStepCount++;
 
         if (accelRhythmicCadenceActive) {
+            if (accelCandidateStepCount >= 2) {
+                long prevT = accelCandidateStepT[(accelCandidateStepCount - 2 + 4) % 4];
+                stepLastMeanIv = 0.75 * stepLastMeanIv + 0.25 * (now - prevT);
+            }
             recordDetectedSteps(now, 1);
             return;
         }
 
-        // Need 4 rhythmic peaks (3 consecutive intervals within [340ms, 1450ms] and ±30% of average)
+        // Need 4 rhythmic peaks (3 consecutive intervals within [300ms, 1250ms] and ±34% of average)
         if (accelCandidateStepCount >= 4) {
             long t3 = accelCandidateStepT[(accelCandidateStepCount - 1) % 4];
             long t2 = accelCandidateStepT[(accelCandidateStepCount - 2) % 4];
@@ -1852,13 +1937,14 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             long g1 = t1 - t0;
             long g2 = t2 - t1;
             long g3 = t3 - t2;
-            boolean validRange = g1 >= 340L && g1 <= 1450L && g2 >= 340L && g2 <= 1450L && g3 >= 340L && g3 <= 1450L;
+            boolean validRange = g1 >= 300L && g1 <= 1250L && g2 >= 300L && g2 <= 1250L && g3 >= 300L && g3 <= 1250L;
             double avg = (g1 + g2 + g3) / 3.0;
-            boolean rhythmic = Math.abs(g1 - avg) <= avg * 0.30
-                && Math.abs(g2 - avg) <= avg * 0.30
-                && Math.abs(g3 - avg) <= avg * 0.30;
+            boolean rhythmic = Math.abs(g1 - avg) <= avg * 0.34
+                && Math.abs(g2 - avg) <= avg * 0.34
+                && Math.abs(g3 - avg) <= avg * 0.34;
             if (validRange && rhythmic) {
                 accelRhythmicCadenceActive = true;
+                stepLastMeanIv = avg;
                 recordDetectedSteps(now, 4);
             }
         }
@@ -2078,9 +2164,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
             boolean isWalkingBlocked = now < walkingLockUntilMs;
 
-            // Gate 7: Evaluate 220ms post-release follow-through window if a shot candidate is pending
+            // Gate 7: Evaluate 220ms post-release follow-through window exclusively for Biomechanical Analysis mode
             if (pendingShotActive) {
-                if (!autoDetectEnabled || isWalkingBlocked) {
+                if (!analysisMode || isWalkingBlocked) {
                     pendingShotActive = false;
                 } else {
                     long elapsed = now - pendingShotStartMs;
@@ -2102,37 +2188,17 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                             double followMeanGyro = pendingFollowGyroSamples >= 2
                                 ? (pendingFollowSumGyro / pendingFollowGyroSamples)
                                 : 0.0;
-                            // Bow release settles rapidly in horizontal follow-through; target arrow yanks sustain gross motion or drop arm
                             if (followMeanLin > 7.8 || followMeanAx > 8.0 || followMeanGyro > 4.2) {
                                 validFollowThrough = false;
                             }
                         }
-                        // Dual-Key Coincidence Gate:
-                        // Key 1 = 100 Hz Biomechanical Aim/Anchor + Sharp Release Impulse + Clean Follow-Through
-                        // Key 2 = Synchronized High-Frequency Percussive String-Snap on Watch Microphone (±140ms)
-                        long snapDeltaMs = Math.abs(lastVerifiedAcousticSnapMs - pendingShotStartMs);
-                        boolean hasAcousticKey = isAcousticAnalyzerRunning
-                                && lastVerifiedAcousticSnapMs > 0L
-                                && snapDeltaMs <= 140L;
-                        boolean acousticOk = hasAcousticKey || (analysisMode && !isAcousticAnalyzerRunning);
-                        if (validFollowThrough && acousticOk && (now - lastShotTimestamp) > shotCooldownMs) {
+                        if (validFollowThrough && (now - lastShotTimestamp) > shotCooldownMs) {
                             lastShotTimestamp = now;
-                            lastVerifiedAcousticSnapMs = 0L;
-                            if (analysisMode) {
-                                emitWearAnalysisShot(pendingShotStartMs, "watch_auto");
-                            } else {
-                                markUserActivity(true);
-                                arrowCount++;
-                                mPendingUnackedDelta += 1;
-                                triggerHaptic(55);
-                                saveState();
-                                sendToPhone("{\"type\":\"INCREMENT_ARROW\",\"delta\":1,\"source\":\"watch_auto\"}");
-                                if (canvasView != null) canvasView.invalidate();
-                            }
+                            emitWearAnalysisShot(pendingShotStartMs, "watch_auto");
                         }
                     }
                 }
-            } else if (autoDetectEnabled
+            } else if (analysisMode
                     && !isWalkingBlocked
                     && linearMag >= shotThreshold
                     && (now - lastShotTimestamp) > shotCooldownMs
@@ -2154,12 +2220,38 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 pendingFollowSumAx = 0.0;
                 pendingFollowSumGyro = 0.0;
                 pendingFollowGyroSamples = 0;
-            } else if (prevDynLinear >= 1.05
-                    && prevDynLinear > prevPrevDynLinear
-                    && prevDynLinear >= dynamicLinear
-                    && prevDynLinear <= 11.5
-                    && (now - lastShotTimestamp) > 1500L) {
-                evaluateRhythmicAccelStep(now);
+            }
+
+            // Continuous bipedal wrist step detection (works in both Manual Counter and Analysis modes)
+            if (mag >= 1.0 && mag <= 42.0) {
+                stepGravityMag = 0.94 * stepGravityMag + 0.06 * mag;
+                stepSmoothLin = 0.65 * stepSmoothLin + 0.35 * (mag - stepGravityMag);
+                if (lastWatchTapMs > 0L && (now - lastWatchTapMs) < 1200L) {
+                    accelCandidateStepCount = 0;
+                    accelRhythmicCadenceActive = false;
+                    stepPeakSeen = false;
+                    stepArmedForPeak = true;
+                } else {
+                    long prevStepCand = accelCandidateStepCount > 0
+                            ? accelCandidateStepT[(accelCandidateStepCount - 1) % 4]
+                            : 0L;
+                    if (prevStepCand > 0L && (now - prevStepCand) > 2200L) {
+                        accelCandidateStepCount = 0;
+                        accelRhythmicCadenceActive = false;
+                        stepPeakSeen = false;
+                        stepArmedForPeak = true;
+                    }
+                    if (stepArmedForPeak && stepSmoothLin >= 0.68) {
+                        stepPeakSeen = true;
+                        stepArmedForPeak = false;
+                    } else if (stepPeakSeen && stepSmoothLin <= -0.28) {
+                        stepPeakSeen = false;
+                        stepArmedForPeak = true;
+                        if ((now - lastShotTimestamp) > 1200L) {
+                            evaluateRhythmicAccelStep(now);
+                        }
+                    }
+                }
             }
             prevPrevDynLinear = prevDynLinear;
             prevDynLinear = dynamicLinear;
@@ -2558,7 +2650,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
                 @Override
                 public boolean onSingleTapUp(MotionEvent e) {
-                    handleTap(e.getX(), e.getY());
+                    float scale = Math.max(0.75f, Math.min(getWidth(), getHeight()) / 240f);
+                    if (!swipeHandledThisGesture && Math.hypot(e.getX() - touchDownX, e.getY() - touchDownY) <= (20f * scale)) {
+                        handleTap(e.getX(), e.getY());
+                    }
                     return true;
                 }
 
@@ -2567,19 +2662,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     if (e1 == null || e2 == null) return false;
                     float dx = e2.getX() - e1.getX();
                     float dy = e2.getY() - e1.getY();
-                    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
-                        if (analysisMode) {
-                            analysisPage = (analysisPage == 0) ? 1 : 0;
-                        } else if (dx < 0) {
-                            isEditingCode = false;
-                            screenIndex = (screenIndex + 1) % 5;
-                        } else {
-                            isEditingCode = false;
-                            screenIndex = (screenIndex + 4) % 5;
-                        }
-                        markUserActivity(false);
-                        triggerHaptic(20);
-                        invalidate();
+                    float scale = Math.max(0.75f, Math.min(getWidth(), getHeight()) / 240f);
+                    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > (28f * scale)) {
+                        swipeHandledThisGesture = true;
+                        handleHorizontalSwipe(dx);
                         return true;
                     }
                     return false;
@@ -2587,9 +2673,75 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             });
         }
 
+        private float touchDownX = 0f;
+        private float touchDownY = 0f;
+        private boolean swipeHandledThisGesture = false;
+
+        private void handleHorizontalSwipe(float dx) {
+            if (analysisMode) {
+                analysisPage = (dx < 0) ? 1 : 0;
+            } else if (dx < 0) {
+                isEditingCode = false;
+                screenIndex = (screenIndex + 1) % 5;
+            } else {
+                if (screenIndex == 4 && isEditingCode) {
+                    isEditingCode = false;
+                } else {
+                    screenIndex = (screenIndex + 4) % 5;
+                }
+            }
+            syncBackNavigationCallback();
+            markUserActivity(false);
+            triggerHaptic(20);
+            invalidate();
+        }
+
+        @Override
+        protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+            super.onLayout(changed, left, top, right, bottom);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                int w = right - left;
+                int h = bottom - top;
+                if (w > 0 && h > 0) {
+                    try {
+                        float density = getResources().getDisplayMetrics().density;
+                        int exclH = Math.min(h, Math.round(200f * density));
+                        int exclTop = Math.max(0, (h - exclH) / 2);
+                        setSystemGestureExclusionRects(
+                                java.util.Collections.singletonList(new Rect(0, exclTop, w, exclTop + exclH))
+                        );
+                    } catch (Throwable ignored) {}
+                }
+            }
+        }
+
         @Override
         public boolean onTouchEvent(MotionEvent event) {
-            return gestureDetector.onTouchEvent(event) || super.onTouchEvent(event);
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) {
+                touchDownX = event.getX();
+                touchDownY = event.getY();
+                swipeHandledThisGesture = false;
+                if (getParent() != null) {
+                    getParent().requestDisallowInterceptTouchEvent(true);
+                }
+            } else if (action == MotionEvent.ACTION_MOVE) {
+                if (getParent() != null) {
+                    getParent().requestDisallowInterceptTouchEvent(true);
+                }
+            }
+            boolean handled = gestureDetector.onTouchEvent(event);
+            if (action == MotionEvent.ACTION_UP && !swipeHandledThisGesture) {
+                float dx = event.getX() - touchDownX;
+                float dy = event.getY() - touchDownY;
+                float scale = Math.max(0.75f, Math.min(getWidth(), getHeight()) / 240f);
+                if (Math.abs(dx) > (32f * scale) && Math.abs(dx) > (Math.abs(dy) * 1.2f)) {
+                    swipeHandledThisGesture = true;
+                    handleHorizontalSwipe(dx);
+                    return true;
+                }
+            }
+            return handled || super.onTouchEvent(event);
         }
 
         private boolean isRoundDisplay(int w, int h) {
@@ -2632,6 +2784,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
 
         private void handleTap(float x, float y) {
+            lastWatchTapMs = System.currentTimeMillis();
             if (wakeLock != null && !wakeLock.isHeld()) {
                 try {
                     wakeLock.acquire(4 * 60 * 60 * 1000L);
@@ -2667,28 +2820,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 screenIndex = (screenIndex + 1) % 5;
                 markUserActivity(false);
                 triggerHaptic(20);
-                invalidate();
-                return;
-            }
-
-            // Status pill cycles sensitivity & auto-detector on Screen 0:
-            // AUTO · MEDIA (1) -> AUTO · BAJA (0) -> AUTO · ALTA (2) -> MODO MANUAL (off) -> AUTO · MEDIA (1)
-            if (screenIndex == 0 && btnToggleDetector.contains(x, y)) {
-                markUserActivity(true);
-                if (!autoDetectEnabled) {
-                    autoDetectEnabled = true;
-                    sensitivityLevel = 1; // MEDIA
-                } else if (sensitivityLevel == 1) {
-                    sensitivityLevel = 0; // BAJA (less sensitive)
-                } else if (sensitivityLevel == 0) {
-                    sensitivityLevel = 2; // ALTA (more sensitive)
-                } else {
-                    autoDetectEnabled = false; // MODO MANUAL
-                }
-                syncShotDetectionSensors();
-                triggerHaptic(25);
-                saveState();
-                sendToPhone("{\"type\":\"TOGGLE_AUTO_DETECT\",\"enabled\":" + autoDetectEnabled + ",\"sensitivityLevel\":" + sensitivityLevel + "}");
                 invalidate();
                 return;
             }
@@ -2946,6 +3077,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
+            syncBackNavigationCallback();
             int w = getWidth();
             int h = getHeight();
             float cx = w / 2f;
@@ -3294,68 +3426,54 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
 
         /**
-         * SCREEN 0: COUNTER & AUTO-SHOT (Mathematically centered: 39f..188f around cy = 114f..120f)
+         * SCREEN 0: MANUAL COUNTER (Mathematically centered inside 240f circular & square bezels)
          */
         private void drawCounterScreen(Canvas canvas, float cx, float scale, boolean isRound, float wMult) {
-            long now = System.currentTimeMillis();
-            boolean isWalkingPaused = autoDetectEnabled && (now < walkingLockUntilMs);
             boolean isSyncedNow = isPhoneConnected || isCloudSynced;
-            String sensLabel = (sensitivityLevel == 0)
-                    ? tr("BAJA", "LOW")
-                    : ((sensitivityLevel == 2) ? tr("ALTA", "HIGH") : tr("MEDIA", "MED"));
-            String pillLabel;
-            if (now < micDeniedNoticeUntilMs) {
-                pillLabel = tr("PERMITE MICRÓFONO", "ALLOW MICROPHONE");
-                postInvalidateDelayed(Math.max(250L, (micDeniedNoticeUntilMs - now) + 60L));
-            } else if (!autoDetectEnabled) {
-                pillLabel = isSyncedNow ? tr("MODO MANUAL · LIVE", "MANUAL MODE · LIVE") : tr("MODO MANUAL", "MANUAL MODE");
-            } else if (isWalkingPaused) {
-                pillLabel = tr("PAUSA · CAMINANDO", "PAUSED · WALKING");
-                postInvalidateDelayed(Math.max(250L, (walkingLockUntilMs - now) + 60L));
-            } else {
-                pillLabel = tr("AUTO 2K · ", "AUTO 2K · ") + sensLabel + (isSyncedNow ? " · LIVE" : "");
-            }
-            drawBrandHeaderAndPill(canvas, cx, scale, isRound, pillLabel, isWalkingPaused);
+            String pillLabel = isSyncedNow
+                    ? tr("CONECTADO · LIVE", "SYNCED · LIVE")
+                    : tr("MODO MANUAL", "MANUAL MODE");
+            drawBrandHeaderAndPill(canvas, cx, scale, isRound, pillLabel, false);
 
-            // Outer Counter Chassis: VOLUMEN · FLECHAS / VOLUME · ARROWS (top = 77f, bottom = 152f, centerY = 114.5f)
+            // Outer Counter Chassis: VOLUMEN · FLECHAS / VOLUME · ARROWS (top = 74f, bottom = 134f)
             float chassisW = 168f * scale * wMult;
-            float chassisH = 74f * scale;
-            float chassisTop = 77f * scale;
+            float chassisH = 60f * scale;
+            float chassisTop = 74f * scale;
             btnCounterChassis.set(cx - chassisW / 2f, chassisTop, cx + chassisW / 2f, chassisTop + chassisH);
 
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.parseColor("#07090E"));
-            canvas.drawRoundRect(btnCounterChassis, 11.5f * scale, 11.5f * scale, paint);
+            canvas.drawRoundRect(btnCounterChassis, 11f * scale, 11f * scale, paint);
 
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(1.0f * scale);
             paint.setColor(Color.parseColor("#1AFFFFFF"));
-            canvas.drawRoundRect(btnCounterChassis, 11.5f * scale, 11.5f * scale, paint);
+            canvas.drawRoundRect(btnCounterChassis, 11f * scale, 11f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
 
             // Label "VOLUMEN · FLECHAS" / "VOLUME · ARROWS"
             paint.setTypeface(outfitBold);
-            paint.setTextSize(6.4f * scale);
+            paint.setTextSize(6.2f * scale);
             paint.setColor(Color.parseColor("#8E96A4"));
-            drawCenteredText(canvas, tr("VOLUMEN · FLECHAS", "VOLUME · ARROWS"), cx, chassisTop + 10.5f * scale);
+            drawCenteredText(canvas, tr("VOLUMEN · FLECHAS", "VOLUME · ARROWS"), cx, chassisTop + 9.2f * scale);
 
             // Inner Dark Tray holding the 4 Digit Cells
-            float trayPad = 7.5f * scale;
-            float trayTop = chassisTop + 18f * scale;
-            float trayBottom = chassisTop + chassisH - 7.5f * scale;
+            float trayPad = 6.5f * scale;
+            float trayTop = chassisTop + 16.0f * scale;
+            float trayBottom = chassisTop + chassisH - 5.5f * scale;
             rect.set(btnCounterChassis.left + trayPad, trayTop, btnCounterChassis.right - trayPad, trayBottom);
             paint.setColor(Color.parseColor("#030407"));
-            canvas.drawRoundRect(rect, 8f * scale, 8f * scale, paint);
+            canvas.drawRoundRect(rect, 7.5f * scale, 7.5f * scale, paint);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(0.9f * scale);
             paint.setColor(Color.parseColor("#12FFFFFF"));
-            canvas.drawRoundRect(rect, 8f * scale, 8f * scale, paint);
+            canvas.drawRoundRect(rect, 7.5f * scale, 7.5f * scale, paint);
             paint.setStyle(Paint.Style.FILL);
 
             // 4 Digit Cells (0 0 0 0) in Outfit ExtraBold
             String digits = String.format(Locale.US, "%04d", Math.min(9999, Math.max(0, arrowCount)));
-            float innerPad = 4f * scale;
-            float cellGap = 4.2f * scale;
+            float innerPad = 3.2f * scale;
+            float cellGap = 4.0f * scale;
             float availW = rect.width() - (2f * innerPad) - (3f * cellGap);
             float cellW = availW / 4f;
             float cellH = rect.height() - (2f * innerPad);
@@ -3378,59 +3496,61 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 paint.setStyle(Paint.Style.FILL);
 
                 paint.setTypeface(outfitExtraBold);
-                paint.setTextSize(21f * scale);
+                paint.setTextSize(19.5f * scale);
                 paint.setColor(isUnits ? Color.parseColor("#FFE500") : Color.WHITE);
                 drawCenteredText(canvas, String.valueOf(digits.charAt(i)), rect.centerX(), rect.centerY());
             }
 
-            // Bottom Symmetrical Row: [-1]  |  Walked · kcal / TANDA 1 · 18 M  |  [+1]
-            float rowW = 160f * scale * wMult;
-            float btnW = 30f * scale;
-            float btnH = 22.5f * scale;
-            float btnTop = 163f * scale;
+            // Symmetrical XL Tactile Row: [   −1   ]   [   +1   ] aligned edge-to-edge with Counter Chassis
+            float rowW = chassisW;
+            float btnGap = 8.0f * scale;
+            float btnW = (rowW - btnGap) / 2f;
+            float btnH = 36.0f * scale;
+            float btnTop = 140.5f * scale;
+            float btnRadius = 10.5f * scale;
 
-            // Left Button: −1 (stored in btnRightSecondary)
+            // Left XL Button: −1 (stored in btnRightSecondary)
             btnRightSecondary.set(cx - rowW / 2f, btnTop, cx - rowW / 2f + btnW, btnTop + btnH);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.parseColor("#180709"));
-            canvas.drawRoundRect(btnRightSecondary, btnH / 2f, btnH / 2f, paint);
+            canvas.drawRoundRect(btnRightSecondary, btnRadius, btnRadius, paint);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.0f * scale);
-            paint.setColor(Color.parseColor("#A6FF1E1E"));
-            canvas.drawRoundRect(btnRightSecondary, btnH / 2f, btnH / 2f, paint);
+            paint.setStrokeWidth(1.3f * scale);
+            paint.setColor(Color.parseColor("#C8FF1E1E"));
+            canvas.drawRoundRect(btnRightSecondary, btnRadius, btnRadius, paint);
             paint.setStyle(Paint.Style.FILL);
             paint.setTypeface(outfitExtraBold);
-            paint.setTextSize(9.5f * scale);
+            paint.setTextSize(14.5f * scale);
             paint.setColor(Color.WHITE);
             drawCenteredText(canvas, "−1", btnRightSecondary.centerX(), btnRightSecondary.centerY());
 
-            // Center Telemetry (m/km or ft/mi · kcal / TANDA 1 · 18 M | END 1 · 18 M)
-            btnCenterMetrics.set(btnRightSecondary.right + 4f * scale, btnTop - 2f * scale, cx + rowW / 2f - btnW - 4f * scale, btnTop + btnH + 2f * scale);
-            paint.setTypeface(outfitExtraBold);
-            paint.setTextSize(8.8f * scale);
-            paint.setColor(Color.WHITE);
-            drawCenteredText(canvas, getFormattedWalkedPrimary() + " · " + getActiveKcal() + " kcal", cx, btnTop + 7f * scale);
-
-            paint.setTypeface(outfitBold);
-            paint.setTextSize(6.6f * scale);
-            paint.setColor(Color.parseColor("#8E96A4"));
-            int displayTanda = Math.max(1, currentEnd);
-            drawCenteredText(canvas, tr("TANDA ", "END ") + displayTanda + " · " + distanceMeters + " M", cx, btnTop + 17.5f * scale);
-
-            // Right Button: +1 (stored in btnLeftPrimary)
+            // Right XL Button: +1 (stored in btnLeftPrimary)
             btnLeftPrimary.set(cx + rowW / 2f - btnW, btnTop, cx + rowW / 2f, btnTop + btnH);
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(Color.parseColor("#061523"));
-            canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
+            canvas.drawRoundRect(btnLeftPrimary, btnRadius, btnRadius, paint);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.0f * scale);
+            paint.setStrokeWidth(1.3f * scale);
             paint.setColor(Color.parseColor("#00A8F3"));
-            canvas.drawRoundRect(btnLeftPrimary, btnH / 2f, btnH / 2f, paint);
+            canvas.drawRoundRect(btnLeftPrimary, btnRadius, btnRadius, paint);
             paint.setStyle(Paint.Style.FILL);
             paint.setTypeface(outfitExtraBold);
-            paint.setTextSize(9.5f * scale);
+            paint.setTextSize(14.5f * scale);
             paint.setColor(Color.WHITE);
             drawCenteredText(canvas, "+1", btnLeftPrimary.centerX(), btnLeftPrimary.centerY());
+
+            // Dedicated Bottom Telemetry Stack cleanly below XL buttons (tappable to jump to Screen 2)
+            btnCenterMetrics.set(cx - 74f * scale, 180f * scale, cx + 74f * scale, 208f * scale);
+            paint.setTypeface(outfitExtraBold);
+            paint.setTextSize(8.4f * scale);
+            paint.setColor(Color.WHITE);
+            drawCenteredText(canvas, getFormattedWalkedPrimary() + " · " + getActiveKcal() + " kcal", cx, 187.5f * scale);
+
+            paint.setTypeface(outfitBold);
+            paint.setTextSize(6.4f * scale);
+            paint.setColor(Color.parseColor("#8E96A4"));
+            int displayTanda = Math.max(1, currentEnd);
+            drawCenteredText(canvas, tr("TANDA ", "END ") + displayTanda + " · " + distanceMeters + " M", cx, 199.0f * scale);
         }
 
         /**

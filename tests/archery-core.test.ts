@@ -1292,4 +1292,87 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     assert.ok(bioSrc.includes("isFreshCloudWatchHr"));
     assert.ok(bioSrc.includes("__onNativeWearHrUpdate"));
   });
+
+  it("tracks realistic range walks (gentle pocket gait, 2-min shooting pauses, 70m target unlocks & GPS+step fusion)", async () => {
+    const {
+      createGaitDetectorState,
+      createGpsAnchorState,
+      createWalkingFusionState,
+      processAccelerometerSample,
+      processGpsCoordinateFix,
+      recordFusedGpsMeters,
+      recordFusedSteps
+    } = await import("../src/lib/scoring/walkingTracker.ts");
+
+    // 1. Gentle pocket/wrist walking (~1.35 m/s² amplitude at 600ms cadence, 24 steps = ~18.7m)
+    const gentleWalk = createGaitDetectorState(0);
+    let gt = 5_000_000;
+    for (let step = 0; step < 24; step++) {
+      for (let s = 0; s < 30; s++) {
+        const phase = (s / 30) * Math.PI * 2;
+        const az = 9.81 + Math.sin(phase) * 1.35;
+        processAccelerometerSample(gentleWalk, 0, 0, az, gt + s * 20);
+      }
+      gt += 600;
+    }
+    assert.ok(
+      gentleWalk.creditedSteps >= 22 && gentleWalk.creditedSteps <= 25,
+      `Expected ~24 gentle range steps, got ${gentleWalk.creditedSteps}`
+    );
+
+    // 2. 50m outdoor round trip AFTER standing 120s shooting on line + 45s pulling arrows at target
+    const rangeGps = createGpsAnchorState(0);
+    const baseLat = 9.935;
+    const lon = -84.091;
+    const degPerMeter = 1 / 111132;
+    let clock = 10_000;
+
+    // Stand 120s on shooting line with minor <=1.2m stationary jitter
+    for (let sec = 0; sec <= 120; sec += 3) {
+      processGpsCoordinateFix(rangeGps, baseLat + ((sec % 2) * 0.8) * degPerMeter, lon, 6, clock);
+      clock += 3000;
+    }
+    assert.equal(rangeGps.accumulatedMeters, 0, "Standing 2 min on shooting line must equal 0m");
+
+    // Walk 50m north at 1.25 m/s (40 seconds, fix every 2s = 2.5m/fix)
+    for (let d = 2.5; d <= 50; d += 2.5) {
+      clock += 2000;
+      processGpsCoordinateFix(rangeGps, baseLat + d * degPerMeter, lon, 6, clock, 1.25);
+    }
+    // Stand 45s at target pulling arrows
+    for (let sec = 3; sec <= 45; sec += 3) {
+      clock += 3000;
+      processGpsCoordinateFix(rangeGps, baseLat + 50 * degPerMeter, lon, 6, clock, 0.05);
+    }
+    // Walk 50m south back to shooting line at 1.25 m/s
+    for (let d = 47.5; d >= 0; d -= 2.5) {
+      clock += 2000;
+      processGpsCoordinateFix(rangeGps, baseLat + d * degPerMeter, lon, 6, clock, 1.25);
+    }
+    assert.ok(
+      rangeGps.accumulatedMeters >= 92 && rangeGps.accumulatedMeters <= 104,
+      `Expected ~96-100m on 50m round trip, got ${rangeGps.accumulatedMeters.toFixed(1)}m`
+    );
+
+    // 3. 70m Olympic Recurve walk with screen locked in pocket, unlocked at 70m target 58s later
+    const pocket70 = createGpsAnchorState(0);
+    processGpsCoordinateFix(pocket70, baseLat, lon, 7, 1000, 0);
+    processGpsCoordinateFix(pocket70, baseLat + 70 * degPerMeter, lon, 7, 59_000, 0);
+    assert.ok(
+      pocket70.accumulatedMeters >= 68 && pocket70.accumulatedMeters <= 72,
+      `Expected ~70m on 70m target unlock, got ${pocket70.accumulatedMeters.toFixed(1)}m`
+    );
+
+    // 4. Incremental GPS + Step fusion: zero double-counting outdoors, zero lost distance when GPS drops indoors
+    const fusion = createWalkingFusionState(0, 0);
+    recordFusedSteps(fusion, 40, 10_000, 175); // ~29.4m from steps
+    const outdoorFused = recordFusedGpsMeters(fusion, 36, 12_000); // GPS confirms 36m in same window
+    assert.equal(outdoorFused, 36, "Outdoor GPS + steps in same window must not double-count");
+    // 30 seconds later, archer walks another 48 steps (~35.3m) under a metal roof with 0 GPS fixes
+    const mixedFused = recordFusedSteps(fusion, 88, 45_000, 175);
+    assert.ok(
+      mixedFused >= 70 && mixedFused <= 73,
+      `Expected ~71m after indoor segment without GPS, got ${mixedFused}m`
+    );
+  });
 });

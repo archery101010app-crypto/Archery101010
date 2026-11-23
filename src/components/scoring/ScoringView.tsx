@@ -30,11 +30,16 @@ import {
   subscribeWatchMessages
 } from "@/lib/scoring/biometricsEngine";
 import {
+  WalkingFusionState,
   createGaitDetectorState,
   createGpsAnchorState,
+  createWalkingFusionState,
   notifyScreenInteraction,
   processAccelerometerSample,
-  processGpsCoordinateFix
+  processGpsCoordinateFix,
+  recordFusedGpsMeters,
+  recordFusedSteps,
+  recordFusedWatchTelemetry
 } from "@/lib/scoring/walkingTracker";
 import SmartwatchMiniApp from "@/components/watch/SmartwatchMiniApp";
 import BleHeartRateModal from "@/components/watch/BleHeartRateModal";
@@ -318,6 +323,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const stepsCountRef = useRef<number>(
     Number(config?.stepsCount) || Number(config?.biometrics?.stepsCount) || 0
   );
+  const walkingFusionRef = useRef<WalkingFusionState>(
+    createWalkingFusionState(
+      Number(config?.gpsDistanceM) || Number(config?.distanceWalkedM) || 0,
+      Number(config?.stepsCount) || Number(config?.biometrics?.stepsCount) || 0
+    )
+  );
   const [avgHeartRateBpm, setAvgHeartRateBpm] = useState<number>(
     () => Number(config?.avgHeartRateBpm) || Number(config?.biometrics?.avgHeartRateBpm) || 0
   );
@@ -400,19 +411,18 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const dianaRef = useRef<SVGSVGElement | null>(null);
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Live Session GPS + Real Bipedal Walking Gait Tracker (0m when seated/tapping, real meters only when walking)
+  // Live Session GPS + Real Bipedal Walking Gait + Native Android Bridge Fusion
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    // Ensure any legacy APK's naive single-spike native sensor listener is stopped so screen taps never count as steps
-    stopNativeLocationTracking();
-    (window as any).__onNativeMovementUpdate = undefined;
-    (window as any).__onNativeLocationUpdate = undefined;
 
     const initialMeters = Number(config?.gpsDistanceM) || Number(config?.distanceWalkedM) || 0;
     const initialSteps = Number(config?.stepsCount) || Number(config?.biometrics?.stepsCount) || 0;
     gpsDistanceAccumRef.current = Math.max(gpsDistanceAccumRef.current, initialMeters);
     stepsCountRef.current = Math.max(stepsCountRef.current, initialSteps);
+    walkingFusionRef.current = createWalkingFusionState(
+      gpsDistanceAccumRef.current,
+      stepsCountRef.current
+    );
 
     const gaitState = createGaitDetectorState(stepsCountRef.current);
     const gpsAnchor = createGpsAnchorState(gpsDistanceAccumRef.current);
@@ -424,18 +434,74 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     window.addEventListener("pointerdown", handleScreenTouch, { passive: true });
     window.addEventListener("touchstart", handleScreenTouch, { passive: true });
 
+    // Bind Native Android 50Hz Accelerometer + Hardware GNSS Bridge (keeps counting in pocket / WakeLock)
+    const handleNativeMovement = (
+      nativeMeters: number,
+      nativeHasFix: boolean,
+      nativeSteps: number
+    ) => {
+      const now = Date.now();
+      if (typeof nativeHasFix === "boolean" && nativeHasFix) {
+        setGpsActive(true);
+      }
+      // Guard against screen-tap vibrations on older APKs
+      const inTouchLockout = gaitState.lastTouchMs > 0 && now - gaitState.lastTouchMs < 1800;
+      let fusedM = gpsDistanceAccumRef.current;
+
+      if (!inTouchLockout && typeof nativeSteps === "number" && nativeSteps > stepsCountRef.current) {
+        stepsCountRef.current = Math.round(nativeSteps);
+        gaitState.creditedSteps = Math.max(gaitState.creditedSteps, stepsCountRef.current);
+        fusedM = recordFusedSteps(
+          walkingFusionRef.current,
+          stepsCountRef.current,
+          now,
+          user.physicalData?.height
+        );
+      }
+      if (typeof nativeMeters === "number" && Number.isFinite(nativeMeters) && nativeMeters > 0) {
+        fusedM = Math.max(
+          fusedM,
+          recordFusedGpsMeters(walkingFusionRef.current, nativeMeters, now)
+        );
+      }
+      if (fusedM > gpsDistanceAccumRef.current) {
+        gpsDistanceAccumRef.current = fusedM;
+        setGpsDistanceM((curr) => Math.max(curr, fusedM));
+      }
+    };
+
+    (window as any).__onNativeMovementUpdate = handleNativeMovement;
+    (window as any).__onNativeLocationUpdate = handleNativeMovement;
+    try {
+      const locBridge = (window as any).ArcheryLocationNativeBridge;
+      if (locBridge?.startSessionTracking) {
+        locBridge.startSessionTracking(gpsDistanceAccumRef.current);
+      }
+    } catch {}
+
     if (typeof navigator !== "undefined" && "geolocation" in navigator) {
       try {
         watchId = navigator.geolocation.watchPosition(
           (pos) => {
-            const { latitude, longitude, accuracy } = pos.coords;
-            const res = processGpsCoordinateFix(gpsAnchor, latitude, longitude, accuracy, Date.now());
+            const now = Date.now();
+            const { latitude, longitude, accuracy, speed } = pos.coords;
+            const res = processGpsCoordinateFix(
+              gpsAnchor,
+              latitude,
+              longitude,
+              accuracy,
+              now,
+              speed
+            );
             setGpsActive(res.hasSatelliteLock);
-            if (res.accumulatedMeters > gpsDistanceAccumRef.current) {
-              gpsDistanceAccumRef.current = res.accumulatedMeters;
-              const stepDistM = estimateDistanceFromSteps(stepsCountRef.current, user.physicalData?.height);
-              const nextDistM = Math.max(gpsDistanceAccumRef.current, stepDistM);
-              setGpsDistanceM((curr) => Math.max(curr, nextDistM));
+            if (res.accumulatedMeters > walkingFusionRef.current.lastGpsMeters) {
+              const nextDistM = recordFusedGpsMeters(
+                walkingFusionRef.current,
+                res.accumulatedMeters,
+                now
+              );
+              gpsDistanceAccumRef.current = Math.max(gpsDistanceAccumRef.current, nextDistM);
+              setGpsDistanceM((curr) => Math.max(curr, gpsDistanceAccumRef.current));
             }
           },
           () => {
@@ -453,19 +519,25 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     const handleMotion = (ev: DeviceMotionEvent) => {
       const acc = ev.accelerationIncludingGravity;
       if (!acc) return;
+      const now = Date.now();
       const prevSteps = stepsCountRef.current;
       const nextSteps = processAccelerometerSample(
         gaitState,
         acc.x || 0,
         acc.y || 0,
         acc.z || 0,
-        Date.now()
+        now
       );
       if (nextSteps > prevSteps) {
         stepsCountRef.current = nextSteps;
-        const estFromSteps = estimateDistanceFromSteps(nextSteps, user.physicalData?.height);
-        const nextDistM = Math.max(gpsDistanceAccumRef.current, estFromSteps);
-        setGpsDistanceM((curr) => Math.max(curr, nextDistM));
+        const nextDistM = recordFusedSteps(
+          walkingFusionRef.current,
+          nextSteps,
+          now,
+          user.physicalData?.height
+        );
+        gpsDistanceAccumRef.current = Math.max(gpsDistanceAccumRef.current, nextDistM);
+        setGpsDistanceM((curr) => Math.max(curr, gpsDistanceAccumRef.current));
       }
     };
 
@@ -475,6 +547,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
     return () => {
       stopNativeLocationTracking();
+      (window as any).__onNativeMovementUpdate = undefined;
+      (window as any).__onNativeLocationUpdate = undefined;
       window.removeEventListener("pointerdown", handleScreenTouch);
       window.removeEventListener("touchstart", handleScreenTouch);
       if (watchId !== null && typeof navigator !== "undefined" && navigator.geolocation) {
@@ -2110,10 +2184,15 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       const incomingDist = Number(msg.payload?.distanceWalkedM ?? msg.distanceWalkedM) || 0;
       const nextSteps = Math.max(stepsCountRef.current, incomingSteps);
       stepsCountRef.current = nextSteps;
-      const stepDistM = estimateDistanceFromSteps(nextSteps, user.physicalData?.height);
-      const nextDistM = Math.max(gpsDistanceAccumRef.current, incomingDist, stepDistM);
-      gpsDistanceAccumRef.current = nextDistM;
-      setGpsDistanceM((curr) => Math.max(curr, nextDistM));
+      const nextDistM = recordFusedWatchTelemetry(
+        walkingFusionRef.current,
+        nextSteps,
+        incomingDist,
+        Date.now(),
+        user.physicalData?.height
+      );
+      gpsDistanceAccumRef.current = Math.max(gpsDistanceAccumRef.current, nextDistM);
+      setGpsDistanceM((curr) => Math.max(curr, gpsDistanceAccumRef.current));
 
       // Never overwrite phone BLE Heart Rate session stats when phone BLE HR tracker is connected or has active samples
       const bleSnap = bleTrackerRef.current.getSnapshot();

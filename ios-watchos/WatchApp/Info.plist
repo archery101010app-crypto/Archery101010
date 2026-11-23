@@ -17,9 +17,9 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>2.148</string>
+    <string>2.149</string>
     <key>CFBundleVersion</key>
-    <string>154800</string>
+    <string>154900</string>
     <key>NSHealthShareUsageDescription</key>
     <string>ARCHERY 101010 lee tu frecuencia cardíaca en tiempo real durante tu práctica de tiro para mostrar tus pulsaciones, promedio y pico máximo en sesión.</string>
     <key>NSHealthUpdateUsageDescription</key>
@@ -28,9 +28,7 @@
     <array>
         <string>workout-processing</string>
     </array>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>ARCHERY 101010 analiza localmente en tiempo real el chasquido acústico de la cuerda junto con el acelerómetro (Doble Llave) para contar tus flechas automáticamente. El audio nunca se graba, almacena ni envía.</string>
     <key>NSMotionUsageDescription</key>
-    <string>ARCHERY 101010 utiliza los sensores de movimiento para detectar la postura de tiro, distancia caminada y energía activa.</string>
+    <string>ARCHERY 101010 utiliza los sensores de movimiento para detectar distancia caminada y energía activa durante tu sesión.</string>
 </dict>
 </plist>

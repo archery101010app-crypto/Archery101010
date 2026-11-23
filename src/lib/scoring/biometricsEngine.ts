@@ -171,7 +171,7 @@ export function parseAthleteWeightKg(user?: any): number {
 export function estimateDistanceFromSteps(stepsCount: number, heightCm?: number): number {
   const safeSteps = Math.max(0, Number(stepsCount) || 0);
   const parsedHeight = Number(heightCm) || 0;
-  const strideM = parsedHeight >= 100 && parsedHeight <= 230 ? (parsedHeight * 0.415) / 100 : 0.76;
+  const strideM = parsedHeight >= 100 && parsedHeight <= 230 ? (parsedHeight * 0.42) / 100 : 0.78;
   return Math.round(safeSteps * strideM);
 }
 
@@ -593,7 +593,7 @@ function buildPhoneCloudSessionFields(
     stepsCount: Math.max(0, Number(s?.stepsCount) || 0),
     distanceWalkedM: Math.max(0, Math.round(Number(s?.distanceWalkedM) || 0)),
     caloriesBurnedKcal: Math.max(0, Math.round(Number(s?.activeKcal) || 0)),
-    autoDetectEnabled: s ? Boolean(s.autoDetectEnabled) : true,
+    autoDetectEnabled: false,
     sensitivityLevel,
     bowPoundageLbs: Math.max(10, Number(s?.bowPoundageLbs) || 36),
     bowType: String(s?.bowType || "Recurve").slice(0, 40),

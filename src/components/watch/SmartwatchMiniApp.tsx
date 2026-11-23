@@ -633,146 +633,15 @@ export default function SmartwatchMiniApp({
     }
   };
 
-  // Real-time Web Audio High-Pass (>1.8 kHz) Bowstring Snap Analyzer (100% volatile on-device, never recorded)
+  // Manual-only watch counter: microphone acoustic auto-shot is permanently disabled
   useEffect(() => {
-    if (!isOpen || !isPageVisible || !isStandalone || !activeState.autoDetectEnabled) {
-      micActiveRef.current = false;
-      lastAcousticSnapRef.current = 0;
-      return;
-    }
-    if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      micActiveRef.current = false;
-      return;
-    }
-
-    let cancelled = false;
-    let stream: MediaStream | null = null;
-    let audioCtx: AudioContext | null = null;
-    let rafTimer: number | null = null;
-
-    (async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-          },
-        });
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        audioCtx = new AudioCtx();
-        const source = audioCtx.createMediaStreamSource(stream);
-        const highpass = audioCtx.createBiquadFilter();
-        highpass.type = "highpass";
-        highpass.frequency.value = 1800;
-        highpass.Q.value = 0.707;
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(highpass);
-        highpass.connect(analyser);
-
-        const samples = new Float32Array(analyser.fftSize);
-        let noiseFloor = 0.0035;
-        let warmup = 0;
-        let inCandidate = false;
-        let candidateStart = 0;
-        let candidatePeak = 0;
-        let sustainedFrames = 0;
-        let waitQuiet = false;
-
-        micActiveRef.current = true;
-        setMicDeniedNotice(false);
-
-        const snrMult = sensitivity === "BAJA" ? 4.6 : sensitivity === "ALTA" ? 2.8 : 3.6;
-        const minRms = sensitivity === "BAJA" ? 0.0042 : sensitivity === "ALTA" ? 0.0019 : 0.0028;
-        const crestMin = sensitivity === "BAJA" ? 2.2 : sensitivity === "ALTA" ? 1.82 : 2.0;
-
-        rafTimer = window.setInterval(() => {
-          analyser.getFloatTimeDomainData(samples);
-          let sumSq = 0;
-          let maxAbs = 0;
-          for (let i = 0; i < samples.length; i++) {
-            const v = Math.abs(samples[i]);
-            if (v > maxAbs) maxAbs = v;
-            sumSq += samples[i] * samples[i];
-          }
-          const hfRms = Math.sqrt(sumSq / samples.length);
-          const now = Date.now();
-
-          if (warmup < 8) {
-            const clamped = Math.max(0.0008, Math.min(0.08, hfRms));
-            noiseFloor = warmup === 0 ? clamped : 0.75 * noiseFloor + 0.25 * clamped;
-            warmup++;
-            return;
-          }
-
-          if (waitQuiet) {
-            if (hfRms < Math.max(minRms * 0.85, noiseFloor * 1.75)) {
-              waitQuiet = false;
-            } else {
-              noiseFloor = Math.max(0.0008, Math.min(0.1, 0.985 * noiseFloor + 0.015 * hfRms));
-              return;
-            }
-          }
-
-          if (!inCandidate) {
-            if (hfRms >= Math.max(minRms, noiseFloor * snrMult) && maxAbs >= hfRms * crestMin) {
-              inCandidate = true;
-              candidateStart = now;
-              candidatePeak = hfRms;
-              sustainedFrames = 1;
-            } else if (hfRms < noiseFloor * 2.1) {
-              noiseFloor = Math.max(0.0008, Math.min(0.1, 0.965 * noiseFloor + 0.035 * hfRms));
-            }
-          } else {
-            if (hfRms > candidatePeak) candidatePeak = hfRms;
-            if (hfRms > candidatePeak * 0.52) {
-              sustainedFrames++;
-              if (sustainedFrames > 6) {
-                inCandidate = false;
-                waitQuiet = true;
-              }
-            } else {
-              lastAcousticSnapRef.current = candidateStart;
-              inCandidate = false;
-            }
-          }
-        }, 15);
-      } catch {
-        micActiveRef.current = false;
-        if (!isAnalysisWatchMode) {
-          setMicDeniedNotice(true);
-          if (onToggleAutoDetect) onToggleAutoDetect(false);
-          else {
-            sendWatchCommand({ type: "TOGGLE_AUTO_DETECT", enabled: false });
-            setInternalSnapshot((prev) => ({ ...prev, autoDetectEnabled: false }));
-          }
-          window.setTimeout(() => setMicDeniedNotice(false), 4500);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      micActiveRef.current = false;
-      if (rafTimer !== null) window.clearInterval(rafTimer);
-      if (stream) stream.getTracks().forEach((t) => t.stop());
-      if (audioCtx) audioCtx.close().catch(() => {});
-    };
-  }, [isOpen, isPageVisible, isStandalone, activeState.autoDetectEnabled, isAnalysisWatchMode, sensitivity, onToggleAutoDetect]);
+    micActiveRef.current = false;
+    lastAcousticSnapRef.current = 0;
+  }, []);
 
   useEffect(() => {
-    // Run wrist IMU capture on standalone watch (/watch) when autoDetect OR Análisis mode is active
-    if (
-      !isOpen ||
-      !isPageVisible ||
-      !isStandalone ||
-      (!activeState.autoDetectEnabled && !isAnalysisWatchMode)
-    ) {
+    // Run wrist IMU capture on standalone watch (/watch) ONLY when Análisis mode is active
+    if (!isOpen || !isPageVisible || !isStandalone || !isAnalysisWatchMode) {
       return;
     }
     if (!iosMotionGranted) return;
@@ -912,23 +781,19 @@ export default function SmartwatchMiniApp({
               micActiveRef.current && lastAcousticSnapRef.current > 0 && snapDeltaMs <= 145;
             const acousticGateOk = hasAcousticKey || (isAnalysisWatchMode && !micActiveRef.current);
             if (
-              activeState.autoDetectEnabled &&
+              isAnalysisWatchMode &&
               validFollow &&
               acousticGateOk &&
               now - lastShotRef.current > cfg.cooldown
             ) {
               lastShotRef.current = now;
               lastAcousticSnapRef.current = 0;
-              if (isAnalysisWatchMode) {
-                emitAnalysisShotRef.current(pending.startMs, "watch_auto");
-              } else {
-                handleArrowDelta(1, "watch_auto");
-              }
+              emitAnalysisShotRef.current(pending.startMs, "watch_auto");
             }
           }
         }
       } else if (
-        activeState.autoDetectEnabled &&
+        isAnalysisWatchMode &&
         !isWalkingBlocked &&
         lin >= cfg.threshold &&
         now - lastShotRef.current > cfg.cooldown
@@ -1226,27 +1091,22 @@ export default function SmartwatchMiniApp({
   const WatchCounterChassis = ({ highlightGold = false }: { highlightGold?: boolean }) => (
     <div
       className={`${
-        isSquare ? "w-[214px]" : "w-[196px]"
-      } bg-[#07090E] rounded-[13px] pt-[7px] pb-[9px] px-[9px] border transition-all ${
+        isSquare ? "w-[214px]" : "w-[192px]"
+      } bg-[#07090E] rounded-[13px] pt-[6px] pb-[7px] px-[8px] border transition-all ${
         highlightGold ? "border-[#FFE500]/65" : "border-white/10"
       }`}
     >
-      <div className="text-center text-[7.5px] font-bold tracking-[0.14em] text-[#8E96A4] uppercase mb-[6px] whitespace-nowrap tabular-nums">
-        {highlightGold
-          ? tx(
-              `FLECHA #${activeState.arrowsCount} REGISTRADA`,
-              `ARROW #${activeState.arrowsCount} LOGGED`
-            )
-          : tx("VOLUMEN · FLECHAS", "VOLUME · ARROWS")}
+      <div className="text-center text-[7px] font-bold tracking-[0.14em] text-[#8E96A4] uppercase mb-[4px] whitespace-nowrap tabular-nums">
+        {tx("VOLUMEN · FLECHAS", "VOLUME · ARROWS")}
       </div>
 
-      <div className="grid grid-cols-4 gap-[5px] bg-[#030407] p-[5px] rounded-[9px] border border-white/[0.06]">
+      <div className="grid grid-cols-4 gap-[5px] bg-[#030407] p-[4px] rounded-[9px] border border-white/[0.06]">
         {digits.map((digitStr, i) => {
           const isUnits = i === 3;
           return (
             <div
               key={i}
-              className={`h-[44px] rounded-[6px] bg-[#0B0E15] flex items-center justify-center relative overflow-hidden select-none border ${
+              className={`h-[38px] rounded-[6px] bg-[#0B0E15] flex items-center justify-center relative overflow-hidden select-none border ${
                 isUnits ? "border-[#FFE500] bg-[#101008]" : "border-white/[0.11]"
               }`}
             >
@@ -1257,7 +1117,7 @@ export default function SmartwatchMiniApp({
                   animate={{ y: 0, opacity: 1 }}
                   exit={{ y: -10, opacity: 0 }}
                   transition={{ type: "spring", stiffness: 450, damping: 28 }}
-                  className={`font-sans text-[25px] font-extrabold leading-none tabular-nums ${
+                  className={`font-sans text-[23.5px] font-extrabold leading-none tabular-nums ${
                     isUnits ? "text-[#FFE500]" : "text-white"
                   }`}
                 >
@@ -1283,14 +1143,35 @@ export default function SmartwatchMiniApp({
     }
     const dx = e.changedTouches[0].clientX - touchStartXRef.current;
     touchStartXRef.current = null;
-    if (Math.abs(dx) < 34) return;
+    if (Math.abs(dx) < 28) return;
     triggerHaptic(15);
     if (isAnalysisWatchMode) {
-      setAnalysisPage((prev) => (prev === 0 ? 1 : 0));
+      setAnalysisPage(dx < 0 ? 1 : 0);
     } else if (dx < 0) {
-      setScreenIdx((prev) => (prev + 1) % 5);
+      setScreenIdx((prev) => (prev + 1) % 4);
     } else {
-      setScreenIdx((prev) => (prev + 4) % 5);
+      setScreenIdx((prev) => (prev + 3) % 4);
+    }
+  };
+
+  const pointerStartXRef = useRef<number | null>(null);
+  const handleWatchPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType === "mouse") {
+      pointerStartXRef.current = e.clientX;
+    }
+  };
+  const handleWatchPointerUp = (e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse" || pointerStartXRef.current === null) return;
+    const dx = e.clientX - pointerStartXRef.current;
+    pointerStartXRef.current = null;
+    if (Math.abs(dx) < 28) return;
+    triggerHaptic(15);
+    if (isAnalysisWatchMode) {
+      setAnalysisPage(dx < 0 ? 1 : 0);
+    } else if (dx < 0) {
+      setScreenIdx((prev) => (prev + 1) % 4);
+    } else {
+      setScreenIdx((prev) => (prev + 3) % 4);
     }
   };
 
@@ -1318,7 +1199,9 @@ export default function SmartwatchMiniApp({
           dir="ltr"
           onTouchStart={handleWatchTouchStart}
           onTouchEnd={handleWatchTouchEnd}
-          className={`relative w-[284px] h-[284px] bg-[#020305] border border-white/10 flex flex-col items-center justify-between ${
+          onPointerDown={handleWatchPointerDown}
+          onPointerUp={handleWatchPointerUp}
+          className={`relative w-[284px] h-[284px] bg-[#020305] border border-white/10 flex flex-col items-center justify-between touch-pan-y overscroll-x-none ${
             analysisPage === 0 ? "pt-[21px] pb-[11px] px-[14px]" : "pt-[19px] pb-[12px] px-[16px]"
           } overflow-hidden select-none transition-all ${
             isSquare ? "rounded-[48px]" : "rounded-full"
@@ -1536,7 +1419,9 @@ export default function SmartwatchMiniApp({
         onWheel={handleWheel}
         onTouchStart={handleWatchTouchStart}
         onTouchEnd={handleWatchTouchEnd}
-        className={`relative w-[284px] h-[284px] bg-[#020305] border border-white/10 flex flex-col items-center justify-center px-[16px] overflow-hidden select-none transition-all ${
+        onPointerDown={handleWatchPointerDown}
+        onPointerUp={handleWatchPointerUp}
+        className={`relative w-[284px] h-[284px] bg-[#020305] border border-white/10 flex flex-col items-center justify-center px-[16px] overflow-hidden select-none touch-pan-y overscroll-x-none transition-all ${
           isSquare ? "rounded-[48px]" : "rounded-full"
         }`}
       >
@@ -1549,62 +1434,57 @@ export default function SmartwatchMiniApp({
 
       <div
         className={`w-full flex flex-col items-center justify-center ${
-          screenIdx === 1 ? "gap-[4.5px] mb-[11px]" : "gap-[10px] mb-[6px]"
+          screenIdx === 1 ? "gap-[4.5px] mb-[11px]" : screenIdx === 0 ? "gap-[7px] mb-[8px]" : "gap-[10px] mb-[6px]"
         } z-10`}
       >
-        {/* SCREEN 00: CONTADOR + AUTO-TIRO / COUNTER + AUTO SHOT */}
+        {/* SCREEN 00: MANUAL COUNTER WITH XL −1 / +1 BUTTONS */}
         {screenIdx === 0 && (
           <>
             <WatchBrandHeader
               pillText={
-                micDeniedNotice
-                  ? tx("PERMITE MICRÓFONO", "ALLOW MICROPHONE")
-                  : justDetectedShot
-                  ? tx("SUELTA DETECTADA · +1", "SHOT DETECTED · +1")
-                  : activeState.autoDetectEnabled
-                  ? `AUTO 2K · ${sensitivityDisplay}`
-                  : tx("MODO MANUAL", "MANUAL MODE")
+                isWatchConnected
+                  ? tx("CONECTADO", "CONNECTED")
+                  : tx("MANUAL", "MANUAL")
               }
-              pillColor={justDetectedShot ? "yellow" : "cyan"}
-              onClickPill={handleToggleAuto}
+              pillColor={isWatchConnected ? "cyan" : "muted"}
             />
 
-            <WatchCounterChassis highlightGold={justDetectedShot} />
+            <WatchCounterChassis />
 
             <div
-              className={`flex items-center justify-between ${
-                isSquare ? "w-[202px]" : "w-[184px]"
-              } gap-2`}
+              className={`${
+                isSquare ? "w-[214px]" : "w-[192px]"
+              } grid grid-cols-2 gap-[8px]`}
             >
               <button
                 type="button"
                 onClick={() => activeState.arrowsCount > 0 && handleArrowDelta(-1, "watch_manual")}
                 aria-label={tx("−1 flecha", "−1 arrow")}
-                className="w-[34px] h-[26px] rounded-full bg-[#180709] border border-[#FF1E1E]/65 text-white text-[11px] font-extrabold flex items-center justify-center active:scale-90 transition cursor-pointer tabular-nums"
+                className="h-[40px] rounded-[12px] bg-[#180709] border-[1.5px] border-[#FF1E1E]/75 text-white text-[16.5px] font-extrabold flex items-center justify-center active:scale-95 transition cursor-pointer tabular-nums"
               >
                 −1
               </button>
-
-              <div
-                onClick={() => setScreenIdx(2)}
-                className="flex flex-col items-center cursor-pointer text-center"
-              >
-                <div className="text-[10.5px] font-extrabold text-white tracking-[0.01em] whitespace-nowrap tabular-nums">
-                  {walkedPrimaryStr} · {activeState.activeKcal} kcal
-                </div>
-                <span className="text-[8px] font-bold text-[#8E96A4] tracking-[0.09em] uppercase whitespace-nowrap tabular-nums mt-[1.5px]">
-                  {tx("TANDA", "END")} {currentTanda} · {activeState.distanceM} M
-                </span>
-              </div>
 
               <button
                 type="button"
                 onClick={() => handleArrowDelta(1, "watch_manual")}
                 aria-label={tx("+1 flecha", "+1 arrow")}
-                className="w-[34px] h-[26px] rounded-full bg-[#061523] border border-[#00A8F3] text-white text-[11px] font-extrabold flex items-center justify-center active:scale-90 transition cursor-pointer tabular-nums"
+                className="h-[40px] rounded-[12px] bg-[#061523] border-[1.5px] border-[#00A8F3] text-white text-[16.5px] font-extrabold flex items-center justify-center active:scale-95 transition cursor-pointer tabular-nums"
               >
                 +1
               </button>
+            </div>
+
+            <div
+              onClick={() => setScreenIdx(2)}
+              className="flex flex-col items-center cursor-pointer text-center leading-tight"
+            >
+              <div className="text-[10px] font-extrabold text-white tracking-[0.01em] whitespace-nowrap tabular-nums">
+                {walkedPrimaryStr} · {activeState.activeKcal} kcal
+              </div>
+              <span className="text-[7.8px] font-bold text-[#8E96A4] tracking-[0.09em] uppercase whitespace-nowrap tabular-nums mt-[1px]">
+                {tx("TANDA", "END")} {currentTanda} · {activeState.distanceM} M
+              </span>
             </div>
           </>
         )}
@@ -1780,67 +1660,8 @@ export default function SmartwatchMiniApp({
           </>
         )}
 
-        {/* SCREEN 03: AUTO-SHOT & SENSITIVITY */}
+        {/* SCREEN 03: SUMMARY & SAVE */}
         {screenIdx === 3 && (
-          <>
-            <WatchBrandHeader
-              pillText={
-                activeState.autoDetectEnabled
-                  ? tx("AUTO TIRO · +1", "AUTO SHOT · +1")
-                  : tx("MODO MANUAL", "MANUAL MODE")
-              }
-              pillColor="yellow"
-              onClickPill={handleToggleAuto}
-            />
-
-            <WatchCounterChassis highlightGold={true} />
-
-            {iosMotionNeedsPermission && !iosMotionGranted ? (
-              <button
-                type="button"
-                onClick={requestMotionPermissionFromUserGesture}
-                className={`${
-                  isSquare ? "w-[214px]" : "w-[196px]"
-                } py-1.5 rounded-full bg-[#061523] border border-[#00A8F3] text-white text-[8px] font-extrabold tracking-[0.08em] uppercase active:scale-95 transition cursor-pointer whitespace-nowrap`}
-              >
-                {tx("ACTIVAR SENSOR DE MUÑECA", "ENABLE WRIST SENSOR")}
-              </button>
-            ) : (
-              <div
-                className={`${
-                  isSquare ? "w-[214px]" : "w-[196px]"
-                } flex items-center justify-between bg-[#07090E] border border-white/10 rounded-xl px-2.5 py-1.5`}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    requestMotionPermissionFromUserGesture();
-                    setSensitivity((s) => (s === "ALTA" ? "MEDIA" : s === "MEDIA" ? "BAJA" : "ALTA"));
-                  }}
-                  className="text-left cursor-pointer"
-                >
-                  <div className="text-[7px] font-bold text-[#8E96A4] tracking-[0.1em] uppercase whitespace-nowrap">
-                    {tx("SENSIBILIDAD", "SENSITIVITY")} · {sensitivityDisplay}
-                  </div>
-                  <div className="text-[9px] font-extrabold text-white uppercase whitespace-nowrap">
-                    {tx("COMPUESTO / RECURVO", "COMPOUND / RECURVE")}
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => activeState.arrowsCount > 0 && handleArrowDelta(-1, "watch_manual")}
-                  className="bg-[#180709] border border-[#FF1E1E]/60 px-2 py-1 rounded-md text-[7.5px] font-extrabold text-white uppercase active:scale-95 transition cursor-pointer shrink-0 tabular-nums"
-                >
-                  −1
-                </button>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* SCREEN 04: SUMMARY & SAVE */}
-        {screenIdx === 4 && (
           <>
             <WatchBrandHeader
               pillText={
@@ -1898,7 +1719,7 @@ export default function SmartwatchMiniApp({
 
       {/* Bottom Pinned Pager Dots */}
       <div className="absolute bottom-[12px] left-0 right-0 flex items-center justify-center gap-[5px] z-10">
-        {[0, 1, 2, 3, 4].map((idx) => {
+        {[0, 1, 2, 3].map((idx) => {
           const isCurrent = screenIdx === idx;
           return (
             <button
@@ -2033,14 +1854,14 @@ export default function SmartwatchMiniApp({
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => setScreenIdx((s) => (s + 4) % 5)}
+            onClick={() => setScreenIdx((s) => (s + 3) % 4)}
             className="px-3.5 py-1.5 rounded-full bg-[#07090E] border border-white/15 text-white text-[10px] font-extrabold uppercase cursor-pointer"
           >
             {tx("◀ Anterior", "◀ Prev")}
           </button>
           <button
             type="button"
-            onClick={() => setScreenIdx((s) => (s + 1) % 5)}
+            onClick={() => setScreenIdx((s) => (s + 1) % 4)}
             className="px-3.5 py-1.5 rounded-full bg-[#07090E] border border-white/15 text-white text-[10px] font-extrabold uppercase cursor-pointer"
           >
             {tx("Siguiente ▶", "Next ▶")}
@@ -2290,23 +2111,19 @@ export default function SmartwatchMiniApp({
             <WatchFaceContent />
           </div>
 
-          {/* Clean Bottom Navigation Tabs (5 screens) */}
-          <div className="w-full grid grid-cols-5 gap-[4px]">
+          {/* Clean Bottom Navigation Tabs (4 screens) */}
+          <div className="w-full grid grid-cols-4 gap-[4px]">
             {[
               { idx: 0, label: tx("FLECHAS", "ARROWS") },
               { idx: 1, label: tx("PUNTOS", "SCORE") },
               { idx: 2, label: tx("PASOS", "STEPS") },
-              { idx: 3, label: "AUTO" },
-              { idx: 4, label: tx("RESUMEN", "SUMMARY") }
+              { idx: 3, label: tx("RESUMEN", "SUMMARY") }
             ].map((tab) => (
               <button
                 key={tab.idx}
                 type="button"
-                onClick={() => {
-                  if (tab.idx === 3) requestMotionPermissionFromUserGesture();
-                  setScreenIdx(tab.idx);
-                }}
-                className={`py-[7px] px-[2px] rounded-[10px] text-[8px] font-extrabold uppercase tracking-[0.04em] text-center border transition cursor-pointer ${
+                onClick={() => setScreenIdx(tab.idx)}
+                className={`py-[7px] px-[2px] rounded-[10px] text-[8.5px] font-extrabold uppercase tracking-[0.04em] text-center border transition cursor-pointer ${
                   screenIdx === tab.idx
                     ? "bg-[#0B1420] text-white border-[#00A8F3]/50"
                     : "bg-[#04060A] text-[#6E7785] border-white/[0.06] hover:text-white"

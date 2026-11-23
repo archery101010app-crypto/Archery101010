@@ -153,11 +153,8 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
         let bootNowMs = Int64(Date().timeIntervalSince1970 * 1000)
         lastActivityMs = bootNowMs
         let defaults = UserDefaults.standard
-        if defaults.object(forKey: "autoDetectEnabled_v2") != nil {
-            autoDetectEnabled = defaults.bool(forKey: "autoDetectEnabled_v2")
-        } else {
-            autoDetectEnabled = false
-        }
+        autoDetectEnabled = false
+        defaults.set(false, forKey: "autoDetectEnabled_v2")
         if defaults.object(forKey: "sensitivityLevel") != nil {
             sensitivityLevel = max(0, min(2, defaults.integer(forKey: "sensitivityLevel")))
         }
@@ -218,8 +215,8 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                     self.recordDetectedStep(nowMs: nowMs)
                 }
                 self.stepsCount = newSteps
-                let pedDist = data.distance?.doubleValue ?? (Double(self.stepsCount) * 0.76)
-                self.distanceWalkedM = max(self.distanceWalkedM, pedDist)
+                let pedDist = data.distance?.doubleValue ?? (Double(self.stepsCount) * 0.78)
+                self.distanceWalkedM = max(self.distanceWalkedM, pedDist, Double(self.stepsCount) * 0.78)
                 self.maybeSyncTelemetryToPhone()
             }
         }
@@ -333,7 +330,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     private func maybeSyncTelemetryToPhone(force: Bool = false) {
         let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
         let stepDelta = stepsCount - lastSyncedStepsCount
-        if !force && (stepDelta < 3 || (nowMs - lastTelemetrySyncTimeMs) < 4000) {
+        if !force && (stepDelta < 2 || (nowMs - lastTelemetrySyncTimeMs) < 2000) {
             return
         }
         lastSyncedStepsCount = stepsCount
@@ -368,44 +365,16 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     }
 
     func cycleSensitivityMode() {
-        markUserActivity(isWriteAction: true)
-        if !autoDetectEnabled {
-            autoDetectEnabled = true
-            sensitivityLevel = 1 // MEDIA
-        } else if sensitivityLevel == 1 {
-            sensitivityLevel = 0 // BAJA
-        } else if sensitivityLevel == 0 {
-            sensitivityLevel = 2 // ALTA
-        } else {
-            autoDetectEnabled = false // MODO MANUAL
-        }
-        let defaults = UserDefaults.standard
-        defaults.set(autoDetectEnabled, forKey: "autoDetectEnabled_v2")
-        defaults.set(sensitivityLevel, forKey: "sensitivityLevel")
+        // 100% Manual Counter Mode on watches
+        autoDetectEnabled = false
+        UserDefaults.standard.set(false, forKey: "autoDetectEnabled_v2")
         syncShotDetectionMotionSensors()
-        WKInterfaceDevice.current().play(.click)
-        sendCommandToPhone([
-            "type": "TOGGLE_AUTO_DETECT",
-            "enabled": autoDetectEnabled,
-            "sensitivityLevel": sensitivityLevel
-        ])
+        markUserActivity(isWriteAction: false)
     }
 
     var currentStatusPillLabel: String {
         let syncedNow = isPhoneConnected || isCloudSynced
-        if micDeniedNotice {
-            return tr("PERMITE MICRÓFONO", "ALLOW MICROPHONE")
-        }
-        if !autoDetectEnabled {
-            return syncedNow ? tr("MANUAL · CONECTADO", "MANUAL · SYNCED") : tr("MODO MANUAL", "MANUAL MODE")
-        }
-        if isWalkingPaused {
-            return tr("PAUSA · CAMINANDO", "PAUSED · WALKING")
-        }
-        let sens = (sensitivityLevel == 0)
-            ? tr("BAJA", "LOW")
-            : ((sensitivityLevel == 2) ? tr("ALTA", "HIGH") : tr("MEDIA", "MED"))
-        return syncedNow ? "AUTO 2K · \(sens) · SYNC" : "AUTO 2K · \(sens)"
+        return syncedNow ? tr("CONECTADO · LIVE", "SYNCED · LIVE") : tr("MODO MANUAL", "MANUAL MODE")
     }
 
     private func startSensors() {
@@ -1145,8 +1114,8 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                             self.currentEndArrows = parsedEndArrows
                         }
                         if hasAutoField {
-                            self.autoDetectEnabled = fsAuto
-                            UserDefaults.standard.set(fsAuto, forKey: "autoDetectEnabled_v2")
+                            self.autoDetectEnabled = false
+                            UserDefaults.standard.set(false, forKey: "autoDetectEnabled_v2")
                             self.syncShotDetectionMotionSensors()
                         }
                         self.sensitivityLevel = fsSens
@@ -1408,9 +1377,9 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
             if let ends = obj["endsCount"] as? Int { self.endsCount = max(1, ends) }
             if let curIdx = obj["currentEndIndex"] as? Int { self.currentEnd = curIdx + 1 }
             if let endArrows = obj["currentEndArrows"] as? [String] { self.currentEndArrows = endArrows }
-            if let autoEn = obj["autoDetectEnabled"] as? Bool {
-                self.autoDetectEnabled = autoEn
-                UserDefaults.standard.set(autoEn, forKey: "autoDetectEnabled_v2")
+            if obj["autoDetectEnabled"] != nil {
+                self.autoDetectEnabled = false
+                UserDefaults.standard.set(false, forKey: "autoDetectEnabled_v2")
                 self.syncShotDetectionMotionSensors()
             }
             if let sens = obj["sensitivityLevel"] as? Int {
@@ -1497,22 +1466,21 @@ struct CounterWatchScreen: View {
         VStack(spacing: 5) {
             WatchBrandHeaderView(
                 pillText: vm.currentStatusPillLabel,
-                isYellowPill: vm.autoDetectEnabled && vm.isWalkingPaused,
-                isMutedPill: !syncedNow && !(vm.autoDetectEnabled && vm.isWalkingPaused)
+                isYellowPill: false,
+                isMutedPill: !syncedNow
             )
-            .onTapGesture { vm.cycleSensitivityMode() }
 
             VStack(spacing: 3) {
-                Text(vm.tr("FLECHAS", "ARROWS"))
+                Text(vm.tr("VOLUMEN · FLECHAS", "VOLUME · ARROWS"))
                     .font(.system(size: 7, weight: .bold, design: .rounded))
                     .foregroundColor(.gray)
 
                 HStack(spacing: 4) {
                     ForEach(0..<4, id: \.self) { idx in
                         Text(digits[idx])
-                            .font(.system(size: 21, weight: .black, design: .rounded).monospacedDigit())
+                            .font(.system(size: 20, weight: .black, design: .rounded).monospacedDigit())
                             .foregroundColor(idx == 3 ? Color(red: 1, green: 229/255, blue: 0) : .white)
-                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .frame(maxWidth: .infinity, minHeight: 33)
                             .background(Color(red: 11/255, green: 14/255, blue: 21/255))
                             .cornerRadius(6)
                             .overlay(
@@ -1524,39 +1492,55 @@ struct CounterWatchScreen: View {
             }
             .padding(5)
             .background(Color(red: 7/255, green: 9/255, blue: 14/255))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
+            )
             .cornerRadius(10)
 
-            HStack {
+            HStack(spacing: 7) {
                 Button(action: { vm.incrementArrow(delta: -1) }) {
                     Text("−1")
-                        .font(.system(size: 11, weight: .heavy, design: .rounded))
+                        .font(.system(size: 15, weight: .black, design: .rounded).monospacedDigit())
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, minHeight: 37)
+                        .background(Color(red: 24/255, green: 7/255, blue: 9/255))
+                        .cornerRadius(11)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 11)
+                                .stroke(Color(red: 1, green: 30/255, blue: 30/255).opacity(0.78), lineWidth: 1.2)
+                        )
                 }
                 .buttonStyle(.plain)
-                .frame(width: 32, height: 22)
-                .background(Color(red: 24/255, green: 7/255, blue: 9/255))
-                .clipShape(Capsule())
-
-                Spacer()
-
-                VStack(spacing: 1) {
-                    Text("\(vm.walkedPrimaryString) · \(vm.activeKcal) kcal")
-                        .font(.system(size: 10, weight: .heavy, design: .rounded).monospacedDigit())
-                        .foregroundColor(.white)
-                    Text("\(vm.tr("TANDA", "END")) \(vm.currentEnd) · \(vm.distanceM) M")
-                        .font(.system(size: 7.5, weight: .bold, design: .rounded).monospacedDigit())
-                        .foregroundColor(.gray)
-                }
-
-                Spacer()
 
                 Button(action: { vm.incrementArrow(delta: 1) }) {
                     Text("+1")
-                        .font(.system(size: 11, weight: .heavy, design: .rounded))
+                        .font(.system(size: 15, weight: .black, design: .rounded).monospacedDigit())
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, minHeight: 37)
+                        .background(Color(red: 6/255, green: 21/255, blue: 35/255))
+                        .cornerRadius(11)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 11)
+                                .stroke(Color(red: 0, green: 168/255, blue: 243/255), lineWidth: 1.2)
+                        )
                 }
                 .buttonStyle(.plain)
-                .frame(width: 32, height: 22)
-                .background(Color(red: 6/255, green: 21/255, blue: 35/255))
-                .clipShape(Capsule())
+            }
+
+            VStack(spacing: 1) {
+                Text("\(vm.walkedPrimaryString) · \(vm.activeKcal) kcal")
+                    .font(.system(size: 9.5, weight: .heavy, design: .rounded).monospacedDigit())
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                Text("\(vm.tr("TANDA", "END")) \(vm.currentEnd) · \(vm.distanceM) M")
+                    .font(.system(size: 7, weight: .bold, design: .rounded).monospacedDigit())
+                    .foregroundColor(.gray)
+                    .lineLimit(1)
+            }
+            .onTapGesture {
+                vm.screenIndex = 2
+                vm.markUserActivity(isWriteAction: false)
             }
         }
         .padding(.horizontal, 8)

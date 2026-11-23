@@ -753,7 +753,7 @@ class Archery101010WatchView extends WatchUi.View {
                         stepsCount = deltaSteps;
                     }
                     recalculateMetrics();
-                    if ((stepsCount - mLastTelemetryPushSteps) >= 6 && hasPairingCode) {
+                    if ((stepsCount - mLastTelemetryPushSteps) >= 3 && hasPairingCode) {
                         mLastTelemetryPushSteps = stepsCount;
                         syncWithFirestoreCloud("SYNC_TELEMETRY_FROM_WATCH", null);
                     }
@@ -889,23 +889,35 @@ class Archery101010WatchView extends WatchUi.View {
         if (info == null) {
             return;
         }
-        // Prefer native elapsedDistance delta from session start without double-counting manual Haversine
+        // Use native elapsedDistance ONLY when an active positive distance delta exists
         if ((info has :elapsedDistance) && info.elapsedDistance != null) {
             var curElapsed = info.elapsedDistance.toFloat();
-            if (mStartElapsedDistM == null || curElapsed < mStartElapsedDistM) {
-                mStartElapsedDistM = curElapsed;
+            if (curElapsed > 0.0) {
+                if (mStartElapsedDistM == null || curElapsed < mStartElapsedDistM) {
+                    mStartElapsedDistM = curElapsed;
+                }
+                var deltaM = curElapsed - mStartElapsedDistM;
+                if (deltaM > gpsDistanceM) {
+                    gpsDistanceM = deltaM;
+                    recalculateMetrics();
+                    WatchUi.requestUpdate();
+                }
+                return;
             }
-            var deltaM = curElapsed - mStartElapsedDistM;
-            if (deltaM > gpsDistanceM) {
-                gpsDistanceM = deltaM;
-                recalculateMetrics();
-                WatchUi.requestUpdate();
-            }
-            return;
         }
 
-        // Manual Haversine fallback ONLY when elapsedDistance is null AND GPS fix is QUALITY_USABLE or better
-        if (info.accuracy != null && info.accuracy >= Position.QUALITY_USABLE && info.position != null) {
+        // Haversine GNSS tracking across outdoor & covered ranges (QUALITY_POOR or better when moving >= 0.50 m/s)
+        var hasValidFix = (info.accuracy != null && info.accuracy >= Position.QUALITY_POOR && info.position != null);
+        if (hasValidFix) {
+            var spdOk = true;
+            if ((info has :speed) && info.speed != null) {
+                var spd = info.speed.toFloat();
+                if (spd < 0.48 || spd > 5.8) {
+                    spdOk = false;
+                }
+            } else if (info.accuracy < Position.QUALITY_USABLE) {
+                spdOk = false;
+            }
             var radians = info.position.toRadians();
             var lat = radians[0];
             var lon = radians[1];
@@ -917,12 +929,14 @@ class Archery101010WatchView extends WatchUi.View {
                         Math.cos(mLastLat) * Math.cos(lat) * Math.sin(dLon / 2.0) * Math.sin(dLon / 2.0);
                 var c = 2.0 * Math.atan2(Math.sqrt(a), Math.sqrt(1.0 - a));
                 var stepM = R * c;
-                if (stepM >= 1.8 && stepM <= 45.0) {
-                    gpsDistanceM = gpsDistanceM + stepM;
+                if (stepM >= 4.2 && stepM <= 140.0) {
+                    if (spdOk) {
+                        gpsDistanceM = gpsDistanceM + stepM;
+                        recalculateMetrics();
+                        WatchUi.requestUpdate();
+                    }
                     mLastLat = lat;
                     mLastLon = lon;
-                    recalculateMetrics();
-                    WatchUi.requestUpdate();
                 }
             } else {
                 mLastLat = lat;
@@ -1049,7 +1063,7 @@ class Archery101010WatchView extends WatchUi.View {
     function recalculateMetrics() as Void {
         var distM = gpsDistanceM;
         if (stepsCount > 0) {
-            var stepMeters = stepsCount * 0.76;
+            var stepMeters = stepsCount * 0.78;
             if (stepMeters > distM) {
                 distM = stepMeters;
             }
@@ -1558,30 +1572,13 @@ class Archery101010WatchView extends WatchUi.View {
         var maxPillTxtW = (148.0 * s).toNumber();
 
         if (screenIdx == 0) {
-            var sensShort = (sensitivityLevel == 0)
-                ? tr("BAJA", "LOW")
-                : ((sensitivityLevel == 2) ? tr("ALTA", "HIGH") : tr("MEDIA", "MED"));
-            var sensFull = (sensitivityLevel == 0)
-                ? tr("SENS BAJA", "SENS LOW")
-                : ((sensitivityLevel == 2) ? tr("SENS ALTA", "SENS HIGH") : tr("SENS MEDIA", "SENS MED"));
-
-            var pillTxt = "";
-            if (!autoDetectEnabled) {
-                pillTxt = isConnectedNow ? "MANUAL · SYNC" : tr("MODO MANUAL", "MANUAL MODE");
-            } else if (System.getTimer() < mWalkingLockUntilMs) {
-                pillTxt = tr("PAUSA · CAMINANDO", "PAUSED · WALKING");
-                if (dc.getTextWidthInPixels(pillTxt, fMicro) > maxPillTxtW) {
-                    pillTxt = tr("CAMINANDO", "WALKING");
-                }
-            } else {
-                pillTxt = isConnectedNow
-                    ? (tr("AUTO TIRO · ", "AUTO SHOT · ") + sensShort)
-                    : (tr("AUTO TIRO · ", "AUTO SHOT · ") + sensShort);
-                if (dc.getTextWidthInPixels(pillTxt, fMicro) > maxPillTxtW) {
-                    pillTxt = sensFull;
-                }
+            var pillTxt = isConnectedNow
+                ? tr("CONECTADO · LIVE", "SYNCED · LIVE")
+                : tr("MODO MANUAL", "MANUAL MODE");
+            if (dc.getTextWidthInPixels(pillTxt, fMicro) > maxPillTxtW) {
+                pillTxt = isConnectedNow ? tr("CONECTADO", "SYNCED") : "MANUAL";
             }
-            drawArchery101010Header(dc, w, h, s, pillTxt, false);
+            drawArchery101010Header(dc, w, h, s, pillTxt, true);
 
             var d3 = (arrowsCount / 1000) % 10;
             var d2 = (arrowsCount / 100) % 10;
@@ -1590,11 +1587,11 @@ class Archery101010WatchView extends WatchUi.View {
             var digits = [d3, d2, d1, d0] as Lang.Array<Lang.Number>;
 
             var boxW = (37.0 * s).toNumber();
-            var boxH = (56.0 * s).toNumber();
+            var boxH = (50.0 * s).toNumber();
             var gap = (5.0 * s).toNumber();
             var totalW = (boxW * 4) + (gap * 3);
             var startX = cx - (totalW / 2);
-            var startY = (66.0 * s).toNumber();
+            var startY = (60.0 * s).toNumber();
 
             for (var i = 0; i < 4; i++) {
                 var rx = startX + i * (boxW + gap);
@@ -1606,38 +1603,33 @@ class Archery101010WatchView extends WatchUi.View {
                 dc.drawText(rx + (boxW / 2), startY + (boxH / 2), fHero, digits[i].toString(), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
             }
 
-            // Dedicated Tactile Row: [-1]  |  TANDA 1 · 18M / END 1 · 18M  |  [+1]  (Zero collision with telemetry)
-            var rowY = (131.0 * s).toNumber();
-            var btnW = (42.0 * s).toNumber();
-            var btnH = (28.0 * s).toNumber();
-            var rowW = (162.0 * s).toNumber();
+            // Symmetrical XL Manual Counter Row: [  -1  ]  [  +1  ] aligned edge-to-edge with 4-digit chassis
+            var rowY = (118.0 * s).toNumber();
+            var rowW = totalW;
+            var btnGap = (7.0 * s).toNumber();
+            var btnW = (rowW - btnGap) / 2;
+            var btnH = (36.0 * s).toNumber();
+            var btnRad = (10.0 * s).toNumber();
 
             var minusX = cx - (rowW / 2);
-            drawCrispBox(dc, minusX, rowY, btnW, btnH, btnH / 2, 0x180709, 0xFF1E1E, strokePx);
+            drawCrispBox(dc, minusX, rowY, btnW, btnH, btnRad, 0x180709, 0xFF1E1E, strokePx);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(minusX + (btnW / 2), rowY + (btnH / 2), fLabel, "-1", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(minusX + (btnW / 2), rowY + (btnH / 2), fValue, "-1", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
             var plusX = cx + (rowW / 2) - btnW;
-            drawCrispBox(dc, plusX, rowY, btnW, btnH, btnH / 2, 0x061523, 0x00A8F3, strokePx);
+            drawCrispBox(dc, plusX, rowY, btnW, btnH, btnRad, 0x061523, 0x00A8F3, strokePx);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(plusX + (btnW / 2), rowY + (btnH / 2), fLabel, "+1", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(plusX + (btnW / 2), rowY + (btnH / 2), fValue, "+1", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-            var centerAvailW = rowW - (2 * btnW) - (8.0 * s).toNumber();
-            var fullEndLabel = tr("TANDA ", "END ") + currentEnd.toString() + " · " + distanceM.toString() + "M";
-            var shortEndLabel = tr("T", "E") + currentEnd.toString() + " · " + distanceM.toString() + "M";
-            var endDistLabel = (dc.getTextWidthInPixels(fullEndLabel, fMicro) <= centerAvailW) ? fullEndLabel : shortEndLabel;
-            dc.setColor(0xCBD5E1, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, rowY + (btnH / 2), fMicro, endDistLabel, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-
-            // Dedicated Bottom Telemetry Lines (100% separated vertically below buttons)
+            // Dedicated Bottom Telemetry Lines (100% separated vertically below XL buttons)
             var telemStr = walkedPrimaryStr + " · " + activeKcal.toString() + " kcal";
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, ((minDim > 180 ? 173.0 : 176.0) * s).toNumber(), fMicro, telemStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(cx, ((minDim > 180 ? 168.0 : 172.0) * s).toNumber(), fMicro, telemStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
             if (minDim > 180) {
-                var subCounterStr = arrowsCount.toString() + " " + tr("FLECHAS", "ARROWS") + " · " + totalScore.toString() + " PTS";
+                var endDistStr = tr("TANDA ", "END ") + currentEnd.toString() + " · " + distanceM.toString() + " M";
                 dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(cx, (192.0 * s).toNumber(), fMicro, subCounterStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+                dc.drawText(cx, (186.0 * s).toNumber(), fMicro, endDistStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
             }
 
         } else if (screenIdx == 1) {
@@ -2026,12 +2018,52 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
         return true;
     }
 
+    function onSwipe(swipeEvent) {
+        if (swipeEvent == null) {
+            return false;
+        }
+        var dir = swipeEvent.getDirection();
+        if (dir == WatchUi.SWIPE_LEFT) {
+            mView.isEditingCode = false;
+            mView.screenIdx = (mView.screenIdx + 1) % 5;
+            mView.markUserActivity(false);
+            WatchUi.requestUpdate();
+            return true;
+        } else if (dir == WatchUi.SWIPE_RIGHT) {
+            if (mView.screenIdx == 4 && mView.isEditingCode) {
+                mView.isEditingCode = false;
+            } else {
+                mView.screenIdx = (mView.screenIdx + 4) % 5;
+            }
+            mView.markUserActivity(false);
+            WatchUi.requestUpdate();
+            return true;
+        }
+        return false;
+    }
+
+    function onBack() {
+        if (mView.screenIdx == 4 && mView.isEditingCode) {
+            mView.isEditingCode = false;
+            mView.markUserActivity(false);
+            WatchUi.requestUpdate();
+            return true;
+        }
+        if (mView.screenIdx > 0) {
+            mView.screenIdx = mView.screenIdx - 1;
+            mView.markUserActivity(false);
+            WatchUi.requestUpdate();
+            return true;
+        }
+        return false;
+    }
+
     function onMenu() {
         if (mView.screenIdx == 1) {
             mView.advanceNextEnd();
             return true;
         }
-        mView.cycleSensitivityMode();
+        mView.markUserActivity(false);
         return true;
     }
 
@@ -2057,26 +2089,25 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
             return true;
         }
 
-        // Top pill tap on Screen 0 cycles sensitivity
-        if (mView.screenIdx == 0 && ty <= (62.0 * s)) {
-            mView.cycleSensitivityMode();
-            return true;
-        }
-
         if (mView.screenIdx == 0) {
-            // Deliberate -1 / +1 buttons ONLY (prevents accidental wrist/sleeve/arrow touches on 0000 chassis)
-            if (ty >= (126.0 * s) && ty <= (165.0 * s)) {
-                if (tx < (cx - (34.0 * s))) {
+            // Deliberate XL side-by-side -1 / +1 buttons (prevents accidental wrist/sleeve/arrow touches on 0000 chassis)
+            if (ty >= (114.0 * s) && ty <= (160.0 * s)) {
+                if (tx < (cx - (2.5 * s))) {
                     if (mView.arrowsCount > 0) {
                         mView.incrementArrow(-1, false);
                     } else {
                         mView.markUserActivity(false);
                     }
                     return true;
-                } else if (tx > (cx + (34.0 * s))) {
+                } else if (tx > (cx + (2.5 * s))) {
                     mView.incrementArrow(1, false);
                     return true;
                 }
+            } else if (ty > (160.0 * s) && ty < (h - (28.0 * s))) {
+                mView.screenIdx = 2;
+                mView.markUserActivity(false);
+                WatchUi.requestUpdate();
+                return true;
             }
         } else if (mView.screenIdx == 1) {
             var kStartX = mView.lastPadStartX;
@@ -2168,26 +2199,6 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
                 mView.commitPairingDigits();
                 return true;
             }
-        }
-        mView.markUserActivity(false);
-        return false;
-    }
-
-    function onBack() {
-        if (mView.screenIdx == 4 && mView.isEditingCode) {
-            mView.isEditingCode = false;
-            mView.markUserActivity(false);
-            WatchUi.requestUpdate();
-            return true;
-        }
-        if (mView.screenIdx == 0 && mView.arrowsCount > 0) {
-            mView.incrementArrow(-1, false);
-            return true;
-        } else if (mView.screenIdx == 1) {
-            mView.selectedScoreIdx = (mView.selectedScoreIdx + 1) % 12;
-            mView.markUserActivity(false);
-            WatchUi.requestUpdate();
-            return true;
         }
         mView.markUserActivity(false);
         return false;

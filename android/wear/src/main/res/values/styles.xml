@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Disable Wear OS system swipe-to-dismiss so left-to-right swipes navigate to the previous watch screen instead of minimizing -->
+    <style name="Theme.ArcheryWear" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowSwipeToDismiss">false</item>
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

@@ -41,8 +41,10 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelUuid;
+import android.os.PowerManager;
 import android.provider.MediaStore;
 import android.util.Base64;
+import android.view.MotionEvent;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
@@ -179,15 +181,27 @@ public class MainActivity extends BridgeActivity {
     private volatile double initialSessionMeters = 0.0;
     private volatile double sessionAccumulatedMeters = 0.0;
     private volatile double accumulatedGpsDistanceM = 0.0;
+    private volatile double nativeStepMetersSinceLastGps = 0.0;
+    private volatile long lastNativeGpsCreditTimeMs = 0L;
     private volatile int accumulatedSteps = 0;
     private volatile boolean hasGpsFix = false;
+    private volatile long lastPhoneScreenTouchMs = 0L;
+    private PowerManager.WakeLock sessionTrackingWakeLock = null;
     private Location lastValidGpsLocation = null;
     private long lastGpsFixTimeMs = 0L;
+    private Location lastRawFixLocation = null;
+    private long lastRawFixTimeMs = 0L;
     private long lastHighAccuracyGpsTimeMs = 0L;
     private long lastStepDetectedTimeMs = 0L;
     private LocationManager nativeLocationManager = null;
     private SensorManager nativeSensorManager = null;
     private Sensor nativeAccelerometer = null;
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        lastPhoneScreenTouchMs = System.currentTimeMillis();
+        return super.dispatchTouchEvent(ev);
+    }
     private MessageClient.OnMessageReceivedListener wearMessageListener = null;
     private DataClient.OnDataChangedListener wearDataListener = null;
 
@@ -207,26 +221,71 @@ public class MainActivity extends BridgeActivity {
         @Override
         public void onLocationChanged(Location loc) {
             if (!isSessionTrackingActive || loc == null) return;
-            // Strict satellite-grade accuracy gate (<= 14m) so indoor Wi-Fi/cell triangulation bounce never adds phantom meters
-            if (!loc.hasAccuracy() || loc.getAccuracy() > 14f) {
+            // Reject coarse indoor Wi-Fi/cell triangulation (> 20m) while keeping range canopy GNSS fixes
+            if (!loc.hasAccuracy() || loc.getAccuracy() <= 0f || loc.getAccuracy() > 20f) {
                 return;
             }
             long now = System.currentTimeMillis();
             if (lastValidGpsLocation != null) {
                 float deltaM = loc.distanceTo(lastValidGpsLocation);
                 long dtMs = Math.max(500L, now - lastGpsFixTimeMs);
-                float speedMs = (deltaM * 1000f) / dtMs;
-                if (deltaM > 60f || speedMs > 5.5f) {
+                float anchorSpeedMs = (deltaM * 1000f) / dtMs;
+
+                float recentSegDistM = 0f;
+                float recentSegSpeedMs = 0f;
+                if (lastRawFixLocation != null && now > lastRawFixTimeMs && (now - lastRawFixTimeMs) <= 14_000L) {
+                    long segDtMs = Math.max(500L, now - lastRawFixTimeMs);
+                    recentSegDistM = loc.distanceTo(lastRawFixLocation);
+                    recentSegSpeedMs = (recentSegDistM * 1000f) / segDtMs;
+                }
+                lastRawFixLocation = loc;
+                lastRawFixTimeMs = now;
+
+                float dopplerSpeedMs = (loc.hasSpeed() && loc.getSpeed() >= 0f && loc.getSpeed() <= 5.5f)
+                        ? loc.getSpeed()
+                        : 0f;
+
+                // Stationary dwell refresh: standing 2 minutes on the shooting line or at the target
+                // keeps lastGpsFixTimeMs fresh so subsequent walking speed is never diluted!
+                float dwellRadiusM = Math.min(3.5f, Math.max(2.0f, loc.getAccuracy() * 0.45f));
+                if (deltaM <= dwellRadiusM && recentSegSpeedMs < 0.45f && dopplerSpeedMs < 0.45f) {
+                    lastGpsFixTimeMs = now;
+                    hasGpsFix = true;
+                    return;
+                }
+
+                // Reject impossible teleportation (> 140m single jump or > 5.5 m/s) while allowing 70m/90m target walks
+                if (deltaM > 140f || anchorSpeedMs > 5.5f) {
                     lastValidGpsLocation = loc;
                     lastGpsFixTimeMs = now;
                     hasGpsFix = true;
                     return;
                 }
-                float minDeltaM = Math.max(8.0f, loc.getAccuracy() * 1.25f);
+
+                boolean activeRecentWalk =
+                        (recentSegDistM >= 2.2f && recentSegSpeedMs >= 0.52f && recentSegSpeedMs <= 5.5f)
+                        || dopplerSpeedMs >= 0.60f;
+                float effectiveSpeedMs = activeRecentWalk
+                        ? Math.max(anchorSpeedMs, Math.max(recentSegSpeedMs, dopplerSpeedMs))
+                        : anchorSpeedMs;
+                boolean isClearRangeRelocation =
+                        deltaM >= Math.max(16.0f, loc.getAccuracy() * 1.6f)
+                        && deltaM <= 140f
+                        && dtMs <= 300_000L;
+
+                float minDeltaM = (effectiveSpeedMs >= 0.65f)
+                        ? Math.max(5.0f, loc.getAccuracy() * 0.80f)
+                        : Math.max(8.0f, loc.getAccuracy() * 1.15f);
                 if (deltaM >= minDeltaM) {
-                    if (speedMs >= 0.55f) {
+                    if (effectiveSpeedMs >= 0.52f || isClearRangeRelocation) {
                         accumulatedGpsDistanceM += deltaM;
-                        sessionAccumulatedMeters = Math.max(accumulatedGpsDistanceM, accumulatedSteps * 0.76);
+                        if (lastNativeGpsCreditTimeMs > 0L && (now - lastNativeGpsCreditTimeMs) > 25_000L) {
+                            nativeStepMetersSinceLastGps = 0.0;
+                        }
+                        lastNativeGpsCreditTimeMs = now;
+                        double uncreditedGps = Math.max(0.0, deltaM - nativeStepMetersSinceLastGps);
+                        sessionAccumulatedMeters += uncreditedGps;
+                        nativeStepMetersSinceLastGps = Math.max(0.0, nativeStepMetersSinceLastGps - deltaM);
                         emitLocationSnapshot();
                     }
                     lastValidGpsLocation = loc;
@@ -236,6 +295,8 @@ public class MainActivity extends BridgeActivity {
             } else {
                 lastValidGpsLocation = loc;
                 lastGpsFixTimeMs = now;
+                lastRawFixLocation = loc;
+                lastRawFixTimeMs = now;
                 hasGpsFix = true;
                 emitLocationSnapshot();
             }
@@ -256,9 +317,22 @@ public class MainActivity extends BridgeActivity {
         private double smoothLin = 0.0;
         private boolean armedForPeak = true;
         private boolean peakSeen = false;
-        private final long[] candidateTimes = new long[6];
+        private final long[] candidateTimes = new long[4];
         private int candidateCount = 0;
+        private double lastMeanIv = 580.0;
         private boolean rhythmicActive = false;
+
+        private void creditSteps(long now, int stepDelta) {
+            if (lastNativeGpsCreditTimeMs > 0L && (now - lastNativeGpsCreditTimeMs) > 15_000L) {
+                nativeStepMetersSinceLastGps = 0.0;
+            }
+            lastStepDetectedTimeMs = now;
+            accumulatedSteps += stepDelta;
+            double deltaM = stepDelta * 0.78;
+            sessionAccumulatedMeters += deltaM;
+            nativeStepMetersSinceLastGps += deltaM;
+            emitLocationSnapshot();
+        }
 
         @Override
         public void onSensorChanged(SensorEvent event) {
@@ -267,62 +341,80 @@ public class MainActivity extends BridgeActivity {
             float ay = event.values[1];
             float az = event.values[2];
             double mag = Math.sqrt(ax * ax + ay * ay + az * az);
+            if (mag < 1.0 || mag > 45.0) return;
             gravityMag = 0.94 * gravityMag + 0.06 * mag;
             smoothLin = 0.65 * smoothLin + 0.35 * (mag - gravityMag);
             long now = System.currentTimeMillis();
 
-            long lastMs = candidateCount > 0 ? candidateTimes[(candidateCount - 1) % 6] : 0L;
-            if (lastMs > 0L && (now - lastMs) > 1500L) {
+            // 1800ms screen-tap lockout: scoring taps on phone never register as steps
+            if (lastPhoneScreenTouchMs > 0L && (now - lastPhoneScreenTouchMs) < 1800L) {
+                candidateCount = 0;
+                rhythmicActive = false;
+                peakSeen = false;
+                armedForPeak = true;
+                return;
+            }
+
+            long lastMs = candidateCount > 0 ? candidateTimes[(candidateCount - 1) % 4] : 0L;
+            if (lastMs > 0L && (now - lastMs) > 2200L) {
                 candidateCount = 0;
                 rhythmicActive = false;
                 peakSeen = false;
                 armedForPeak = true;
             }
 
-            if (armedForPeak && smoothLin >= 1.85) {
+            if (armedForPeak && smoothLin >= 0.78) {
                 peakSeen = true;
                 armedForPeak = false;
-            } else if (peakSeen && smoothLin <= -0.80) {
+            } else if (peakSeen && smoothLin <= -0.34) {
                 peakSeen = false;
                 armedForPeak = true;
                 if (lastMs > 0L) {
                     long dt = now - lastMs;
-                    if (dt < 360L) return;
-                    if (dt > 950L) {
+                    if (dt < 300L) return;
+                    if (dt > 1200L) {
+                        double expectedDouble = lastMeanIv * 2.0;
+                        if (rhythmicActive && dt <= 1900L && Math.abs(dt - expectedDouble) <= expectedDouble * 0.34) {
+                            candidateTimes[candidateCount % 4] = lastMs + (dt / 2L);
+                            candidateCount++;
+                            candidateTimes[candidateCount % 4] = now;
+                            candidateCount++;
+                            creditSteps(now, 2);
+                            return;
+                        }
                         candidateTimes[0] = now;
                         candidateCount = 1;
                         rhythmicActive = false;
                         return;
                     }
                 }
-                candidateTimes[candidateCount % 6] = now;
+                candidateTimes[candidateCount % 4] = now;
                 candidateCount++;
                 if (rhythmicActive) {
-                    lastStepDetectedTimeMs = now;
-                    accumulatedSteps += 1;
-                    sessionAccumulatedMeters = Math.max(accumulatedGpsDistanceM, accumulatedSteps * 0.76);
-                    emitLocationSnapshot();
+                    if (candidateCount >= 2) {
+                        long prevT = candidateTimes[(candidateCount - 2 + 4) % 4];
+                        lastMeanIv = 0.75 * lastMeanIv + 0.25 * (now - prevT);
+                    }
+                    creditSteps(now, 1);
                     return;
                 }
-                if (candidateCount >= 6) {
+                if (candidateCount >= 4) {
                     double sumIv = 0.0;
-                    long[] ivs = new long[5];
-                    for (int i = 0; i < 5; i++) {
-                        long tB = candidateTimes[(candidateCount - 1 - i) % 6];
-                        long tA = candidateTimes[(candidateCount - 2 - i) % 6];
+                    long[] ivs = new long[3];
+                    for (int i = 0; i < 3; i++) {
+                        long tB = candidateTimes[(candidateCount - 1 - i) % 4];
+                        long tA = candidateTimes[(candidateCount - 2 - i) % 4];
                         ivs[i] = tB - tA;
-                        if (ivs[i] < 360L || ivs[i] > 950L) return;
+                        if (ivs[i] < 300L || ivs[i] > 1200L) return;
                         sumIv += ivs[i];
                     }
-                    double meanIv = sumIv / 5.0;
-                    for (int i = 0; i < 5; i++) {
-                        if (Math.abs(ivs[i] - meanIv) > meanIv * 0.24) return;
+                    double meanIv = sumIv / 3.0;
+                    for (int i = 0; i < 3; i++) {
+                        if (Math.abs(ivs[i] - meanIv) > meanIv * 0.32) return;
                     }
                     rhythmicActive = true;
-                    lastStepDetectedTimeMs = now;
-                    accumulatedSteps += 6;
-                    sessionAccumulatedMeters = Math.max(accumulatedGpsDistanceM, accumulatedSteps * 0.76);
-                    emitLocationSnapshot();
+                    lastMeanIv = meanIv;
+                    creditSteps(now, 4);
                 }
             }
         }
@@ -1204,12 +1296,29 @@ public class MainActivity extends BridgeActivity {
                 initialSessionMeters = Math.max(0.0, initialMeters);
                 sessionAccumulatedMeters = initialSessionMeters;
                 accumulatedGpsDistanceM = initialSessionMeters;
-                accumulatedSteps = initialSessionMeters > 0 ? (int) Math.round(initialSessionMeters / 0.76) : 0;
+                nativeStepMetersSinceLastGps = 0.0;
+                lastNativeGpsCreditTimeMs = 0L;
+                accumulatedSteps = initialSessionMeters > 0 ? (int) Math.round(initialSessionMeters / 0.78) : 0;
                 hasGpsFix = false;
                 lastValidGpsLocation = null;
                 lastGpsFixTimeMs = 0L;
+                lastRawFixLocation = null;
+                lastRawFixTimeMs = 0L;
                 lastHighAccuracyGpsTimeMs = 0L;
                 isSessionTrackingActive = true;
+
+                try {
+                    PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                    if (pm != null) {
+                        if (sessionTrackingWakeLock == null) {
+                            sessionTrackingWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Archery101010::PhoneSessionWakeLock");
+                            sessionTrackingWakeLock.setReferenceCounted(false);
+                        }
+                        if (!sessionTrackingWakeLock.isHeld()) {
+                            sessionTrackingWakeLock.acquire(4 * 60 * 60 * 1000L);
+                        }
+                    }
+                } catch (Exception ignored) {}
 
                 // 1. Start immediate step/movement tracking via accelerometer
                 try {
@@ -1247,6 +1356,12 @@ public class MainActivity extends BridgeActivity {
                 isSessionTrackingActive = false;
                 hasGpsFix = false;
                 lastValidGpsLocation = null;
+                lastRawFixLocation = null;
+                try {
+                    if (sessionTrackingWakeLock != null && sessionTrackingWakeLock.isHeld()) {
+                        sessionTrackingWakeLock.release();
+                    }
+                } catch (Exception ignored) {}
                 try {
                     if (nativeLocationManager != null) {
                         nativeLocationManager.removeUpdates(nativeLocationListener);
