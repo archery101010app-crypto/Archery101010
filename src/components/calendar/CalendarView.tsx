@@ -1766,23 +1766,15 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
       })()}
 
       {/* Attendance Stats Widget */}
-      <div className="bg-neutral-900/60 p-4 rounded-3xl border border-white/5 flex justify-between items-center gap-4">
-        <div className="flex flex-col gap-1.5 w-[65%]">
-          <span className="text-[10.5px] text-cyan-neon font-bold uppercase tracking-widest flex items-center">
+      <div className="bg-neutral-900/60 px-5 py-4 rounded-3xl border border-white/5 flex items-center justify-between gap-4">
+        <div className="flex-1 flex items-center justify-center">
+          <span className="text-[15.5px] sm:text-[16.5px] text-cyan-neon font-black uppercase tracking-[0.12em] text-center leading-tight">
             {tx("Constancia Mensual", "Monthly Attendance")}
           </span>
-          <h4 className="text-white text-xs font-extrabold leading-tight">
-            {tx("Tu constancia de entrenamiento", "Your training consistency")}
-          </h4>
-          <p className="text-[11.6px] text-white leading-snug">
-            {attendanceRate >= 80 
-              ? tx("¡Excelente consistencia olímpica! Estás entrenando al nivel planeado.", "Excellent Olympic consistency! You are training at the planned level.")
-              : tx("Continúa asistiendo regularmente para completar tus metas del club.", "Continue attending regularly to complete your club goals.")}
-          </p>
         </div>
 
         {/* Circular Progress SVG widget */}
-        <div className="relative w-16 h-16 flex items-center justify-center">
+        <div className="relative w-16 h-16 flex items-center justify-center shrink-0">
           <svg className="w-16 h-16 transform -rotate-90">
             <circle
               cx="32"

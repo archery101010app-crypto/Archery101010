@@ -496,24 +496,24 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     : "rgba(255, 255, 255, 0.24)";
 
   // 2. Top Header Row
-  // OFFICIAL TELEMETRY Badge (+15% text: 29.2px inside 468x68 pill)
+  // OFFICIAL TELEMETRY Badge (+10% over v2.151: 32.1px inside 490x72 pill)
   ctx.fillStyle = isBlackMode ? "rgba(255, 255, 255, 0.05)" : boxFillStyle;
   ctx.strokeStyle = isBlackMode ? "rgba(255, 255, 255, 0.20)" : "rgba(255, 255, 255, 0.26)";
   ctx.lineWidth = 1.5;
-  drawRoundedRect(ctx, 54, 74, 468, 68, 34);
+  drawRoundedRect(ctx, 54, 74, 490, 72, 36);
   ctx.fill();
   ctx.stroke();
 
   const badgeText =
     OFFICIAL_BADGE_BY_LANG[resolvedLang] ||
     (resolvedLang.toLowerCase().startsWith("es") ? "TELEMETRÍA OFICIAL" : "OFFICIAL TELEMETRY");
-  ctx.font = `800 29.2px ${appFont}`;
+  ctx.font = `800 32.1px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(badgeText, 54 + 468 / 2, 74 + 68 / 2 + 1, 436);
+  ctx.fillText(badgeText, 54 + 490 / 2, 74 + 72 / 2 + 1, 456);
 
-  // Archer Name (+15%: 48.3px) & Subtitle (+15%: 25.9px)
+  // Archer Name (+10%: 53.1px) & Subtitle (+10%: 28.5px)
   ctx.save();
   if (!isBlackMode) {
     ctx.shadowColor = "rgba(0, 0, 0, 0.88)";
@@ -521,10 +521,10 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     ctx.shadowOffsetY = 2;
   }
   ctx.textBaseline = "alphabetic";
-  ctx.font = `900 48.3px ${appFont}`;
+  ctx.font = `900 53.1px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
   ctx.textAlign = "left";
-  ctx.fillText(archerName || tCard(resolvedLang, "roleAthlete"), 54, 204, 616);
+  ctx.fillText(archerName || tCard(resolvedLang, "roleAthlete"), 54, 208, 616);
 
   const displayBowType =
     bowType === "Recurve"
@@ -544,9 +544,9 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     : format === "Libre" && !resolvedLang.toLowerCase().startsWith("es")
     ? "Custom"
     : format;
-  ctx.font = `700 25.9px ${appFont}`;
+  ctx.font = `700 28.5px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(`${displayBowType} • ${displayShootDist} • ${displayFormat} • ${dateStr}`, 54, 246, 618);
+  ctx.fillText(`${displayBowType} • ${displayShootDist} • ${displayFormat} • ${dateStr}`, 54, 250, 618);
   ctx.restore();
 
   // SCORE / VOLUME Box (340x180, r=32, x=686, y=74; big number kept at exact 69px, labels +15%)
@@ -790,11 +790,11 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#FFFFFF";
     ctx.textAlign = "left";
-    ctx.font = `800 27.6px ${appFont}`;
+    ctx.font = `800 30.4px ${appFont}`;
     ctx.fillText(hrLabel, iconBoxX + iconBoxSize + 24, hrY + hrH / 2 + 1, 410);
 
     ctx.textAlign = "right";
-    ctx.font = `900 34.5px ${appFont}`;
+    ctx.font = `900 38.0px ${appFont}`;
     ctx.fillText(hrValueStr, hrX + hrW - 36, hrY + hrH / 2 + 1, 455);
     ctx.restore();
     ctx.textBaseline = "alphabetic";
@@ -917,15 +917,15 @@ function drawCenteredStatBox(
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
 
-  // Header (+15% -> 22.5px)
-  ctx.font = `800 22.5px ${appFont}`;
+  // Header (+10% over v2.151 -> 24.8px)
+  ctx.font = `800 24.8px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(title, centerX, y + 58, w - 14);
+  ctx.fillText(title, centerX, y + 56, w - 14);
 
-  // Value (+15% -> 31.7px)
-  ctx.font = `900 31.7px ${appFont}`;
+  // Value (+10% over v2.151 -> 34.9px)
+  ctx.font = `900 34.9px ${appFont}`;
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(main, centerX, y + 112, w - 14);
+  ctx.fillText(main, centerX, y + 114, w - 14);
 }
 
 /**
