@@ -351,6 +351,7 @@ let lastPushedPhoneArrowsCount = 0;
 const seenCloudCmdIds = new Set<string>();
 let lastCloudTelemetrySteps = 0;
 let lastCloudTelemetryDistM = 0;
+let lastCloudTelemetryLiveHr = 0;
 let lastCloudTelemetryAvgHr = 0;
 let lastCloudTelemetryMaxHr = 0;
 let watchHrSum = 0;
@@ -704,6 +705,7 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
         watchHrSum = 0;
         watchHrCount = 0;
         lastWatchHrSampleKey = "";
+        lastCloudTelemetryLiveHr = 0;
         lastCloudTelemetryAvgHr = 0;
         lastCloudTelemetryMaxHr = 0;
       }
@@ -744,9 +746,34 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
         incomingAvgHr
       );
 
+      const isFreshCloudWatchHr =
+        data.sessionActive !== false &&
+        incomingHrBpm >= 30 &&
+        incomingHrBpm <= 245 &&
+        ((watchHeartbeatAt > 0 && now - watchHeartbeatAt <= 25_000) ||
+          (docUpdatedAt > 0 && now - docUpdatedAt <= 25_000 && Boolean(watchSource)));
+
+      if (isFreshCloudWatchHr && typeof window !== "undefined") {
+        const friendlyWatchName =
+          watchSource === "WATCHOS"
+            ? "Reloj Vinculado (Nube)"
+            : watchSource === "GARMIN"
+            ? "Reloj Deportivo (Nube)"
+            : "Reloj Inteligente";
+        try {
+          (window as any).__onNativeWearHrUpdate?.({
+            bpm: incomingHrBpm,
+            status: "ok",
+            deviceName: friendlyWatchName,
+            nodeId: `cloud:${watchSource || "watch"}`
+          });
+        } catch {}
+      }
+
       if (incomingSteps === 0 && incomingDistM === 0 && data.sessionActive === false) {
         lastCloudTelemetrySteps = 0;
         lastCloudTelemetryDistM = 0;
+        lastCloudTelemetryLiveHr = 0;
         lastCloudTelemetryAvgHr = 0;
         lastCloudTelemetryMaxHr = 0;
         watchHrSum = 0;
@@ -756,12 +783,14 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
       } else if (
         (incomingSteps > lastCloudTelemetrySteps && incomingSteps > 0) ||
         (incomingDistM > lastCloudTelemetryDistM && incomingDistM > 0) ||
+        (isFreshCloudWatchHr && incomingHrBpm !== lastCloudTelemetryLiveHr) ||
         (incomingAvgHr >= 30 &&
           incomingAvgHr <= 250 &&
           (incomingAvgHr !== lastCloudTelemetryAvgHr || incomingMaxHr > lastCloudTelemetryMaxHr))
       ) {
         if (incomingSteps > lastCloudTelemetrySteps) lastCloudTelemetrySteps = incomingSteps;
         if (incomingDistM > lastCloudTelemetryDistM) lastCloudTelemetryDistM = incomingDistM;
+        if (isFreshCloudWatchHr) lastCloudTelemetryLiveHr = incomingHrBpm;
         if (incomingAvgHr >= 30 && incomingAvgHr <= 250) {
           lastCloudTelemetryAvgHr = incomingAvgHr;
         }

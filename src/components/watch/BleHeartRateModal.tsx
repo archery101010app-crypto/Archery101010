@@ -164,8 +164,8 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
     }
     if (status.errorCode === "HR_BROADCAST_NOT_ENABLED") {
       return tx(
-        "Este dispositivo no transmite pulso. Activa Transmitir pulso en sus ajustes o abre ARCHERY 101010 en tu reloj.",
-        "This device isn't broadcasting pulse. Turn on Broadcast heart rate in its settings or open ARCHERY 101010 on your watch."
+        "Este dispositivo tiene apagado Transmitir pulso. Actívalo en su app o ajustes, o abre ARCHERY 101010 en tu reloj.",
+        "Heart rate broadcast is turned off on this device. Enable it in its app or settings, or open ARCHERY 101010 on your watch."
       );
     }
     if (status.errorCode === "WEAR_APP_REQUIRED") {
@@ -460,8 +460,8 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
 
             <p className="text-[12.5px] font-medium text-[#94A3B8] leading-snug px-0.5">
               {tx(
-                "¿Reloj inteligente? Abre ARCHERY 101010 en el reloj o activa Transmitir pulso en sus ajustes.",
-                "Smartwatch? Open ARCHERY 101010 on the watch or turn on Broadcast heart rate in its settings."
+                "Bandas y cintas: activa Transmitir pulso en su app o ajustes. Relojes: abre ARCHERY 101010 en el reloj o vincula su código de 6 dígitos.",
+                "Bands & straps: enable Broadcast heart rate in its app or settings. Watches: open ARCHERY 101010 on the watch or link its 6-digit code."
               )}
             </p>
           </div>

@@ -1243,4 +1243,53 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     const serviceSrc = fs.readFileSync(path.resolve(process.cwd(), "src/lib/scoring/bleHeartRateService.ts"), "utf8");
     assert.ok(serviceSrc.includes("__onNativeWearHrUpdate"));
   });
+
+  it("enforces v2.148 universal pulse readiness across random-MAC BLE bands, watchOS HealthKit, iOS CoreBluetooth & 6-digit Cloud HR", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+
+    // 1. Android BLE: random-MAC device cache, BLE 5 non-legacy scan, delayed CCCD/discovery retries & non-HR gadget filter
+    const phoneJava = fs.readFileSync(
+      path.resolve(process.cwd(), "android/app/src/main/java/com/archery101010/app/MainActivity.java"),
+      "utf8"
+    );
+    assert.ok(phoneJava.includes("cachedBleDevicesByAddr"));
+    assert.ok(phoneJava.includes("resolveBleRemoteDevice"));
+    assert.ok(phoneJava.includes("scheduleCccdEnableAttempt"));
+    assert.ok(phoneJava.includes("scheduleServiceDiscoveryAttempt"));
+    assert.ok(phoneJava.includes("setLegacy(false)"));
+    assert.ok(phoneJava.includes("isObviouslyNonHrAccessory"));
+
+    // 2. watchOS Companion: HealthKit .archery workout + .heartRate live query -> WCSession & 6-digit Cloud Sync
+    const watchSwift = fs.readFileSync(
+      path.resolve(process.cwd(), "ios-watchos/WatchApp/Archery101010WatchApp.swift"),
+      "utf8"
+    );
+    assert.ok(watchSwift.includes("import HealthKit"));
+    assert.ok(watchSwift.includes("HKAnchoredObjectQuery"));
+    assert.ok(watchSwift.includes("watchHeartRateBpm"));
+
+    // 3. iOS Companion: CoreBluetooth 0x180D + retrieveConnectedPeripherals + Info.plist Bluetooth permission
+    const iosScene = fs.readFileSync(
+      path.resolve(process.cwd(), "ios/App/App/SceneDelegate.swift"),
+      "utf8"
+    );
+    assert.ok(iosScene.includes("CBCentralManagerDelegate"));
+    assert.ok(iosScene.includes("retrieveConnectedPeripherals"));
+    assert.ok(iosScene.includes("window.ArcheryBleHeartRateBridge"));
+
+    const iosPlist = fs.readFileSync(
+      path.resolve(process.cwd(), "ios/App/App/Info.plist"),
+      "utf8"
+    );
+    assert.ok(iosPlist.includes("NSBluetoothAlwaysUsageDescription"));
+
+    // 4. Cloud Watch HR forwarded into Pulsaciones live stream
+    const bioSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/lib/scoring/biometricsEngine.ts"),
+      "utf8"
+    );
+    assert.ok(bioSrc.includes("isFreshCloudWatchHr"));
+    assert.ok(bioSrc.includes("__onNativeWearHrUpdate"));
+  });
 });

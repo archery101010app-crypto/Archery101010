@@ -111,6 +111,14 @@ public final class ArcheryWatchSessionManager: NSObject, WCSessionDelegate, WKSc
         }
     }
 
+    public func requestWatchHeartRate() {
+        guard WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated, session.isReachable else { return }
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        session.sendMessage(["type": "HR_REQUEST", "_ts": nowMs], replyHandler: nil, errorHandler: nil)
+    }
+
     public func pingWatch() {
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
@@ -146,6 +154,8 @@ public final class ArcheryWatchSessionManager: NSObject, WCSessionDelegate, WKSc
             }
         case "pingWatch":
             pingWatch()
+        case "requestWatchHeartRate":
+            requestWatchHeartRate()
         case "requestStatus":
             emitConnectionStatusToWebView()
         case "notifyWatchListenerReady":
@@ -223,6 +233,14 @@ public final class ArcheryWatchSessionManager: NSObject, WCSessionDelegate, WKSc
                 emitConnectionStatusToWebView()
                 return
             }
+            if cmdType == "HR" {
+                emitWearHeartRateToWebView(dict)
+                emitConnectionStatusToWebView()
+                return
+            }
+            if cmdType == "SYNC_TELEMETRY_FROM_WATCH", let hr = dict["heartRateBpm"] as? Int, hr >= 30 {
+                emitWearHeartRateToWebView(["bpm": hr, "status": "ok", "deviceName": "Smartwatch Deportivo"])
+            }
             if cmdType == "REQUEST_STATE" {
                 if let saved = UserDefaults.standard.string(forKey: prefsKey), !saved.isEmpty {
                     syncSnapshotToWatch(jsonString: saved)
@@ -274,6 +292,25 @@ public final class ArcheryWatchSessionManager: NSObject, WCSessionDelegate, WKSc
                     }
                 }
             }
+        }
+    }
+
+    private func emitWearHeartRateToWebView(_ dict: [String: Any]) {
+        let out: [String: Any] = [
+            "bpm": (dict["bpm"] as? Int) ?? 0,
+            "status": (dict["status"] as? String) ?? "ok",
+            "deviceName": (dict["deviceName"] as? String) ?? "Smartwatch Deportivo",
+            "nodeId": "watchos-companion"
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: out, options: []),
+              let jsonStr = String(data: data, encoding: .utf8) else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            let escaped = self.escapeForSingleQuotedJs(jsonStr)
+            self.webView?.evaluateJavaScript(
+                "if (window.__onNativeWearHrUpdate) { window.__onNativeWearHrUpdate('\(escaped)'); }",
+                completionHandler: nil
+            )
         }
     }
 

@@ -74,6 +74,10 @@
 	<string>ARCHERY 101010 utiliza la cámara para capturar fotos opcionales de tu diana y validar puntajes en eliminatorias en línea.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>ARCHERY 101010 accede a tu galería únicamente cuando eliges adjuntar o guardar tarjetas de entrenamiento y fotos de diana.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>ARCHERY 101010 utiliza Bluetooth para recibir tus pulsaciones en vivo desde bandas biométricas, sensores ópticos y cintas de frecuencia cardíaca durante tu sesión de tiro.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>ARCHERY 101010 utiliza Bluetooth para vincular sensores deportivos de frecuencia cardíaca durante tu entrenamiento.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>ARCHERY 101010 utiliza los sensores de movimiento y podómetro durante tu práctica para contabilizar pasos y distancia recorrida.</string>
 </dict>

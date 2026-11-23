@@ -230,7 +230,7 @@ let staleSampleWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
 let lastNativeScanStartedAt = 0;
 
 // ── Watch-app pulse channel (ARCHERY 101010 watch app → phone via Wearable Data Layer) ──
-const WEAR_HR_LIVE_WINDOW_MS = 15_000;
+const WEAR_HR_LIVE_WINDOW_MS = 20_000;
 let wearHrLastAt = 0;
 let wearHrMuted = false;
 let wearHrTimeoutTimer: ReturnType<typeof setTimeout> | null = null;

@@ -3,6 +3,7 @@ package com.archery101010.app;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothClass;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
@@ -2181,6 +2182,65 @@ public class MainActivity extends BridgeActivity {
 
     private final Map<String, BleDiscoveredEntry> discoveredBleDevices =
         Collections.synchronizedMap(new LinkedHashMap<>());
+    private final Map<String, BluetoothDevice> cachedBleDevicesByAddr =
+        Collections.synchronizedMap(new LinkedHashMap<>());
+    private volatile Runnable pendingConnectAfterStopScanRunnable = null;
+    private volatile int bleCccdRetryAttempt = 0;
+
+    @SuppressLint("MissingPermission")
+    private boolean deviceCachesHrServiceUuid(BluetoothDevice dev) {
+        if (dev == null) return false;
+        try {
+            ParcelUuid[] uuids = dev.getUuids();
+            if (uuids != null) {
+                for (ParcelUuid pu : uuids) {
+                    if (pu != null && BLE_HR_SERVICE_UUID.equals(pu.getUuid())) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    @SuppressLint("MissingPermission")
+    private boolean isObviouslyNonHrAccessory(BluetoothDevice dev, String cleanName, boolean advertisesHr) {
+        if (advertisesHr) return false;
+        if (dev != null) {
+            try {
+                BluetoothClass btClass = dev.getBluetoothClass();
+                if (btClass != null) {
+                    int major = btClass.getMajorDeviceClass();
+                    if (major == BluetoothClass.Device.Major.AUDIO_VIDEO ||
+                        major == BluetoothClass.Device.Major.COMPUTER ||
+                        major == BluetoothClass.Device.Major.PHONE ||
+                        major == BluetoothClass.Device.Major.IMAGING ||
+                        major == BluetoothClass.Device.Major.PERIPHERAL ||
+                        major == BluetoothClass.Device.Major.NETWORKING) {
+                        return true;
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        if (cleanName != null && !cleanName.isEmpty()) {
+            String lower = cleanName.toLowerCase(java.util.Locale.ROOT);
+            if (lower.contains("shutter") ||
+                lower.contains("keyboard") ||
+                lower.contains("mouse") ||
+                lower.contains("gamepad") ||
+                lower.contains("controller") ||
+                lower.contains("airpods") ||
+                lower.contains("earbuds") ||
+                lower.contains("buds") ||
+                lower.contains("headphone") ||
+                lower.contains("speaker") ||
+                lower.contains("handsfree") ||
+                lower.contains("smarttag")) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     private final Runnable stopBleScanTimeoutRunnable = () -> {
         stopBleHrScanInternal();
@@ -2318,7 +2378,7 @@ public class MainActivity extends BridgeActivity {
             String addr = dev.getAddress();
             if (addr == null || addr.isEmpty()) return;
 
-            boolean advertisesHr = false;
+            boolean advertisesHr = deviceCachesHrServiceUuid(dev);
             String scanName = null;
             ScanRecord record = result.getScanRecord();
             if (record != null) {
@@ -2332,6 +2392,28 @@ public class MainActivity extends BridgeActivity {
                         }
                     }
                 }
+                if (!advertisesHr) {
+                    Map<ParcelUuid, byte[]> svcData = record.getServiceData();
+                    if (svcData != null) {
+                        for (ParcelUuid pu : svcData.keySet()) {
+                            if (pu != null && BLE_HR_SERVICE_UUID.equals(pu.getUuid())) {
+                                advertisesHr = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (!advertisesHr && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    List<ParcelUuid> solUuids = record.getServiceSolicitationUuids();
+                    if (solUuids != null) {
+                        for (ParcelUuid pu : solUuids) {
+                            if (pu != null && BLE_HR_SERVICE_UUID.equals(pu.getUuid())) {
+                                advertisesHr = true;
+                                break;
+                            }
+                        }
+                    }
+                }
             }
             String devName = null;
             try {
@@ -2341,8 +2423,11 @@ public class MainActivity extends BridgeActivity {
                 ? devName.trim()
                 : (scanName != null && !scanName.trim().isEmpty() ? scanName.trim() : "");
 
-            // Show devices advertising 0x180D (even if unnamed) plus named nearby BLE wearables
+            // Show devices advertising 0x180D (even if unnamed) plus named nearby BLE wearables, excluding non-HR audio/HID gadgets
             if (!advertisesHr && cleanName.isEmpty()) return;
+            if (isObviouslyNonHrAccessory(dev, cleanName, advertisesHr)) return;
+
+            cachedBleDevicesByAddr.put(addr, dev);
 
             synchronized (discoveredBleDevices) {
                 BleDiscoveredEntry existing = discoveredBleDevices.get(addr);
@@ -2396,11 +2481,15 @@ public class MainActivity extends BridgeActivity {
                         if (dev == null || dev.getAddress() == null) continue;
                         String name = dev.getName();
                         if (name == null || name.trim().isEmpty()) continue;
+                        String clean = name.trim();
+                        boolean cachedHr = deviceCachesHrServiceUuid(dev);
+                        if (isObviouslyNonHrAccessory(dev, clean, cachedHr)) continue;
+                        cachedBleDevicesByAddr.put(dev.getAddress(), dev);
                         BleDiscoveredEntry entry = new BleDiscoveredEntry();
                         entry.id = dev.getAddress();
-                        entry.name = name.trim();
+                        entry.name = clean;
                         entry.rssi = -45;
-                        entry.hasHrService = false;
+                        entry.hasHrService = cachedHr;
                         entry.isBondedOrConnected = true;
                         discoveredBleDevices.put(entry.id, entry);
                     }
@@ -2421,13 +2510,17 @@ public class MainActivity extends BridgeActivity {
                         }
                         String name = dev.getName();
                         if (name == null || name.trim().isEmpty()) continue;
+                        String clean = name.trim();
+                        boolean cachedHr = deviceCachesHrServiceUuid(dev);
+                        if (isObviouslyNonHrAccessory(dev, clean, cachedHr)) continue;
+                        cachedBleDevicesByAddr.put(dev.getAddress(), dev);
                         synchronized (discoveredBleDevices) {
                             if (!discoveredBleDevices.containsKey(dev.getAddress())) {
                                 BleDiscoveredEntry entry = new BleDiscoveredEntry();
                                 entry.id = dev.getAddress();
-                                entry.name = name.trim();
+                                entry.name = clean;
                                 entry.rssi = -55;
-                                entry.hasHrService = false;
+                                entry.hasHrService = cachedHr;
                                 entry.isBondedOrConnected = true;
                                 discoveredBleDevices.put(entry.id, entry);
                             }
@@ -2495,9 +2588,12 @@ public class MainActivity extends BridgeActivity {
         try {
             BluetoothLeScanner scanner = adapter.getBluetoothLeScanner();
             if (scanner != null) {
-                ScanSettings settings = new ScanSettings.Builder()
-                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-                    .build();
+                ScanSettings.Builder settingsBuilder = new ScanSettings.Builder()
+                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    settingsBuilder.setLegacy(false);
+                }
+                ScanSettings settings = settingsBuilder.build();
                 isBleScanning = true;
                 if (!"connected".equals(bleHrState)) {
                     bleHrState = "scanning";
@@ -2562,6 +2658,138 @@ public class MainActivity extends BridgeActivity {
     }
 
     @SuppressLint("MissingPermission")
+    private void scheduleServiceDiscoveryAttempt(final BluetoothGatt gatt, final int attempt, final int bondWaitCount) {
+        bleMainHandler.postDelayed(() -> {
+            if (gatt != activeBleGatt || !isBleGattConnected) return;
+            try {
+                BluetoothDevice dev = gatt.getDevice();
+                if (dev != null && dev.getBondState() == BluetoothDevice.BOND_BONDING && bondWaitCount < 8) {
+                    scheduleServiceDiscoveryAttempt(gatt, attempt, bondWaitCount + 1);
+                    return;
+                }
+                boolean started = gatt.discoverServices();
+                if (!started) {
+                    if (attempt < 3) {
+                        scheduleServiceDiscoveryAttempt(gatt, attempt + 1, bondWaitCount);
+                    } else {
+                        isBleGattConnected = false;
+                        bleHrState = "error";
+                        bleHrErrorCode = "CONNECT_FAILED";
+                        try {
+                            gatt.disconnect();
+                            gatt.close();
+                        } catch (Exception ignored) {}
+                        activeBleGatt = null;
+                        emitBleHrStatusToWebView(null);
+                    }
+                }
+            } catch (Exception e) {
+                isBleGattConnected = false;
+                bleHrState = "error";
+                bleHrErrorCode = "CONNECT_FAILED";
+                emitBleHrStatusToWebView(null);
+            }
+        }, attempt == 0 && bondWaitCount == 0 ? 220L : 420L);
+    }
+
+    @SuppressLint("MissingPermission")
+    private void scheduleCccdEnableAttempt(final BluetoothGatt gatt, final BluetoothGattCharacteristic hrChar, final int attempt) {
+        bleCccdRetryAttempt = attempt;
+        bleMainHandler.postDelayed(() -> {
+            if (gatt != activeBleGatt || !isBleGattConnected || hrChar == null) return;
+            try {
+                BluetoothDevice dev = gatt.getDevice();
+                if (dev != null && dev.getBondState() == BluetoothDevice.BOND_BONDING && attempt < 6) {
+                    scheduleCccdEnableAttempt(gatt, hrChar, attempt + 1);
+                    return;
+                }
+                BluetoothGattDescriptor cccd = hrChar.getDescriptor(BLE_CCCD_UUID);
+                if (cccd == null) {
+                    gatt.setCharacteristicNotification(hrChar, true);
+                    bleHrState = "connected";
+                    bleHrErrorCode = "";
+                    emitBleHrStatusToWebView(null);
+                    return;
+                }
+                boolean ok = enableCccdNotifications(gatt, hrChar);
+                if (ok) {
+                    bleMainHandler.removeCallbacks(bleCccdConfirmFallbackRunnable);
+                    bleMainHandler.postDelayed(bleCccdConfirmFallbackRunnable, 2200L);
+                } else if (attempt < 5) {
+                    // Retry when controller returns BUSY (e.g. 201 during Samsung MTU / 0x2A05 exchange)
+                    scheduleCccdEnableAttempt(gatt, hrChar, attempt + 1);
+                } else {
+                    // Final fallback: local notification registration + direct read if supported
+                    if ((hrChar.getProperties() & BluetoothGattCharacteristic.PROPERTY_READ) != 0) {
+                        try { gatt.readCharacteristic(hrChar); } catch (Exception ignored) {}
+                    }
+                    bleHrState = "connected";
+                    bleHrErrorCode = "";
+                    emitBleHrStatusToWebView(null);
+                }
+            } catch (Exception ignored) {
+                if (attempt < 5) {
+                    scheduleCccdEnableAttempt(gatt, hrChar, attempt + 1);
+                }
+            }
+        }, attempt == 0 ? 180L : 340L);
+    }
+
+    @SuppressLint("MissingPermission")
+    private BluetoothDevice resolveBleRemoteDevice(BluetoothAdapter adapter, String cleanAddr, int retryIndex) {
+        BluetoothDevice cached = cachedBleDevicesByAddr.get(cleanAddr);
+        if (cached != null) return cached;
+
+        BluetoothManager mgr = getBleManagerInternal();
+        if (mgr != null) {
+            try {
+                List<BluetoothDevice> connected = mgr.getConnectedDevices(BluetoothProfile.GATT);
+                if (connected != null) {
+                    for (BluetoothDevice d : connected) {
+                        if (d != null && cleanAddr.equalsIgnoreCase(d.getAddress())) {
+                            cachedBleDevicesByAddr.put(cleanAddr, d);
+                            return d;
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        try {
+            Set<BluetoothDevice> bonded = adapter.getBondedDevices();
+            if (bonded != null) {
+                for (BluetoothDevice d : bonded) {
+                    if (d != null && cleanAddr.equalsIgnoreCase(d.getAddress())) {
+                        cachedBleDevicesByAddr.put(cleanAddr, d);
+                        return d;
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            try {
+                int savedAddrType = getSharedPreferences(BLE_HR_PREFS, MODE_PRIVATE)
+                    .getInt("saved_addr_type", -1);
+                int targetType;
+                if (savedAddrType == BluetoothDevice.ADDRESS_TYPE_RANDOM || savedAddrType == BluetoothDevice.ADDRESS_TYPE_PUBLIC) {
+                    targetType = (retryIndex % 2 == 1)
+                        ? (savedAddrType == BluetoothDevice.ADDRESS_TYPE_RANDOM
+                            ? BluetoothDevice.ADDRESS_TYPE_PUBLIC
+                            : BluetoothDevice.ADDRESS_TYPE_RANDOM)
+                        : savedAddrType;
+                } else {
+                    // Modern BLE heart-rate broadcasts predominantly use Random Static/RPA addresses; try RANDOM first, then PUBLIC
+                    targetType = (retryIndex % 2 == 0)
+                        ? BluetoothDevice.ADDRESS_TYPE_RANDOM
+                        : BluetoothDevice.ADDRESS_TYPE_PUBLIC;
+                }
+                return adapter.getRemoteLeDevice(cleanAddr, targetType);
+            } catch (Exception ignored) {}
+        }
+        return adapter.getRemoteDevice(cleanAddr);
+    }
+
+    @SuppressLint("MissingPermission")
     private final BluetoothGattCallback bleHrGattCallback = new BluetoothGattCallback() {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
@@ -2576,14 +2804,9 @@ public class MainActivity extends BridgeActivity {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 isBleGattConnected = true;
                 bleHrErrorCode = "";
-                try {
-                    gatt.discoverServices();
-                } catch (Exception e) {
-                    isBleGattConnected = false;
-                    bleHrState = "error";
-                    bleHrErrorCode = "CONNECT_FAILED";
-                    emitBleHrStatusToWebView(null);
-                }
+                // Keep a longer watchdog until service discovery + CCCD finish
+                bleMainHandler.postDelayed(bleConnectTimeoutRunnable, 12000L);
+                scheduleServiceDiscoveryAttempt(gatt, 0, 0);
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 isBleGattConnected = false;
                 try {
@@ -2597,8 +2820,8 @@ public class MainActivity extends BridgeActivity {
                     emitBleHrStatusToWebView(null);
                     bleMainHandler.removeCallbacks(bleReconnectRunnable);
                     bleMainHandler.postDelayed(bleReconnectRunnable, delayMs);
-                } else if (!bleUserRequestedDisconnect && !bleConnectedOnce && status != BluetoothGatt.GATT_SUCCESS && bleConnectRetryCount < 1 && bleHrDeviceId != null && !bleHrDeviceId.isEmpty()) {
-                    // Android GATT 133 transient error on initial connect -> automatic clean retry once
+                } else if (!bleUserRequestedDisconnect && !bleConnectedOnce && status != BluetoothGatt.GATT_SUCCESS && bleConnectRetryCount < 2 && bleHrDeviceId != null && !bleHrDeviceId.isEmpty()) {
+                    // Android GATT 133 / random-vs-public address transient error -> clean retry up to 2x
                     bleConnectRetryCount++;
                     final String retryAddr = bleHrDeviceId;
                     final String retryName = bleHrDeviceName;
@@ -2606,7 +2829,7 @@ public class MainActivity extends BridgeActivity {
                         if (!bleUserRequestedDisconnect && activeBleGatt == null) {
                             connectBleHrDeviceInternal(retryAddr, retryName, false);
                         }
-                    }, 600L);
+                    }, 650L);
                 } else {
                     if (!bleUserRequestedDisconnect && !bleConnectedOnce && status != BluetoothGatt.GATT_SUCCESS) {
                         bleHrState = "error";
@@ -2642,7 +2865,7 @@ public class MainActivity extends BridgeActivity {
 
             if (hrService == null || hrChar == null) {
                 // Android may serve a stale cached service table (e.g. pulse broadcast was just enabled
-                // on the watch). Refresh the GATT cache and rediscover once before giving up.
+                // on the wearable). Refresh the GATT cache and rediscover once before giving up.
                 if (!bleGattCacheRefreshTried) {
                     bleGattCacheRefreshTried = true;
                     if (refreshBleGattCacheInternal(gatt)) {
@@ -2673,32 +2896,34 @@ public class MainActivity extends BridgeActivity {
                 return;
             }
 
-            boolean hasCccd = hrChar.getDescriptor(BLE_CCCD_UUID) != null;
             bleGattCacheRefreshTried = false;
-            boolean notifyOk = enableCccdNotifications(gatt, hrChar);
             bleConnectRetryCount = 0;
             bleAutoReconnectAttempts = 0;
             bleConnectedOnce = true;
             bleHrErrorCode = "";
+            bleMainHandler.removeCallbacks(bleConnectTimeoutRunnable);
             try {
-                String liveName = gatt.getDevice() != null ? gatt.getDevice().getName() : null;
+                BluetoothDevice liveDev = gatt.getDevice();
+                if (liveDev != null && liveDev.getAddress() != null) {
+                    cachedBleDevicesByAddr.put(liveDev.getAddress(), liveDev);
+                }
+                String liveName = liveDev != null ? liveDev.getName() : null;
                 if (liveName != null && !liveName.trim().isEmpty()) {
                     bleHrDeviceName = liveName.trim();
                 }
-                getSharedPreferences(BLE_HR_PREFS, MODE_PRIVATE)
+                android.content.SharedPreferences.Editor ed = getSharedPreferences(BLE_HR_PREFS, MODE_PRIVATE)
                     .edit()
                     .putString("saved_address", bleHrDeviceId)
-                    .putString("saved_name", bleHrDeviceName)
-                    .apply();
+                    .putString("saved_name", bleHrDeviceName);
+                if (liveDev != null && Build.VERSION.SDK_INT >= 35) {
+                    try {
+                        ed.putInt("saved_addr_type", liveDev.getAddressType());
+                    } catch (Exception ignored) {}
+                }
+                ed.apply();
             } catch (Exception ignored) {}
 
-            if (!hasCccd || !notifyOk) {
-                bleHrState = "connected";
-                emitBleHrStatusToWebView(null);
-            } else {
-                bleMainHandler.removeCallbacks(bleCccdConfirmFallbackRunnable);
-                bleMainHandler.postDelayed(bleCccdConfirmFallbackRunnable, 1800L);
-            }
+            scheduleCccdEnableAttempt(gatt, hrChar, 0);
         }
 
         @Override
@@ -2706,6 +2931,13 @@ public class MainActivity extends BridgeActivity {
             if (gatt != activeBleGatt) return;
             bleMainHandler.removeCallbacks(bleCccdConfirmFallbackRunnable);
             if (status == BluetoothGatt.GATT_SUCCESS) {
+                bleHrState = "connected";
+                bleHrErrorCode = "";
+                emitBleHrStatusToWebView(null);
+            } else if (bleCccdRetryAttempt < 4 && descriptor != null && descriptor.getCharacteristic() != null) {
+                scheduleCccdEnableAttempt(gatt, descriptor.getCharacteristic(), bleCccdRetryAttempt + 1);
+                return;
+            } else {
                 bleHrState = "connected";
                 bleHrErrorCode = "";
                 emitBleHrStatusToWebView(null);
@@ -2726,6 +2958,12 @@ public class MainActivity extends BridgeActivity {
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, byte[] value) {
             if (gatt != activeBleGatt) return;
             if (characteristic != null && BLE_HR_MEASUREMENT_UUID.equals(characteristic.getUuid()) && value != null) {
+                bleMainHandler.removeCallbacks(bleConnectTimeoutRunnable);
+                bleMainHandler.removeCallbacks(bleCccdConfirmFallbackRunnable);
+                if (!"connected".equals(bleHrState)) {
+                    bleHrState = "connected";
+                    bleHrErrorCode = "";
+                }
                 emitBleHrStatusToWebView(value);
             }
         }
@@ -2738,6 +2976,12 @@ public class MainActivity extends BridgeActivity {
                 if (BLE_HR_MEASUREMENT_UUID.equals(characteristic.getUuid())) {
                     byte[] val = characteristic.getValue();
                     if (val != null) {
+                        bleMainHandler.removeCallbacks(bleConnectTimeoutRunnable);
+                        bleMainHandler.removeCallbacks(bleCccdConfirmFallbackRunnable);
+                        if (!"connected".equals(bleHrState)) {
+                            bleHrState = "connected";
+                            bleHrErrorCode = "";
+                        }
                         emitBleHrStatusToWebView(val);
                     }
                 }
@@ -2747,12 +2991,19 @@ public class MainActivity extends BridgeActivity {
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, byte[] value, int status) {
             if (gatt != activeBleGatt) return;
-            if (status == BluetoothGatt.GATT_SUCCESS && characteristic != null &&
-                BLE_BATTERY_LEVEL_UUID.equals(characteristic.getUuid()) && value != null && value.length >= 1) {
-                int pct = value[0] & 0xFF;
-                if (pct >= 0 && pct <= 100) {
-                    bleBatteryPct = pct;
-                    emitBleHrStatusToWebView(null);
+            if (status == BluetoothGatt.GATT_SUCCESS && characteristic != null && value != null) {
+                if (BLE_BATTERY_LEVEL_UUID.equals(characteristic.getUuid()) && value.length >= 1) {
+                    int pct = value[0] & 0xFF;
+                    if (pct >= 0 && pct <= 100) {
+                        bleBatteryPct = pct;
+                        emitBleHrStatusToWebView(null);
+                    }
+                } else if (BLE_HR_MEASUREMENT_UUID.equals(characteristic.getUuid()) && value.length >= 2) {
+                    if (!"connected".equals(bleHrState)) {
+                        bleHrState = "connected";
+                        bleHrErrorCode = "";
+                    }
+                    emitBleHrStatusToWebView(value);
                 }
             }
         }
@@ -2762,13 +3013,21 @@ public class MainActivity extends BridgeActivity {
         public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
             if (gatt != activeBleGatt) return;
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && status == BluetoothGatt.GATT_SUCCESS &&
-                characteristic != null && BLE_BATTERY_LEVEL_UUID.equals(characteristic.getUuid())) {
+                characteristic != null) {
                 byte[] val = characteristic.getValue();
-                if (val != null && val.length >= 1) {
-                    int pct = val[0] & 0xFF;
-                    if (pct >= 0 && pct <= 100) {
-                        bleBatteryPct = pct;
-                        emitBleHrStatusToWebView(null);
+                if (val != null) {
+                    if (BLE_BATTERY_LEVEL_UUID.equals(characteristic.getUuid()) && val.length >= 1) {
+                        int pct = val[0] & 0xFF;
+                        if (pct >= 0 && pct <= 100) {
+                            bleBatteryPct = pct;
+                            emitBleHrStatusToWebView(null);
+                        }
+                    } else if (BLE_HR_MEASUREMENT_UUID.equals(characteristic.getUuid()) && val.length >= 2) {
+                        if (!"connected".equals(bleHrState)) {
+                            bleHrState = "connected";
+                            bleHrErrorCode = "";
+                        }
+                        emitBleHrStatusToWebView(val);
                     }
                 }
             }
@@ -2788,7 +3047,7 @@ public class MainActivity extends BridgeActivity {
             return;
         }
 
-        BluetoothAdapter adapter = getBleAdapterInternal();
+        final BluetoothAdapter adapter = getBleAdapterInternal();
         if (adapter == null || !adapter.isEnabled()) {
             bleHrState = "error";
             bleHrErrorCode = "BLUETOOTH_OFF";
@@ -2796,8 +3055,13 @@ public class MainActivity extends BridgeActivity {
             return;
         }
 
+        if (pendingConnectAfterStopScanRunnable != null) {
+            bleMainHandler.removeCallbacks(pendingConnectAfterStopScanRunnable);
+            pendingConnectAfterStopScanRunnable = null;
+        }
         bleMainHandler.removeCallbacks(bleReconnectRunnable);
         bleMainHandler.removeCallbacks(bleConnectTimeoutRunnable);
+        boolean wasActivelyScanning = isBleScanning || "scanning".equals(bleHrState);
         stopBleHrScanInternal();
         if (!cleanAddr.equals(bleHrDeviceId)) {
             bleConnectRetryCount = 0;
@@ -2806,34 +3070,49 @@ public class MainActivity extends BridgeActivity {
         bleBatteryPct = null;
         bleUserRequestedDisconnect = false;
         bleGattCacheRefreshTried = false;
+        bleCccdRetryAttempt = 0;
         bleHrDeviceId = cleanAddr;
         bleHrDeviceName = cleanName;
         bleHrErrorCode = "";
         bleHrState = autoConnect ? "reconnecting" : "connecting";
         emitBleHrStatusToWebView(null);
 
-        try {
-            if (activeBleGatt != null) {
-                BluetoothGatt oldGatt = activeBleGatt;
-                activeBleGatt = null;
-                try {
-                    oldGatt.disconnect();
-                    oldGatt.close();
-                } catch (Exception ignored) {}
+        if (activeBleGatt != null) {
+            BluetoothGatt oldGatt = activeBleGatt;
+            activeBleGatt = null;
+            try {
+                oldGatt.disconnect();
+                oldGatt.close();
+            } catch (Exception ignored) {}
+        }
+
+        final int currentRetry = bleConnectRetryCount;
+        Runnable doConnect = () -> {
+            pendingConnectAfterStopScanRunnable = null;
+            if (bleUserRequestedDisconnect) return;
+            try {
+                BluetoothDevice device = resolveBleRemoteDevice(adapter, cleanAddr, currentRetry);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    activeBleGatt = device.connectGatt(MainActivity.this, autoConnect, bleHrGattCallback, BluetoothDevice.TRANSPORT_LE);
+                } else {
+                    activeBleGatt = device.connectGatt(MainActivity.this, autoConnect, bleHrGattCallback);
+                }
+                if (!autoConnect) {
+                    bleMainHandler.postDelayed(bleConnectTimeoutRunnable, 12000L);
+                }
+            } catch (Exception e) {
+                bleHrState = "error";
+                bleHrErrorCode = "CONNECT_FAILED";
+                emitBleHrStatusToWebView(null);
             }
-            BluetoothDevice device = adapter.getRemoteDevice(cleanAddr);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                activeBleGatt = device.connectGatt(this, autoConnect, bleHrGattCallback, BluetoothDevice.TRANSPORT_LE);
-            } else {
-                activeBleGatt = device.connectGatt(this, autoConnect, bleHrGattCallback);
-            }
-            if (!autoConnect) {
-                bleMainHandler.postDelayed(bleConnectTimeoutRunnable, 12000L);
-            }
-        } catch (Exception e) {
-            bleHrState = "error";
-            bleHrErrorCode = "CONNECT_FAILED";
-            emitBleHrStatusToWebView(null);
+        };
+
+        // Give the BLE radio 160ms to exit scan state cleanly before initiating LE_Create_Connection (prevents GATT 133)
+        if (wasActivelyScanning && !autoConnect) {
+            pendingConnectAfterStopScanRunnable = doConnect;
+            bleMainHandler.postDelayed(doConnect, 160L);
+        } else {
+            doConnect.run();
         }
     }
 
@@ -2844,6 +3123,10 @@ public class MainActivity extends BridgeActivity {
         bleConnectedOnce = false;
         bleConnectRetryCount = 0;
         bleAutoReconnectAttempts = 0;
+        if (pendingConnectAfterStopScanRunnable != null) {
+            bleMainHandler.removeCallbacks(pendingConnectAfterStopScanRunnable);
+            pendingConnectAfterStopScanRunnable = null;
+        }
         bleMainHandler.removeCallbacks(bleReconnectRunnable);
         bleMainHandler.removeCallbacks(bleConnectTimeoutRunnable);
         bleMainHandler.removeCallbacks(bleCccdConfirmFallbackRunnable);

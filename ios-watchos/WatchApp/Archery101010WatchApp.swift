@@ -3,6 +3,7 @@ import Foundation
 import WatchConnectivity
 import CoreMotion
 import AVFoundation
+import HealthKit
 import WatchKit
 
 /// ARCHERY 101010 — Official WatchOS Companion App (`watchOS 10+`)
@@ -47,6 +48,9 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     @Published var stepsCount: Int = 0
     @Published var distanceWalkedM: Double = 0.0
     @Published var syncedActiveKcal: Int = -1
+    @Published var heartRateBpm: Int = 0
+    @Published var avgHeartRateBpm: Int = 0
+    @Published var maxHeartRateBpm: Int = 0
     @Published var autoDetectEnabled: Bool = false
     @Published var sensitivityLevel: Int = 1 // 0: BAJA/LOW, 1: MEDIA/MED, 2: ALTA/HIGH
     @Published var isWalkingPaused: Bool = false
@@ -79,6 +83,13 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     private let motionManager = CMMotionManager()
     private let pedometer = CMPedometer()
     private let audioEngine = AVAudioEngine()
+    private let healthStore = HKHealthStore()
+    private var workoutSession: HKWorkoutSession?
+    private var heartRateQuery: HKAnchoredObjectQuery?
+    private var hrSampleSum: Int = 0
+    private var hrSampleCount: Int = 0
+    private var lastHrPhoneSendMs: Int64 = 0
+    private var lastHrCloudPushMs: Int64 = 0
     private var isAcousticTapInstalled: Bool = false
     private var lastVerifiedAcousticSnapMs: Int64 = 0
     @Published var micDeniedNotice: Bool = false
@@ -170,6 +181,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
 
     deinit {
         cloudPollTimer?.invalidate()
+        stopHeartRateStreaming()
     }
 
     private func resetSessionCounters(newSessionId: String) {
@@ -183,6 +195,11 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
         lastSyncedStepsCount = 0
         distanceWalkedM = 0.0
         syncedActiveKcal = 0
+        heartRateBpm = 0
+        avgHeartRateBpm = 0
+        maxHeartRateBpm = 0
+        hrSampleSum = 0
+        hrSampleCount = 0
         accelCandidateStepT.removeAll()
         accelRhythmicCadenceActive = false
         restartPedometerFromNow()
@@ -323,17 +340,31 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
         lastTelemetrySyncTimeMs = nowMs
         let walked = walkedMetersInt
         let kcal = activeKcal
-        sendCommandToPhone([
+        var payloadDict: [String: Any] = [
+            "stepsCount": stepsCount,
+            "distanceWalkedM": walked,
+            "activeKcal": kcal
+        ]
+        var cmdDict: [String: Any] = [
             "type": "SYNC_TELEMETRY_FROM_WATCH",
             "stepsCount": stepsCount,
             "distanceWalkedM": walked,
-            "activeKcal": kcal,
-            "payload": [
-                "stepsCount": stepsCount,
-                "distanceWalkedM": walked,
-                "activeKcal": kcal
-            ]
-        ])
+            "activeKcal": kcal
+        ]
+        if heartRateBpm >= 30 && heartRateBpm <= 245 {
+            payloadDict["heartRateBpm"] = heartRateBpm
+            cmdDict["heartRateBpm"] = heartRateBpm
+        }
+        if avgHeartRateBpm >= 30 && avgHeartRateBpm <= 245 {
+            payloadDict["avgHeartRateBpm"] = avgHeartRateBpm
+            cmdDict["avgHeartRateBpm"] = avgHeartRateBpm
+        }
+        if maxHeartRateBpm >= 30 && maxHeartRateBpm <= 245 {
+            payloadDict["maxHeartRateBpm"] = maxHeartRateBpm
+            cmdDict["maxHeartRateBpm"] = maxHeartRateBpm
+        }
+        cmdDict["payload"] = payloadDict
+        sendCommandToPhone(cmdDict)
     }
 
     func cycleSensitivityMode() {
@@ -380,6 +411,118 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     private func startSensors() {
         restartPedometerFromNow()
         syncShotDetectionMotionSensors()
+        startHeartRateStreamingIfSupported()
+    }
+
+    private func startHeartRateStreamingIfSupported() {
+        guard HKHealthStore.isHealthDataAvailable(),
+              let hrType = HKObjectType.quantityType(forIdentifier: .heartRate) else {
+            sendHeartRateStatusToPhone(bpm: 0, status: "no_sensor")
+            return
+        }
+        let shareTypes: Set<HKSampleType> = [HKObjectType.workoutType()]
+        let readTypes: Set<HKObjectType> = [hrType]
+        healthStore.requestAuthorization(toShare: shareTypes, read: readTypes) { [weak self] granted, _ in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                guard granted else {
+                    self.sendHeartRateStatusToPhone(bpm: 0, status: "permission_denied")
+                    return
+                }
+                self.beginWorkoutAndHeartRateQuery(hrType: hrType)
+            }
+        }
+    }
+
+    private func beginWorkoutAndHeartRateQuery(hrType: HKQuantityType) {
+        if workoutSession == nil {
+            let config = HKWorkoutConfiguration()
+            config.activityType = .archery
+            config.locationType = .outdoor
+            if let session = try? HKWorkoutSession(healthStore: healthStore, configuration: config) {
+                workoutSession = session
+                session.startActivity(with: Date())
+            }
+        }
+        if let existingQuery = heartRateQuery {
+            healthStore.stop(existingQuery)
+            heartRateQuery = nil
+        }
+        let predicate = HKQuery.predicateForSamples(
+            withStart: Date().addingTimeInterval(-30),
+            end: nil,
+            options: .strictStartDate
+        )
+        let query = HKAnchoredObjectQuery(
+            type: hrType,
+            predicate: predicate,
+            anchor: nil,
+            limit: HKObjectQueryNoLimit
+        ) { [weak self] _, samples, _, _, _ in
+            self?.handleHeartRateSamples(samples)
+        }
+        query.updateHandler = { [weak self] _, samples, _, _, _ in
+            self?.handleHeartRateSamples(samples)
+        }
+        heartRateQuery = query
+        healthStore.execute(query)
+    }
+
+    private func stopHeartRateStreaming() {
+        if let q = heartRateQuery {
+            healthStore.stop(q)
+            heartRateQuery = nil
+        }
+        if let ws = workoutSession {
+            ws.end()
+            workoutSession = nil
+        }
+    }
+
+    private func handleHeartRateSamples(_ samples: [HKSample]?) {
+        guard let quantitySamples = samples as? [HKQuantitySample],
+              let latest = quantitySamples.last else { return }
+        let bpmUnit = HKUnit.count().unitDivided(by: HKUnit.minute())
+        let bpm = Int(round(latest.quantity.doubleValue(for: bpmUnit)))
+        guard bpm >= 30 && bpm <= 245 else { return }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.heartRateBpm = bpm
+            self.hrSampleSum += bpm
+            self.hrSampleCount += 1
+            self.avgHeartRateBpm = Int(round(Double(self.hrSampleSum) / Double(max(1, self.hrSampleCount))))
+            if bpm > self.maxHeartRateBpm {
+                self.maxHeartRateBpm = bpm
+            }
+            let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+            if (nowMs - self.lastHrPhoneSendMs) >= 1_000 {
+                self.lastHrPhoneSendMs = nowMs
+                self.sendHeartRateStatusToPhone(bpm: bpm, status: "ok")
+            }
+            // Also push live HR to 6-digit Cloud Sync (enables Apple Watch -> Android or Web!)
+            if self.hasPairingCode && self.pairingCode.count == 6 && (nowMs - self.lastHrCloudPushMs) >= 4_500 {
+                self.lastHrCloudPushMs = nowMs
+                self.syncWithFirestoreCloud(eventType: "SYNC_TELEMETRY_FROM_WATCH", extraValue: nil)
+            }
+        }
+    }
+
+    private func sendHeartRateStatusToPhone(bpm: Int, status: String) {
+        guard WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated, session.isReachable else { return }
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        var msg: [String: Any] = [
+            "type": "HR",
+            "bpm": bpm,
+            "status": status,
+            "deviceName": WKInterfaceDevice.current().name,
+            "_ts": nowMs
+        ]
+        if avgHeartRateBpm >= 30 { msg["avgHeartRateBpm"] = avgHeartRateBpm }
+        if maxHeartRateBpm >= 30 { msg["maxHeartRateBpm"] = maxHeartRateBpm }
+        session.sendMessage(msg, replyHandler: nil, errorHandler: nil)
     }
 
     private func stopAcousticSnapEngine() {
@@ -837,6 +980,9 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
         if eventType == "INCREMENT_ARROW" {
             cmdFields["delta"] = ["integerValue": "1"]
             cmdFields["source"] = ["stringValue": extraValue ?? "watch_manual"]
+            if heartRateBpm >= 30 && heartRateBpm <= 245 {
+                cmdFields["heartRateBpm"] = ["integerValue": "\(heartRateBpm)"]
+            }
         } else if eventType == "DECREMENT_ARROW" {
             cmdFields["delta"] = ["integerValue": "-1"]
             cmdFields["source"] = ["stringValue": "watch_manual"]
@@ -853,19 +999,47 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
             cmdFields["stepsCount"] = ["integerValue": "\(stepsCount)"]
             cmdFields["distanceWalkedM"] = ["integerValue": "\(walkedMetersInt)"]
             cmdFields["activeKcal"] = ["integerValue": "\(activeKcal)"]
+            if heartRateBpm >= 30 && heartRateBpm <= 245 {
+                cmdFields["heartRateBpm"] = ["integerValue": "\(heartRateBpm)"]
+            }
+            if avgHeartRateBpm >= 30 && avgHeartRateBpm <= 245 {
+                cmdFields["avgHeartRateBpm"] = ["integerValue": "\(avgHeartRateBpm)"]
+            }
+            if maxHeartRateBpm >= 30 && maxHeartRateBpm <= 245 {
+                cmdFields["maxHeartRateBpm"] = ["integerValue": "\(maxHeartRateBpm)"]
+            }
         }
 
-        let docFields: [String: Any] = [
+        var docFields: [String: Any] = [
             "lastWatchCmd": ["mapValue": ["fields": cmdFields]],
             "lastWatchCmdId": ["stringValue": cmdId],
             "lastWatchCmdSeq": ["integerValue": "\(cmdSequence)"],
             "watchStepsCount": ["integerValue": "\(stepsCount)"],
             "watchDistanceM": ["integerValue": "\(walkedMetersInt)"],
+            "watchHeartbeatAt": ["integerValue": "\(nowMs)"],
             "watchSource": ["stringValue": "WATCHOS"],
             "updatedAt": ["integerValue": "\(nowMs)"]
         ]
+        var maskPaths = [
+            "lastWatchCmd", "lastWatchCmdId", "lastWatchCmdSeq",
+            "watchStepsCount", "watchDistanceM", "watchHeartbeatAt",
+            "watchSource", "updatedAt"
+        ]
+        if heartRateBpm >= 30 && heartRateBpm <= 245 {
+            docFields["watchHeartRateBpm"] = ["integerValue": "\(heartRateBpm)"]
+            maskPaths.append("watchHeartRateBpm")
+        }
+        if avgHeartRateBpm >= 30 && avgHeartRateBpm <= 245 {
+            docFields["watchAvgHeartRateBpm"] = ["integerValue": "\(avgHeartRateBpm)"]
+            maskPaths.append("watchAvgHeartRateBpm")
+        }
+        if maxHeartRateBpm >= 30 && maxHeartRateBpm <= 245 {
+            docFields["watchMaxHeartRateBpm"] = ["integerValue": "\(maxHeartRateBpm)"]
+            maskPaths.append("watchMaxHeartRateBpm")
+        }
 
-        let urlStr = "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/\(pairingCode)?updateMask.fieldPaths=lastWatchCmd&updateMask.fieldPaths=lastWatchCmdId&updateMask.fieldPaths=lastWatchCmdSeq&updateMask.fieldPaths=watchStepsCount&updateMask.fieldPaths=watchDistanceM&updateMask.fieldPaths=watchSource&updateMask.fieldPaths=updatedAt&currentDocument.exists=true"
+        let maskQuery = maskPaths.map { "updateMask.fieldPaths=\($0)" }.joined(separator: "&")
+        let urlStr = "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/\(pairingCode)?\(maskQuery)&currentDocument.exists=true"
         guard let url = URL(string: urlStr),
               let body = try? JSONSerialization.data(withJSONObject: ["fields": docFields]) else { return }
 
@@ -1152,6 +1326,16 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
         if let msgType = dict["type"] as? String {
             if msgType == "PING" {
                 DispatchQueue.main.async { self.isPhoneConnected = true }
+                return
+            }
+            if msgType == "HR_REQUEST" {
+                DispatchQueue.main.async {
+                    self.isPhoneConnected = true
+                    self.startHeartRateStreamingIfSupported()
+                    if self.heartRateBpm >= 30 {
+                        self.sendHeartRateStatusToPhone(bpm: self.heartRateBpm, status: "ok")
+                    }
+                }
                 return
             }
             if msgType == "PHONE_COMMAND" {
