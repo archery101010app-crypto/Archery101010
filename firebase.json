@@ -196,6 +196,23 @@
         ]
       },
       {
+        "source": "/Guia-Neon-vs-Carbon-Archery101010-Movil.pdf",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/pdf"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"Guia-Neon-vs-Carbon-Archery101010-Movil.pdf\""
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
         "source": "/",
         "headers": [
           {
