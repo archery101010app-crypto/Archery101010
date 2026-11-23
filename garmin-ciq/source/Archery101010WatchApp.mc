@@ -104,6 +104,12 @@ class Archery101010WatchView extends WatchUi.View {
     public var avgHeartRateBpm = 0;
     public var maxHeartRateBpm = 0;
     public var autoDetectEnabled = false;
+    public var analysisMode = false;
+    public var manualAnalysisRecording = false;
+    public var manualAnalysisStartTimerMs = 0;
+    public var lastAnalysisStabPct = 0;
+    public var bowTypeStr = "Barebow";
+    public var bowWristStr = "LEFT";
     public var sensitivityLevel = 1; // 0: BAJA, 1: MEDIA, 2: ALTA
     public var selectedScoreIdx = 0; // 0..11
     public var scoreLabels as Lang.Array<Lang.String> = ["X", "10", "9", "8", "7", "6", "5", "4", "3", "2", "1", "M"];
@@ -147,6 +153,18 @@ class Archery101010WatchView extends WatchUi.View {
     private var mRingDelta as Lang.Array<Lang.Float> = new [40] as Lang.Array<Lang.Float>;
     private var mRingIdx = 0;
     private var mRingCount = 0;
+
+    // 10Hz Decimated Analysis Window Buffer (160 samples = 16s for INICIO -> FINAL)
+    private var mAnaSize = 160;
+    private var mAnaT as Lang.Array<Lang.Number> = new [160] as Lang.Array<Lang.Number>;
+    private var mAnaAx as Lang.Array<Lang.Float> = new [160] as Lang.Array<Lang.Float>;
+    private var mAnaAy as Lang.Array<Lang.Float> = new [160] as Lang.Array<Lang.Float>;
+    private var mAnaAz as Lang.Array<Lang.Float> = new [160] as Lang.Array<Lang.Float>;
+    private var mAnaIdx = 0;
+    private var mAnaCount = 0;
+    private var mLastAnaSampleMs = 0;
+    private var mLastHandledStartTag = "";
+    private var mLastHandledStopTag = "";
 
     // Post-release 220ms follow-through verification state
     private var mPendingShotActive = false;
@@ -357,10 +375,12 @@ class Archery101010WatchView extends WatchUi.View {
 
     (:typecheck(false))
     function syncHighFreqAccelerometer() as Void {
-        // Garmin Connect IQ has no microphone API for Dual-Key string-snap verification;
-        // keep arrow counting 100% deterministic Manual Mode (zero false positives, max battery life).
         autoDetectEnabled = false;
-        unregisterHighFreqAccelerometer();
+        if (analysisMode) {
+            registerHighFreqAccelerometer();
+        } else {
+            unregisterHighFreqAccelerometer();
+        }
     }
 
     (:typecheck(false))
@@ -693,6 +713,18 @@ class Archery101010WatchView extends WatchUi.View {
         if (mRingCount < mRingSize) {
             mRingCount = mRingCount + 1;
         }
+
+        if (analysisMode && (now < mLastAnaSampleMs || (now - mLastAnaSampleMs) >= 100)) {
+            mLastAnaSampleMs = now;
+            mAnaT[mAnaIdx] = now;
+            mAnaAx[mAnaIdx] = ax;
+            mAnaAy[mAnaIdx] = ay;
+            mAnaAz[mAnaIdx] = az;
+            mAnaIdx = (mAnaIdx + 1) % mAnaSize;
+            if (mAnaCount < mAnaSize) {
+                mAnaCount = mAnaCount + 1;
+            }
+        }
     }
 
     (:typecheck(false))
@@ -803,8 +835,8 @@ class Archery101010WatchView extends WatchUi.View {
             }
         }
 
-        // Fallback single-sample accel check ONLY when high-freq listener is unavailable AND autoDetectEnabled
-        if (autoDetectEnabled && !mHighFreqAccelActive) {
+        // Fallback single-sample accel check when high-freq listener is unavailable during Analysis mode
+        if (analysisMode && !mHighFreqAccelActive) {
             var info = Sensor.getInfo();
             if (info != null && (info has :accel) && info.accel != null) {
                 var accelArr = info.accel;
@@ -816,6 +848,13 @@ class Archery101010WatchView extends WatchUi.View {
                         now
                     );
                 }
+            }
+        }
+        if (analysisMode && manualAnalysisRecording) {
+            if ((now - manualAnalysisStartTimerMs) >= 24000) {
+                stopManualAnalysis(true);
+            } else {
+                WatchUi.requestUpdate();
             }
         }
     }
@@ -1060,6 +1099,229 @@ class Archery101010WatchView extends WatchUi.View {
         WatchUi.requestUpdate();
     }
 
+    (:typecheck(false))
+    function fmtMilli3(val as Lang.Float) as Lang.String {
+        var clamped = val;
+        if (clamped > 1.08) { clamped = 1.08; }
+        if (clamped < -1.08) { clamped = -1.08; }
+        var neg = (clamped < 0.0);
+        var absVal = neg ? -clamped : clamped;
+        var scaled = (absVal * 1000.0 + 0.5).toNumber();
+        var whole = scaled / 1000;
+        var frac = scaled % 1000;
+        var pad = (frac < 10) ? "00" : ((frac < 100) ? "0" : "");
+        return (neg ? "-" : "") + whole.toString() + "." + pad + frac.toString();
+    }
+
+    (:typecheck(false))
+    function fmtTenths1(val as Lang.Float) as Lang.String {
+        var safe = (val >= 0.0) ? val : 0.0;
+        var scaled = (safe * 10.0 + 0.5).toNumber();
+        return (scaled / 10).toString() + "." + (scaled % 10).toString();
+    }
+
+    (:typecheck(false))
+    function startManualAnalysis(notifyPhone as Lang.Boolean) as Void {
+        if (!analysisMode || manualAnalysisRecording) {
+            return;
+        }
+        manualAnalysisRecording = true;
+        manualAnalysisStartTimerMs = System.getTimer();
+        screenIdx = 0;
+        mLastLocalActionMs = manualAnalysisStartTimerMs;
+        markUserActivity(true);
+        if (Attention has :vibrate) {
+            Attention.vibrate([new Attention.VibeProfile(75, 70)]);
+        }
+        if (notifyPhone) {
+            syncWithPhoneApp("ANALYSIS_MANUAL_START", null);
+        }
+        WatchUi.requestUpdate();
+    }
+
+    (:typecheck(false))
+    function stopManualAnalysis(notifyPhone as Lang.Boolean) as Void {
+        if (!manualAnalysisRecording) {
+            return;
+        }
+        var endTimer = System.getTimer();
+        var startTimer = manualAnalysisStartTimerMs;
+        manualAnalysisRecording = false;
+        manualAnalysisStartTimerMs = 0;
+        mLastLocalActionMs = endTimer;
+        markUserActivity(true);
+        if (Attention has :vibrate) {
+            Attention.vibrate([
+                new Attention.VibeProfile(70, 55),
+                new Attention.VibeProfile(0, 45),
+                new Attention.VibeProfile(90, 90)
+            ]);
+        }
+
+        // Extract samples recorded inside [startTimer .. endTimer]
+        var count = 0;
+        for (var i = 0; i < mAnaCount; i++) {
+            var idx = (mAnaIdx - 1 - i + mAnaSize) % mAnaSize;
+            var st = mAnaT[idx];
+            if (st != null && st >= startTimer && st <= endTimer) {
+                count = count + 1;
+            }
+        }
+        if (count < 4) {
+            if (notifyPhone) {
+                syncWithPhoneApp("ANALYSIS_MANUAL_STOP", null);
+            }
+            WatchUi.requestUpdate();
+            return;
+        }
+
+        var xs = new [count] as Lang.Array<Lang.Float>;
+        var ys = new [count] as Lang.Array<Lang.Float>;
+        var zs = new [count] as Lang.Array<Lang.Float>;
+        var tsArr = new [count] as Lang.Array<Lang.Number>;
+        var k = count - 1;
+        for (var j = 0; j < mAnaCount && k >= 0; j++) {
+            var rIdx = (mAnaIdx - 1 - j + mAnaSize) % mAnaSize;
+            var rt = mAnaT[rIdx];
+            if (rt != null && rt >= startTimer && rt <= endTimer) {
+                tsArr[k] = rt;
+                xs[k] = mAnaAx[rIdx];
+                ys[k] = mAnaAy[rIdx];
+                zs[k] = mAnaAz[rIdx];
+                k = k - 1;
+            }
+        }
+
+        // Trim final 1 sample (button press impulse) when >= 6 samples
+        var effCount = (count >= 6) ? (count - 1) : count;
+        var refStart = (effCount > 6) ? (effCount - 6) : 0;
+        var refAy = 0.0;
+        var refAz = 0.0;
+        var refAx = 0.0;
+        var refN = 0;
+        for (var r = refStart; r < effCount; r++) {
+            refAx = refAx + xs[r];
+            refAy = refAy + ys[r];
+            refAz = refAz + zs[r];
+            refN = refN + 1;
+        }
+        refAx = refAx / refN;
+        refAy = refAy / refN;
+        refAz = refAz / refN;
+        var refNorm = Math.sqrt(refAx * refAx + refAy * refAy + refAz * refAz).toFloat();
+        if (refNorm < 400.0) { refNorm = 1000.0; }
+
+        var faceRadiusCm = (distanceM <= 20) ? 20.0 : ((distanceM <= 26) ? 30.0 : ((distanceM <= 36) ? 40.0 : 61.0));
+        var distCm = (distanceM * 100.0 > 1000.0) ? (distanceM * 100.0) : 1000.0;
+        var wristSign = bowWristStr.equals("RIGHT") ? -1.0 : 1.0;
+
+        var nxArr = new [effCount] as Lang.Array<Lang.Float>;
+        var nyArr = new [effCount] as Lang.Array<Lang.Float>;
+        var sAy = ys[0];
+        var sAz = zs[0];
+        for (var m = 0; m < effCount; m++) {
+            sAy = 0.78 * sAy + 0.22 * ys[m];
+            sAz = 0.78 * sAz + 0.22 * zs[m];
+            var yawRad = ((sAy - refAy) / refNorm) * wristSign * 0.28;
+            var pitchRad = ((sAz - refAz) / refNorm) * 0.28;
+            var dxCm = Math.tan(yawRad).toFloat() * distCm;
+            var dyCm = Math.tan(pitchRad).toFloat() * distCm;
+            nxArr[m] = (dxCm / faceRadiusCm).toFloat();
+            nyArr[m] = (dyCm / faceRadiusCm).toFloat();
+        }
+
+        var settleIdx = (effCount * 35) / 100;
+        if (settleIdx < 1) { settleIdx = 1; }
+        if (settleIdx > effCount - 2) { settleIdx = effCount - 2; }
+
+        var totalSpanSec = (tsArr[effCount - 1] - tsArr[0]).toFloat() / 1000.0;
+        if (totalSpanSec < 1.0) { totalSpanSec = 1.0; }
+        var prepSec = ((tsArr[settleIdx] - tsArr[0]).toFloat() / 1000.0);
+        if (prepSec < 0.4) { prepSec = 0.4; }
+        if (prepSec > 10.0) { prepSec = 10.0; }
+        var aimSec = ((tsArr[effCount - 1] - tsArr[settleIdx]).toFloat() / 1000.0);
+        if (aimSec < 0.5) { aimSec = 0.5; }
+        if (aimSec > 24.0) { aimSec = 24.0; }
+
+        var sumSqCm = 0.0;
+        var aimN = 0;
+        for (var a = settleIdx; a < effCount; a++) {
+            var cxCm = nxArr[a] * faceRadiusCm;
+            var cyCm = nyArr[a] * faceRadiusCm;
+            sumSqCm = sumSqCm + (cxCm * cxCm) + (cyCm * cyCm);
+            aimN = aimN + 1;
+        }
+        var swayCm = (aimN > 0) ? Math.sqrt(sumSqCm / aimN).toFloat() : 1.5;
+        if (swayCm < 0.3) { swayCm = 0.3; }
+        if (swayCm > faceRadiusCm) { swayCm = faceRadiusCm; }
+        var stabPct = (100.0 - ((swayCm / faceRadiusCm) * 82.0) + 0.5).toNumber();
+        if (stabPct < 38) { stabPct = 38; }
+        if (stabPct > 99) { stabPct = 99; }
+
+        var preIdx = (effCount >= 5) ? (effCount - 5) : 0;
+        var relJumpCm = Math.sqrt(
+            (nxArr[effCount - 1] - nxArr[preIdx]) * (nxArr[effCount - 1] - nxArr[preIdx]) +
+            (nyArr[effCount - 1] - nyArr[preIdx]) * (nyArr[effCount - 1] - nyArr[preIdx])
+        ).toFloat() * faceRadiusCm;
+        if (relJumpCm < 0.2) { relJumpCm = 0.2; }
+
+        var pOut = "[";
+        var pSteps = (settleIdx >= 6) ? 6 : (settleIdx + 1);
+        if (pSteps < 2) { pSteps = 2; }
+        for (var pi = 0; pi < pSteps; pi++) {
+            var srcP = (pi * settleIdx) / (pSteps - 1);
+            if (srcP >= effCount) { srcP = effCount - 1; }
+            if (pi > 0) { pOut = pOut + ","; }
+            pOut = pOut + "[" + fmtMilli3(nxArr[srcP]) + "," + fmtMilli3(nyArr[srcP]) + "]";
+        }
+        pOut = pOut + "]";
+
+        var aOut = "[";
+        var aimSpan = effCount - 1 - settleIdx;
+        var aSteps = (aimSpan >= 10) ? 10 : (aimSpan + 1);
+        if (aSteps < 2) { aSteps = 2; }
+        for (var ai = 0; ai < aSteps; ai++) {
+            var srcA = settleIdx + ((ai * aimSpan) / (aSteps - 1));
+            if (srcA >= effCount) { srcA = effCount - 1; }
+            if (ai > 0) { aOut = aOut + ","; }
+            aOut = aOut + "[" + fmtMilli3(nxArr[srcA]) + "," + fmtMilli3(nyArr[srcA]) + "]";
+        }
+        aOut = aOut + "]";
+
+        arrowsCount = arrowsCount + 1;
+        lastAnalysisStabPct = stabPct;
+        var epochMsStr = (Time.now().value().toLong() * 1000l + (endTimer % 1000)).toString();
+        var rPair = "[" + fmtMilli3(nxArr[effCount - 1]) + "," + fmtMilli3(nyArr[effCount - 1]) + "]";
+        var hrPart = (heartRateBpm >= 35 && heartRateBpm <= 240) ? (",\"bpm\":" + heartRateBpm.toString()) : "";
+        var shotJson =
+            "{\"id\":\"SHOT-" + epochMsStr + "-" + arrowsCount.toString() + "\"" +
+            ",\"n\":" + arrowsCount.toString() +
+            ",\"ts\":" + epochMsStr +
+            ",\"d\":" + distanceM.toString() +
+            ",\"bowType\":\"" + bowTypeStr + "\"" +
+            ",\"prepSec\":" + fmtTenths1(prepSec) +
+            ",\"aimSec\":" + fmtTenths1(aimSec) +
+            ",\"stab\":" + stabPct.toString() +
+            ",\"swayCm\":" + fmtTenths1(swayCm) +
+            ",\"relCm\":" + fmtTenths1(relJumpCm) +
+            hrPart +
+            ",\"p\":" + pOut +
+            ",\"a\":" + aOut +
+            ",\"r\":" + rPair + "}";
+
+        saveStateToStorage();
+        syncWithPhoneApp("ANALYSIS_SHOT", shotJson);
+        WatchUi.requestUpdate();
+    }
+
+    function toggleManualAnalysisFromHardware() as Void {
+        if (manualAnalysisRecording) {
+            stopManualAnalysis(true);
+        } else {
+            startManualAnalysis(true);
+        }
+    }
+
     function recalculateMetrics() as Void {
         var distM = gpsDistanceM;
         if (stepsCount > 0) {
@@ -1099,6 +1361,11 @@ class Archery101010WatchView extends WatchUi.View {
                 };
                 if (extra != null && eventType.equals("SCORE_INPUT")) {
                     payload["value"] = extra;
+                } else if (extra != null && eventType.equals("ANALYSIS_SHOT")) {
+                    payload["analysisShotJson"] = extra;
+                    if (heartRateBpm >= 35) {
+                        payload["heartRateBpm"] = heartRateBpm;
+                    }
                 }
                 Communications.transmit(payload, null, new CommListener(self));
             } catch (ex) {}
@@ -1179,6 +1446,16 @@ class Archery101010WatchView extends WatchUi.View {
         } else if (eventType.equals("TOGGLE_AUTO_DETECT")) {
             cmdFields["enabled"] = { "booleanValue" => autoDetectEnabled };
             cmdFields["sensitivityLevel"] = { "integerValue" => sensitivityLevel.toString() };
+        } else if (eventType.equals("ANALYSIS_MANUAL_START") || eventType.equals("ANALYSIS_MANUAL_STOP")) {
+            mPendingRetryDelta = 0;
+            cmdFields["ts"] = { "integerValue" => epochMsStr };
+            cmdFields["source"] = { "stringValue" => "watch_manual" };
+        } else if (eventType.equals("ANALYSIS_SHOT") && extra != null) {
+            mPendingRetryDelta = 0;
+            cmdFields["analysisShotJson"] = { "stringValue" => extra.toString() };
+            if (heartRateBpm >= 35 && heartRateBpm <= 240) {
+                cmdFields["heartRateBpm"] = { "integerValue" => heartRateBpm.toString() };
+            }
         } else if (eventType.equals("SYNC_TELEMETRY_FROM_WATCH")) {
             cmdFields["stepsCount"] = { "integerValue" => stepsCount.toString() };
             cmdFields["distanceWalkedM"] = { "integerValue" => distanceWalkedM.toString() };
@@ -1331,6 +1608,10 @@ class Archery101010WatchView extends WatchUi.View {
             var fsTotalEnds = extractFsInt(fields, "totalEnds", endsCount);
             var fsAuto = extractFsBool(fields, "autoDetectEnabled", autoDetectEnabled);
             var fsSens = extractFsInt(fields, "sensitivityLevel", sensitivityLevel);
+            var fsPt = extractFsString(fields, "practiceType", "");
+            var fsAnalysis = extractFsBool(fields, "analysisMode", fsPt.equals("Análisis"));
+            var fsBow = extractFsString(fields, "bowType", bowTypeStr);
+            var fsCalJson = extractFsString(fields, "analysisCalibrationJson", "");
 
             var hasEndArrowsField = false;
             var parsedEndArrows = [] as Lang.Array<Lang.String>;
@@ -1403,9 +1684,50 @@ class Archery101010WatchView extends WatchUi.View {
             distanceM = fsDistM;
             arrowsPerEnd = fsPerEnd;
             endsCount = fsTotalEnds;
+            if (fsBow.length() > 0) {
+                bowTypeStr = fsBow;
+            }
+            if (fsCalJson.find("\"bowWrist\":\"RIGHT\"") != null) {
+                bowWristStr = "RIGHT";
+            } else if (fsCalJson.find("\"bowWrist\":\"LEFT\"") != null) {
+                bowWristStr = "LEFT";
+            }
             bowPoundageLbs = extractFsInt(fields, "bowPoundageLbs", bowPoundageLbs);
             autoDetectEnabled = false;
             sensitivityLevel = fsSens;
+            if (fsAnalysis != analysisMode) {
+                analysisMode = fsAnalysis;
+                if (!analysisMode) {
+                    manualAnalysisRecording = false;
+                    manualAnalysisStartTimerMs = 0;
+                }
+            }
+            if (analysisMode && fsCalJson.length() > 0) {
+                var startIdx = fsCalJson.find("\"manualStartAt\":");
+                var stopIdx = fsCalJson.find("\"manualStopAt\":");
+                if (startIdx != null) {
+                    var subStart = fsCalJson.substring(startIdx + 16, fsCalJson.length());
+                    if (subStart != null && subStart.length() >= 10) {
+                        var startTag = subStart.substring(0, 13);
+                        if (startTag != null && !startTag.equals(mLastHandledStartTag) && stopIdx == null) {
+                            mLastHandledStartTag = startTag;
+                            startManualAnalysis(false);
+                        }
+                    }
+                }
+                if (stopIdx != null) {
+                    var subStop = fsCalJson.substring(stopIdx + 15, fsCalJson.length());
+                    if (subStop != null && subStop.length() >= 10) {
+                        var stopTag = subStop.substring(0, 13);
+                        if (stopTag != null && !stopTag.equals(mLastHandledStopTag)) {
+                            mLastHandledStopTag = stopTag;
+                            if (manualAnalysisRecording) {
+                                stopManualAnalysis(false);
+                            }
+                        }
+                    }
+                }
+            }
             syncHighFreqAccelerometer();
 
             var cloudWalked = extractFsInt(fields, "distanceWalkedM", 0);
@@ -1571,7 +1893,86 @@ class Archery101010WatchView extends WatchUi.View {
         var walkedDualStr = formatWalkedDual(mts);
         var maxPillTxtW = (148.0 * s).toNumber();
 
-        if (screenIdx == 0) {
+        if (screenIdx == 0 && analysisMode) {
+            var elapsedSec = manualAnalysisRecording
+                ? ((System.getTimer() - manualAnalysisStartTimerMs) / 1000)
+                : 0;
+            if (elapsedSec < 0) { elapsedSec = 0; }
+            var anaPill = manualAnalysisRecording
+                ? (tr("GRABANDO · ", "REC · ") + elapsedSec.toString() + "S")
+                : ((arrowsCount > 0)
+                    ? (tr("TIRO ", "SHOT ") + arrowsCount.toString() + " · " + distanceM.toString() + "M")
+                    : (tr("ANÁLISIS · ", "ANALYSIS · ") + distanceM.toString() + "M"));
+            if (dc.getTextWidthInPixels(anaPill, fMicro) > maxPillTxtW) {
+                anaPill = manualAnalysisRecording ? "REC" : tr("ANÁLISIS", "ANALYSIS");
+            }
+            drawArchery101010Header(dc, w, h, s, anaPill, !manualAnalysisRecording);
+
+            var statBoxW = (160.0 * s).toNumber();
+            var statBoxH = (48.0 * s).toNumber();
+            var statBoxX = cx - (statBoxW / 2);
+            var statBoxY = (60.0 * s).toNumber();
+            drawCrispBox(
+                dc,
+                statBoxX,
+                statBoxY,
+                statBoxW,
+                statBoxH,
+                (8.0 * s).toNumber(),
+                manualAnalysisRecording ? 0x151105 : 0x0B0E15,
+                manualAnalysisRecording ? 0xFFE500 : 0x00A8F3,
+                strokePx
+            );
+            dc.setColor(manualAnalysisRecording ? 0xFFE500 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            var centerTitle = manualAnalysisRecording
+                ? (tr("EN CURSO · ", "ACTIVE · ") + elapsedSec.toString() + " s")
+                : ((lastAnalysisStabPct > 0)
+                    ? (tr("ESTAB. ", "STAB. ") + lastAnalysisStabPct.toString() + "%")
+                    : tr("LISTO · BOTÓN FÍSICO", "READY · WATCH BUTTON"));
+            dc.drawText(cx, statBoxY + (statBoxH / 2), fValue, centerTitle, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            var aRowY = (118.0 * s).toNumber();
+            var aRowW = statBoxW;
+            var aGap = (7.0 * s).toNumber();
+            var aBtnW = (aRowW - aGap) / 2;
+            var aBtnH = (36.0 * s).toNumber();
+            var aRad = (10.0 * s).toNumber();
+
+            var startBtnX = cx - (aRowW / 2);
+            drawCrispBox(
+                dc,
+                startBtnX,
+                aRowY,
+                aBtnW,
+                aBtnH,
+                aRad,
+                manualAnalysisRecording ? 0x09131E : 0x061523,
+                0x00A8F3,
+                strokePx
+            );
+            dc.setColor(manualAnalysisRecording ? 0x94A3B8 : 0x00BFFF, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(startBtnX + (aBtnW / 2), aRowY + (aBtnH / 2), fMicro, tr("INICIO", "START"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            var stopBtnX = cx + (aRowW / 2) - aBtnW;
+            drawCrispBox(
+                dc,
+                stopBtnX,
+                aRowY,
+                aBtnW,
+                aBtnH,
+                aRad,
+                manualAnalysisRecording ? 0x260709 : 0x0E121B,
+                manualAnalysisRecording ? 0xFF1E1E : 0x334155,
+                strokePx
+            );
+            dc.setColor(manualAnalysisRecording ? Graphics.COLOR_WHITE : 0x64748B, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(stopBtnX + (aBtnW / 2), aRowY + (aBtnH / 2), fMicro, tr("FINAL", "END"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+            if (minDim > 180) {
+                dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
+                dc.drawText(cx, (172.0 * s).toNumber(), fMicro, tr("BOTÓN ARRIBA-DER: INICIO/FINAL", "TOP-RIGHT BTN: START/END"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            }
+        } else if (screenIdx == 0) {
             var pillTxt = isConnectedNow
                 ? tr("CONECTADO · LIVE", "SYNCED · LIVE")
                 : tr("MODO MANUAL", "MANUAL MODE");
@@ -1969,7 +2370,9 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
     }
 
     function onSelect() {
-        if (mView.screenIdx == 0) {
+        if (mView.screenIdx == 0 && mView.analysisMode) {
+            mView.toggleManualAnalysisFromHardware();
+        } else if (mView.screenIdx == 0) {
             mView.incrementArrow(1, false);
         } else if (mView.screenIdx == 1) {
             var val = mView.scoreLabels[mView.selectedScoreIdx];
@@ -2089,7 +2492,17 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
             return true;
         }
 
-        if (mView.screenIdx == 0) {
+        if (mView.screenIdx == 0 && mView.analysisMode) {
+            if (ty >= (114.0 * s) && ty <= (162.0 * s)) {
+                if (tx < (cx - (2.5 * s))) {
+                    mView.startManualAnalysis(true);
+                    return true;
+                } else if (tx > (cx + (2.5 * s))) {
+                    mView.stopManualAnalysis(true);
+                    return true;
+                }
+            }
+        } else if (mView.screenIdx == 0) {
             // Deliberate XL side-by-side -1 / +1 buttons (prevents accidental wrist/sleeve/arrow touches on 0000 chassis)
             if (ty >= (114.0 * s) && ty <= (160.0 * s)) {
                 if (tx < (cx - (2.5 * s))) {

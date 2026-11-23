@@ -208,6 +208,7 @@ function downsamplePoints(
 export function analyzeImuShotWindow(params: {
   samples: RawImuSample[];
   releaseTimestampMs?: number;
+  manualStartTimestampMs?: number;
   shotNumber: number;
   distanceM: number;
   bowType: AnalysisBowType;
@@ -217,6 +218,7 @@ export function analyzeImuShotWindow(params: {
 }): AnalysisShotRecord | null {
   const {
     samples,
+    manualStartTimestampMs,
     shotNumber,
     distanceM = 18,
     bowType = "Barebow",
@@ -225,13 +227,44 @@ export function analyzeImuShotWindow(params: {
     heartRateBpm
   } = params;
 
-  if (!samples || samples.length < 12) return null;
+  if (!samples || samples.length < 10) return null;
 
   const sorted = [...samples].sort((a, b) => a.t - b.t);
-  const tEnd = params.releaseTimestampMs ?? sorted[sorted.length - 1].t;
-  // Isolate pre-release window (up to 10.0s before release, excluding post-release recoil spike > -25ms)
-  const preSamples = sorted.filter((s) => s.t >= tEnd - 10_000 && s.t <= tEnd - 15);
-  if (preSamples.length < 10) return null;
+  const rawEnd = params.releaseTimestampMs ?? sorted[sorted.length - 1].t;
+  const hasExplicitManualWindow =
+    typeof manualStartTimestampMs === "number" &&
+    manualStartTimestampMs > 0 &&
+    rawEnd - manualStartTimestampMs >= 600;
+
+  // In explicit INICIO -> FINAL mode, honor the archer's start timestamp (up to 30s) and trim post-shot arm drop / button tap
+  const windowStart = hasExplicitManualWindow
+    ? Math.max(rawEnd - 30_000, manualStartTimestampMs as number)
+    : rawEnd - 10_000;
+
+  let tEnd = rawEnd;
+  if (hasExplicitManualWindow) {
+    const windowCandidates = sorted.filter((s) => s.t >= windowStart && s.t <= rawEnd);
+    let detectedSpikeTs = 0;
+    let peakImpulse = 0;
+    for (let i = 3; i < windowCandidates.length; i++) {
+      const s = windowCandidates[i];
+      if (s.t - windowStart < 950 || rawEnd - s.t > 4500) continue;
+      const prev = windowCandidates[i - 2];
+      const magNow = Math.hypot(s.ax, s.ay, s.az);
+      const magPrev = Math.hypot(prev.ax, prev.ay, prev.az);
+      const jerk = Math.abs(magNow - magPrev);
+      const linDev = Math.abs(magNow - 9.81);
+      if (jerk >= 6.5 && linDev >= 5.5 && linDev > peakImpulse) {
+        peakImpulse = linDev;
+        detectedSpikeTs = s.t;
+      }
+    }
+    tEnd = detectedSpikeTs > 0 ? detectedSpikeTs : Math.max(windowStart + 500, rawEnd - 120);
+  }
+
+  // Isolate pre-release window (excluding post-release recoil spike > -15ms)
+  const preSamples = sorted.filter((s) => s.t >= windowStart && s.t <= tEnd - 15);
+  if (preSamples.length < 8) return null;
 
   // Anchor reference gravity vector = mean of quietest pre-release 450ms window [tEnd - 650ms .. tEnd - 120ms]
   const anchorWindow = preSamples.filter((s) => s.t >= tEnd - 700 && s.t <= tEnd - 100);
@@ -336,37 +369,47 @@ export function analyzeImuShotWindow(params: {
     aimStartIdx = i;
   }
 
-  // Detect Preparatory Raise Start: walk backwards from aimStartIdx across the entire bow-lift/draw sweep
-  // until both angular target sweep rate and motionEnergy drop to pre-lift rest (or max 4.5s window).
+  // Detect Preparatory Raise Start: in explicit INICIO -> FINAL mode use start of window (up to 10s prep);
+  // in AUTO mode walk backwards from aimStartIdx across bow-lift/draw sweep (up to 4.5s).
   let prepStartIdx = Math.max(0, aimStartIdx - 1);
-  for (let i = aimStartIdx - 1; i >= 0; i--) {
-    if (targetTraj[aimStartIdx].t - targetTraj[i].t > 4500) {
-      prepStartIdx = i;
-      break;
+  if (hasExplicitManualWindow) {
+    prepStartIdx = 0;
+    for (let i = 0; i < aimStartIdx; i++) {
+      if (targetTraj[aimStartIdx].t - targetTraj[i].t <= 10_000) {
+        prepStartIdx = i;
+        break;
+      }
     }
-    const lookbackIdx = Math.max(0, i - 3);
-    const dtSpanSec = Math.max(0.04, (targetTraj[i].t - targetTraj[lookbackIdx].t) / 1000);
-    const sweepRateCmPerSec =
-      Math.hypot(
-        targetTraj[i].dxCm - targetTraj[lookbackIdx].dxCm,
-        targetTraj[i].dyCm - targetTraj[lookbackIdx].dyCm
-      ) / dtSpanSec;
-    if (
-      aimStartIdx - i > 6 &&
-      i > lookbackIdx &&
-      sweepRateCmPerSec < 6.0 &&
-      targetTraj[i].motionEnergy < 0.22
-    ) {
+  } else {
+    for (let i = aimStartIdx - 1; i >= 0; i--) {
+      if (targetTraj[aimStartIdx].t - targetTraj[i].t > 4500) {
+        prepStartIdx = i;
+        break;
+      }
+      const lookbackIdx = Math.max(0, i - 3);
+      const dtSpanSec = Math.max(0.04, (targetTraj[i].t - targetTraj[lookbackIdx].t) / 1000);
+      const sweepRateCmPerSec =
+        Math.hypot(
+          targetTraj[i].dxCm - targetTraj[lookbackIdx].dxCm,
+          targetTraj[i].dyCm - targetTraj[lookbackIdx].dyCm
+        ) / dtSpanSec;
+      if (
+        aimStartIdx - i > 6 &&
+        i > lookbackIdx &&
+        sweepRateCmPerSec < 6.0 &&
+        targetTraj[i].motionEnergy < 0.22
+      ) {
+        prepStartIdx = i;
+        break;
+      }
       prepStartIdx = i;
-      break;
     }
-    prepStartIdx = i;
   }
 
   const tPrepStart = targetTraj[prepStartIdx].t;
   const tAimStart = targetTraj[aimStartIdx].t;
-  const rawPrepSec = clamp((tAimStart - tPrepStart) / 1000, 0.5, 6.5);
-  const rawAimSec = clamp((tEnd - tAimStart) / 1000, 0.7, 14.0);
+  const rawPrepSec = clamp((tAimStart - tPrepStart) / 1000, 0.4, hasExplicitManualWindow ? 10.0 : 6.5);
+  const rawAimSec = clamp((tEnd - tAimStart) / 1000, 0.5, hasExplicitManualWindow ? 24.0 : 14.0);
   const prepSeconds = Number(rawPrepSec.toFixed(1));
   const aimSeconds = Number(rawAimSec.toFixed(1));
   const totalSeconds = Number((prepSeconds + aimSeconds).toFixed(1));

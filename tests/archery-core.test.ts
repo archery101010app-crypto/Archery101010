@@ -1402,4 +1402,89 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     assert.ok(historySrc.includes("isVolumeOnly: isVol"));
     assert.ok(historySrc.includes("score: getSessionScore(session)"));
   });
+
+  it("supports explicit INICIO -> FINAL manual analysis windows across Phone and Physical Watch Button", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { analyzeImuShotWindow } = await import("../src/lib/scoring/shotAnalysisEngine.ts");
+
+    // Simulate a 16.5-second manual INICIO -> FINAL shot:
+    //  - 0.0s .. 3.0s: Bow raise / draw sweep (Preparatory)
+    //  - 3.0s .. 15.0s: Steady 12.0s Olympic anchor hold (Aiming)
+    //  - 15.05s: Sharp bowstring release impulse (18.5 m/s^2)
+    //  - 15.1s .. 16.5s: Post-release arm drop while pressing FINAL button on watch
+    const startTs = 100_000;
+    const stopTs = 116_500;
+    const samples = [];
+    for (let t = startTs; t <= stopTs; t += 20) {
+      const elapsedSec = (t - startTs) / 1000;
+      if (elapsedSec < 3.0) {
+        const p = elapsedSec / 3.0;
+        samples.push({
+          t,
+          ax: 2.0 * (1 - p),
+          ay: 6.5 + 3.2 * p,
+          az: 7.2 - 5.2 * p,
+          gy: -0.45 * (1 - p),
+          gz: 0.25 * (1 - p)
+        });
+      } else if (t >= 15_040 + startTs && t <= 15_080 + startTs) {
+        samples.push({ t, ax: 6.2, ay: 15.8, az: 7.4, gy: 1.8, gz: -1.4 });
+      } else if (elapsedSec > 15.08) {
+        // Lowering bow arm to tap FINAL button — must be trimmed automatically!
+        samples.push({ t, ax: 8.5, ay: 3.1, az: 4.0, gy: 1.2, gz: 0.9 });
+      } else {
+        samples.push({
+          t,
+          ax: 0.15,
+          ay: 9.72 + Math.sin(elapsedSec * 7) * 0.03,
+          az: 1.95 + Math.cos(elapsedSec * 5) * 0.03,
+          gy: 0.01,
+          gz: -0.01
+        });
+      }
+    }
+
+    const record = analyzeImuShotWindow({
+      samples,
+      manualStartTimestampMs: startTs,
+      releaseTimestampMs: stopTs,
+      shotNumber: 1,
+      distanceM: 18,
+      bowType: "Recurve",
+      bowWrist: "LEFT"
+    });
+
+    assert.ok(record, "Explicit INICIO -> FINAL window must produce a valid AnalysisShotRecord");
+    assert.ok(
+      record!.totalSeconds >= 13.5 && record!.totalSeconds <= 16.0,
+      `Expected ~15.0s total duration (exceeding old 10s cap), got ${record!.totalSeconds}s`
+    );
+    assert.ok(
+      record!.stabilityPct >= 88,
+      `Post-release arm drop before pressing FINAL must not degrade aiming stability (${record!.stabilityPct}%)`
+    );
+
+    const analysisSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/analysis/AnalysisView.tsx"),
+      "utf8"
+    );
+    assert.equal(
+      analysisSrc.includes("Capturar tiro actual del reloj"),
+      false,
+      "Old single-tap 'Capturar tiro actual del reloj' button must be removed"
+    );
+    assert.ok(analysisSrc.includes("ANALYSIS_MANUAL_START"));
+    assert.ok(analysisSrc.includes("ANALYSIS_MANUAL_STOP"));
+
+    const wearSrc = fs.readFileSync(
+      path.resolve(
+        process.cwd(),
+        "android/wear/src/main/java/com/archery101010/app/WearMainActivity.java"
+      ),
+      "utf8"
+    );
+    assert.ok(wearSrc.includes("KEYCODE_STEM_PRIMARY"));
+    assert.ok(wearSrc.includes("toggleManualAnalysisFromWatchHardware"));
+  });
 });

@@ -79,7 +79,11 @@ export default function SmartwatchMiniApp({
   const [screenIdx, setScreenIdx] = useState<number>(0);
   const [analysisPage, setAnalysisPage] = useState<0 | 1>(0);
   const [lastAnalysisShot, setLastAnalysisShot] = useState<AnalysisShotRecord | null>(null);
+  const [manualAnalysisStartMs, setManualAnalysisStartMs] = useState<number | null>(null);
+  const [manualElapsedSec, setManualElapsedSec] = useState<number>(0);
+  const manualAnalysisStartRef = useRef<number | null>(null);
   const touchStartXRef = useRef<number | null>(null);
+  const pointerStartXRef = useRef<number | null>(null);
   const [watchShape, setWatchShape] = useState<"ROUND" | "SQUARE">("ROUND");
   const [sensitivity, setSensitivity] = useState<"ALTA" | "MEDIA" | "BAJA">("MEDIA");
   const [justDetectedShot, setJustDetectedShot] = useState<boolean>(false);
@@ -143,13 +147,63 @@ export default function SmartwatchMiniApp({
   );
 
   const lastHandledManualCaptureAtRef = useRef<number>(0);
+  const lastHandledManualStartAtRef = useRef<number>(0);
+  const lastHandledManualStopAtRef = useRef<number>(0);
 
   useEffect(() => {
-    if (!isStandalone || !activeState.analysisCalibrationJson) return;
+    manualAnalysisStartRef.current = manualAnalysisStartMs;
+    if (!manualAnalysisStartMs) {
+      setManualElapsedSec(0);
+      return;
+    }
+    const updateElapsed = () => {
+      setManualElapsedSec(Math.max(0, (Date.now() - manualAnalysisStartMs) / 1000));
+    };
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 100);
+    return () => window.clearInterval(timer);
+  }, [manualAnalysisStartMs]);
+
+  useEffect(() => {
+    if (!activeState.analysisCalibrationJson) return;
     try {
       const parsed = JSON.parse(activeState.analysisCalibrationJson);
+      const reqStart = Number(parsed?.manualStartAt) || 0;
+      const reqStop = Number(parsed?.manualStopAt) || 0;
       const reqTs = Number(parsed?.manualCaptureAt) || 0;
+
       if (
+        reqStart > 0 &&
+        reqStart !== lastHandledManualStartAtRef.current &&
+        Date.now() - reqStart <= 25_000
+      ) {
+        lastHandledManualStartAtRef.current = reqStart;
+        if (reqStop < reqStart) {
+          manualAnalysisStartRef.current = reqStart;
+          setManualAnalysisStartMs(reqStart);
+        }
+      }
+
+      if (
+        reqStop > 0 &&
+        reqStop !== lastHandledManualStopAtRef.current &&
+        Date.now() - reqStop <= 15_000
+      ) {
+        if (lastHandledManualStopAtRef.current === 0 && Date.now() - reqStop > 4_000) {
+          lastHandledManualStopAtRef.current = reqStop;
+        } else {
+          lastHandledManualStopAtRef.current = reqStop;
+          const startedAt = manualAnalysisStartRef.current;
+          manualAnalysisStartRef.current = null;
+          setManualAnalysisStartMs(null);
+          if (isStandalone) {
+            emitAnalysisShotRef.current(Date.now(), "watch_manual", startedAt || undefined);
+          }
+        }
+      }
+
+      if (
+        isStandalone &&
         reqTs > 0 &&
         reqTs !== lastHandledManualCaptureAtRef.current &&
         Date.now() - reqTs <= 15_000
@@ -159,7 +213,10 @@ export default function SmartwatchMiniApp({
           return;
         }
         lastHandledManualCaptureAtRef.current = reqTs;
-        emitAnalysisShotRef.current(Date.now(), "watch_manual");
+        const startedAt = manualAnalysisStartRef.current;
+        manualAnalysisStartRef.current = null;
+        setManualAnalysisStartMs(null);
+        emitAnalysisShotRef.current(Date.now(), "watch_manual", startedAt || undefined);
       }
     } catch {}
   }, [isStandalone, activeState.analysisCalibrationJson]);
@@ -167,6 +224,8 @@ export default function SmartwatchMiniApp({
   useEffect(() => {
     if ((activeState.arrowsCount || 0) === 0) {
       setLastAnalysisShot(null);
+      manualAnalysisStartRef.current = null;
+      setManualAnalysisStartMs(null);
     }
   }, [activeState.arrowsCount, activeState.sessionId]);
 
@@ -337,8 +396,22 @@ export default function SmartwatchMiniApp({
         } else {
           setInternalSnapshot(msg.payload);
         }
+      } else if (msg.type === "ANALYSIS_MANUAL_START") {
+        const startTs = typeof msg.ts === "number" && msg.ts > 0 ? msg.ts : Date.now();
+        manualAnalysisStartRef.current = startTs;
+        setManualAnalysisStartMs(startTs);
+      } else if (msg.type === "ANALYSIS_MANUAL_STOP") {
+        const startedAt = manualAnalysisStartRef.current;
+        manualAnalysisStartRef.current = null;
+        setManualAnalysisStartMs(null);
+        if (isStandalone) {
+          emitAnalysisShotRef.current(Date.now(), "watch_manual", startedAt || undefined);
+        }
       } else if (msg.type === "ANALYSIS_MANUAL_CAPTURE" && isStandalone) {
-        emitAnalysisShotRef.current(Date.now(), "watch_manual");
+        const startedAt = manualAnalysisStartRef.current;
+        manualAnalysisStartRef.current = null;
+        setManualAnalysisStartMs(null);
+        emitAnalysisShotRef.current(Date.now(), "watch_manual", startedAt || undefined);
       } else if (msg.type === "ANALYSIS_CALIBRATE_ZERO" && isStandalone) {
         window.setTimeout(() => {
           const recent = motionBufRef.current.slice(-25);
@@ -360,6 +433,8 @@ export default function SmartwatchMiniApp({
           }
         }, 2200);
       } else if (msg.type === "ANALYSIS_SHOT" && msg.analysisShotJson) {
+        manualAnalysisStartRef.current = null;
+        setManualAnalysisStartMs(null);
         const decoded = decodeCompactShotAnalysis(msg.analysisShotJson);
         if (decoded) setLastAnalysisShot(decoded);
       }
@@ -548,12 +623,13 @@ export default function SmartwatchMiniApp({
   }>({ active: false, startMs: 0, followN: 0, sumLin: 0, sumAx: 0, sumGyro: 0, gyroN: 0 });
 
   const emitAnalysisShotRef = useRef<
-    (releaseTs: number, source: "watch_auto" | "watch_manual") => void
+    (releaseTs: number, source: "watch_auto" | "watch_manual", manualStartTs?: number) => void
   >(() => {});
 
   emitAnalysisShotRef.current = (
     releaseTs: number,
-    source: "watch_auto" | "watch_manual"
+    source: "watch_auto" | "watch_manual",
+    manualStartTs?: number
   ) => {
     let calibration: AnalysisCalibrationProfile = {
       bowType:
@@ -602,6 +678,7 @@ export default function SmartwatchMiniApp({
     const analyzed = analyzeImuShotWindow({
       samples: motionBufRef.current,
       releaseTimestampMs: releaseTs,
+      ...(manualStartTs && manualStartTs > 0 ? { manualStartTimestampMs: manualStartTs } : {}),
       shotNumber: nextShotNum,
       distanceM: calibration.distanceM || activeState.distanceM || 18,
       bowType: calibration.bowType || "Barebow",
@@ -782,6 +859,8 @@ export default function SmartwatchMiniApp({
             const acousticGateOk = hasAcousticKey || (isAnalysisWatchMode && !micActiveRef.current);
             if (
               isAnalysisWatchMode &&
+              Boolean(activeState.autoDetectEnabled) &&
+              !manualAnalysisStartRef.current &&
               validFollow &&
               acousticGateOk &&
               now - lastShotRef.current > cfg.cooldown
@@ -794,6 +873,8 @@ export default function SmartwatchMiniApp({
         }
       } else if (
         isAnalysisWatchMode &&
+        Boolean(activeState.autoDetectEnabled) &&
+        !manualAnalysisStartRef.current &&
         !isWalkingBlocked &&
         lin >= cfg.threshold &&
         now - lastShotRef.current > cfg.cooldown
@@ -889,7 +970,7 @@ export default function SmartwatchMiniApp({
       }
 
       buf.push({ t: now, ax, ay, az, gx, gy, gz, mag, lin, gyro: gyroRad });
-      while (buf.length && now - buf[0].t > 9000) buf.shift();
+      while (buf.length && now - buf[0].t > 32000) buf.shift();
     };
 
     window.addEventListener("devicemotion", handleMotion, { passive: true });
@@ -998,6 +1079,61 @@ export default function SmartwatchMiniApp({
       setTimeout(() => setCopiedCode(false), 1800);
     } catch {}
   };
+
+  const handleManualAnalysisStart = useCallback(() => {
+    if (manualAnalysisStartRef.current) return;
+    const now = Date.now();
+    triggerHaptic(50);
+    manualAnalysisStartRef.current = now;
+    setManualAnalysisStartMs(now);
+    sendWatchCommand({ type: "ANALYSIS_MANUAL_START", ts: now, source: "watch_manual" });
+  }, [triggerHaptic]);
+
+  const handleManualAnalysisStop = useCallback(() => {
+    const startedAt = manualAnalysisStartRef.current;
+    if (!startedAt) return;
+    const now = Date.now();
+    manualAnalysisStartRef.current = null;
+    setManualAnalysisStartMs(null);
+    if (isStandalone) {
+      emitAnalysisShotRef.current(now, "watch_manual", startedAt);
+    } else {
+      triggerHaptic([45, 35, 65]);
+      sendWatchCommand({ type: "ANALYSIS_MANUAL_STOP", ts: now, source: "watch_manual" });
+    }
+  }, [isStandalone, triggerHaptic]);
+
+  const handlePhysicalWatchButton = useCallback(() => {
+    if (isAnalysisWatchMode) {
+      if (manualAnalysisStartRef.current) {
+        handleManualAnalysisStop();
+      } else {
+        handleManualAnalysisStart();
+      }
+      return;
+    }
+    handleArrowDelta(1, "watch_manual");
+  }, [
+    isAnalysisWatchMode,
+    handleManualAnalysisStart,
+    handleManualAnalysisStop,
+    handleArrowDelta
+  ]);
+
+  useEffect(() => {
+    if (!isOpen || !isStandalone || !isAnalysisWatchMode) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.key === " " || e.key === "Enter" || e.key === "MediaPlayPause") {
+        e.preventDefault();
+        handlePhysicalWatchButton();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, isStandalone, isAnalysisWatchMode, handlePhysicalWatchButton]);
 
   const handleWheel = (e: React.WheelEvent) => {
     if (screenIdx === 0) {
@@ -1154,7 +1290,6 @@ export default function SmartwatchMiniApp({
     }
   };
 
-  const pointerStartXRef = useRef<number | null>(null);
   const handleWatchPointerDown = (e: React.PointerEvent) => {
     if (e.pointerType === "mouse") {
       pointerStartXRef.current = e.clientX;
@@ -1215,46 +1350,79 @@ export default function SmartwatchMiniApp({
 
           {analysisPage === 0 ? (
             <>
-              <div className="flex flex-col items-center z-10 shrink-0">
+              <div className="flex flex-col items-center gap-[3px] z-10 shrink-0">
                 <img
                   src="/images/brand_logo_header.png"
                   srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
                   alt="ARCHERY 101010"
-                  className={`${isEs ? "h-[10px]" : "h-[9.5px]"} w-auto object-contain select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]`}
+                  className={`${isEs ? "h-[9.5px]" : "h-[9px]"} w-auto object-contain select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]`}
                   draggable={false}
                 />
-              </div>
-
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[192px] h-[192px] flex items-center justify-center pointer-events-none z-[5]">
-                <AnalysisDianaSvg shot={lastAnalysisShot} sizePx={192} compactWatchMode />
-              </div>
-
-              <div className="flex flex-col items-center gap-[5px] z-10 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
-                    if (isStandalone && !activeState.autoDetectEnabled) {
-                      emitAnalysisShotRef.current(Date.now(), "watch_manual");
-                    } else {
-                      triggerHaptic(15);
-                      setAnalysisPage(1);
-                    }
+                    triggerHaptic(15);
+                    setAnalysisPage(1);
                   }}
-                  className="inline-flex items-center gap-[5px] bg-[#080B10] border border-white/[0.13] rounded-full px-[10px] py-[2.5px] text-[8.5px] font-extrabold tracking-[0.08em] text-white uppercase whitespace-nowrap tabular-nums cursor-pointer active:scale-95 transition"
+                  className={`inline-flex items-center gap-[4px] rounded-full px-[9px] py-[2px] text-[8px] font-extrabold tracking-[0.07em] text-white uppercase whitespace-nowrap tabular-nums border cursor-pointer active:scale-95 transition ${
+                    manualAnalysisStartMs
+                      ? "bg-[#151105] border-[#FFE500]/75"
+                      : "bg-[#080B10] border-white/[0.14]"
+                  }`}
                 >
                   <span
                     className={`w-[5px] h-[5px] rounded-full shrink-0 ${
-                      justDetectedShot ? "bg-[#FFE500]" : "bg-[#00BFFF]"
+                      manualAnalysisStartMs
+                        ? "bg-[#FFE500] animate-pulse"
+                        : justDetectedShot
+                        ? "bg-[#FFE500]"
+                        : "bg-[#00BFFF]"
                     }`}
                   />
-                  <span className={isEs ? undefined : "max-w-[156px] truncate"}>
-                    {shotNum > 0
-                      ? `${t("navAnalysis")} · ${tx("Tiro", "Shot")} ${shotNum} · ${activeState.distanceM}m`
-                      : !activeState.autoDetectEnabled && isStandalone
-                      ? `${tx("Capturar Tiro", "Capture Shot")} · ${activeState.distanceM}m`
-                      : `${t("navAnalysis")} · ${tx("Listo", "Ready")} · ${activeState.distanceM}m`}
+                  <span>
+                    {manualAnalysisStartMs
+                      ? `${tx("Grabando", "Rec")} · ${manualElapsedSec.toFixed(1)}s`
+                      : shotNum > 0
+                      ? `${tx("Tiro", "Shot")} ${shotNum} · ${activeState.distanceM}m`
+                      : `${tx("Listo", "Ready")} · ${activeState.distanceM}m`}
                   </span>
                 </button>
+              </div>
+
+              <div className="flex-1 flex items-center justify-center pointer-events-none z-[5] my-[2px]">
+                <AnalysisDianaSvg shot={lastAnalysisShot} sizePx={142} compactWatchMode />
+              </div>
+
+              <div className="flex flex-col items-center gap-[5px] z-10 shrink-0 w-full">
+                <div className="grid grid-cols-2 gap-[6px] w-[184px]">
+                  <button
+                    type="button"
+                    disabled={Boolean(manualAnalysisStartMs)}
+                    onClick={handleManualAnalysisStart}
+                    className={`h-[26px] rounded-full text-[9px] font-black uppercase tracking-[0.07em] flex items-center justify-center gap-[4px] cursor-pointer active:scale-95 transition tabular-nums ${
+                      manualAnalysisStartMs
+                        ? "bg-[#09131E] border border-[#00BFFF]/45 text-white/60"
+                        : "bg-[#00BFFF] text-black"
+                    }`}
+                  >
+                    <span>▶</span>
+                    <span>{tx("Inicio", "Start")}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={!manualAnalysisStartMs}
+                    onClick={handleManualAnalysisStop}
+                    className={`h-[26px] rounded-full text-[9px] font-black uppercase tracking-[0.07em] flex items-center justify-center gap-[4px] cursor-pointer active:scale-95 transition tabular-nums ${
+                      manualAnalysisStartMs
+                        ? "bg-[#FF1E1E] text-white border border-white/25"
+                        : "bg-[#11151E] border border-white/[0.10] text-white/40"
+                    }`}
+                  >
+                    <span>■</span>
+                    <span>{tx("Final", "End")}</span>
+                  </button>
+                </div>
 
                 <div className="flex items-center gap-[5px]">
                   {[0, 1].map((idx) => (
@@ -1849,7 +2017,28 @@ export default function SmartwatchMiniApp({
           </form>
         )}
 
-        <WatchFaceContent />
+        <div className="relative">
+          <button
+            type="button"
+            onClick={handlePhysicalWatchButton}
+            title={
+              isAnalysisWatchMode
+                ? tx("Botón físico del reloj (Inicio / Final)", "Physical watch button (Start / End)")
+                : tx("Corona del reloj (+1 flecha)", "Watch crown (+1 arrow)")
+            }
+            aria-label={
+              isAnalysisWatchMode
+                ? tx("Botón físico: iniciar o finalizar análisis", "Physical button: start or end analysis")
+                : tx("Corona del reloj: sumar 1 flecha", "Watch crown: add 1 arrow")
+            }
+            className={`absolute -right-[8px] top-1/2 -translate-y-1/2 w-[8px] h-[42px] rounded-r-[4px] border cursor-pointer active:scale-95 z-20 ${
+              isAnalysisWatchMode && manualAnalysisStartMs
+                ? "bg-[#FF1E1E] border-white/40"
+                : "bg-[#1F242E] border-[#343B48]"
+            }`}
+          />
+          <WatchFaceContent />
+        </div>
 
         <div className="flex items-center gap-3">
           <button
@@ -2100,13 +2289,25 @@ export default function SmartwatchMiniApp({
               watchShape === "ROUND" ? "rounded-full" : "rounded-[58px]"
             }`}
           >
-            {/* Digital Crown on right side of watch hardware */}
+            {/* Physical Side Button / Digital Crown on right side of watch hardware */}
             <button
               type="button"
-              onClick={() => handleArrowDelta(1, "watch_manual")}
-              title={tx("Corona del reloj (+1 flecha)", "Watch crown (+1 arrow)")}
-              aria-label={tx("Corona del reloj: sumar 1 flecha", "Watch crown: add 1 arrow")}
-              className="absolute -right-[7px] top-1/2 -translate-y-1/2 w-[6px] h-[38px] rounded-r-[4px] bg-[#1F242E] border border-[#343B48] cursor-pointer active:scale-95"
+              onClick={handlePhysicalWatchButton}
+              title={
+                isAnalysisWatchMode
+                  ? tx("Botón físico del reloj (Inicio / Final)", "Physical watch button (Start / End)")
+                  : tx("Corona del reloj (+1 flecha)", "Watch crown (+1 arrow)")
+              }
+              aria-label={
+                isAnalysisWatchMode
+                  ? tx("Botón físico: iniciar o finalizar análisis", "Physical button: start or end analysis")
+                  : tx("Corona del reloj: sumar 1 flecha", "Watch crown: add 1 arrow")
+              }
+              className={`absolute -right-[7px] top-1/2 -translate-y-1/2 w-[7px] h-[42px] rounded-r-[4px] border cursor-pointer active:scale-95 ${
+                isAnalysisWatchMode && manualAnalysisStartMs
+                  ? "bg-[#FF1E1E] border-white/40"
+                  : "bg-[#1F242E] border-[#343B48]"
+              }`}
             />
             <WatchFaceContent />
           </div>

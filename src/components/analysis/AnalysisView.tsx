@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MessageSquare, Play, Plus, RotateCcw, Save, Settings } from "lucide-react";
+import { MessageSquare, Play, Plus, RotateCcw, Save, Settings, Square } from "lucide-react";
 import { UserProfile } from "@/lib/authService";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -216,7 +216,7 @@ export default function AnalysisView({
     });
   }, [defaultBowType, defaultDistanceM, defaultWrist, user?.uid]);
 
-  const [captureMode, setCaptureMode] = useState<"AUTO" | "MANUAL">("AUTO");
+  const [captureMode, setCaptureMode] = useState<"AUTO" | "MANUAL">("MANUAL");
   const [shots, setShots] = useState<AnalysisShotRecord[]>([]);
   const shotsRef = useRef<AnalysisShotRecord[]>([]);
   shotsRef.current = shots;
@@ -229,7 +229,11 @@ export default function AnalysisView({
   const [isCalibrationOpen, setIsCalibrationOpen] = useState<boolean>(false);
   const [isWatchModalOpen, setIsWatchModalOpen] = useState<boolean>(false);
   const [isBleHrModalOpen, setIsBleHrModalOpen] = useState<boolean>(false);
-  const [manualCaptureAt, setManualCaptureAt] = useState<number>(0);
+  const [previewLivePanel, setPreviewLivePanel] = useState<boolean>(false);
+  const [manualStartAt, setManualStartAt] = useState<number>(0);
+  const [manualStopAt, setManualStopAt] = useState<number>(0);
+  const [isManualRecording, setIsManualRecording] = useState<boolean>(false);
+  const [manualElapsedSec, setManualElapsedSec] = useState<number>(0);
   const [calibrateZeroAt, setCalibrateZeroAt] = useState<number>(0);
   const isFinishingRef = useRef<boolean>(false);
   const [coachTechnicalNotes, setCoachTechnicalNotes] = useState<
@@ -567,7 +571,8 @@ export default function AnalysisView({
         bowWrist: calibration.bowWrist,
         distanceM: calibration.distanceM,
         zeroGravityVec: calibration.zeroGravityVec,
-        ...(manualCaptureAt > 0 ? { manualCaptureAt } : {}),
+        ...(manualStartAt > 0 ? { manualStartAt } : {}),
+        ...(manualStopAt > 0 ? { manualStopAt } : {}),
         ...(calibrateZeroAt > 0 ? { calibrateZeroAt } : {})
       }),
       updatedAt: sessionStartTsRef.current + shots.length
@@ -576,11 +581,25 @@ export default function AnalysisView({
     shots,
     calibration,
     captureMode,
-    manualCaptureAt,
+    manualStartAt,
+    manualStopAt,
     calibrateZeroAt,
     bleHrStatus.state,
     user
   ]);
+
+  useEffect(() => {
+    if (!isManualRecording || manualStartAt <= 0) {
+      setManualElapsedSec(0);
+      return;
+    }
+    const tick = () => {
+      setManualElapsedSec(Math.max(0, (Date.now() - manualStartAt) / 1000));
+    };
+    tick();
+    const id = window.setInterval(tick, 100);
+    return () => window.clearInterval(id);
+  }, [isManualRecording, manualStartAt]);
 
   const latestWatchSnapshotRef = useRef<BiometricSessionSnapshot>(liveWatchSnapshot);
   latestWatchSnapshotRef.current = liveWatchSnapshot;
@@ -651,6 +670,21 @@ export default function AnalysisView({
         setCaptureMode(msg.enabled ? "AUTO" : "MANUAL");
         return;
       }
+      if (msg.type === "ANALYSIS_MANUAL_START") {
+        const ts = typeof msg.ts === "number" && msg.ts > 0 ? msg.ts : Date.now();
+        setCaptureMode("MANUAL");
+        setManualStartAt(ts);
+        setIsManualRecording(true);
+        setIsMarkMode(false);
+        triggerHaptic("arrow");
+        return;
+      }
+      if (msg.type === "ANALYSIS_MANUAL_STOP") {
+        const ts = typeof msg.ts === "number" && msg.ts > 0 ? msg.ts : Date.now();
+        setManualStopAt(ts);
+        setIsManualRecording(false);
+        return;
+      }
       if (msg.type === "ANALYSIS_ZERO_VECTOR") {
         let vec: [number, number, number] | null = null;
         if (Array.isArray(msg.zeroGravityVec) && msg.zeroGravityVec.length === 3) {
@@ -683,6 +717,7 @@ export default function AnalysisView({
         return;
       }
       if (msg.type === "ANALYSIS_SHOT" && typeof msg.analysisShotJson === "string") {
+        setIsManualRecording(false);
         const nextNum = shotsRef.current.length + 1;
         const decoded = decodeCompactShotAnalysis(msg.analysisShotJson, nextNum);
         if (!decoded) return;
@@ -787,6 +822,31 @@ export default function AnalysisView({
     setShots([]);
     setSelectedShotIdx(0);
     setIsMarkMode(false);
+    setIsManualRecording(false);
+    setManualStartAt(0);
+    setManualStopAt(0);
+  };
+
+  const handleManualStart = () => {
+    if (!isWatchConnected) {
+      setIsWatchModalOpen(true);
+      return;
+    }
+    const now = Date.now();
+    triggerHaptic("arrow");
+    setIsMarkMode(false);
+    setManualStartAt(now);
+    setIsManualRecording(true);
+    sendWatchCommand({ type: "ANALYSIS_MANUAL_START", ts: now, source: "phone_manual" });
+  };
+
+  const handleManualStop = () => {
+    if (!isManualRecording) return;
+    const now = Date.now();
+    triggerHaptic("confirm");
+    setManualStopAt(now);
+    setIsManualRecording(false);
+    sendWatchCommand({ type: "ANALYSIS_MANUAL_STOP", ts: now, source: "phone_manual" });
   };
 
   const handleSaveAndFinishSession = async () => {
@@ -857,7 +917,7 @@ export default function AnalysisView({
   // ============================================================================
   // STATE A: UNCONNECTED WATCH (AND ZERO ACTIVE SHOTS) — ZERO FAKE NUMBERS
   // ============================================================================
-  if (!isWatchConnected && shots.length === 0) {
+  if (!isWatchConnected && shots.length === 0 && !previewLivePanel) {
     return (
       <div className="flex flex-col gap-3.5 py-2 w-full max-w-full overflow-x-hidden font-sans">
         {/* Top Context Header */}
@@ -1064,23 +1124,18 @@ export default function AnalysisView({
                     </svg>
                   </div>
 
-                  {/* Watch Footer Pill + Pagination Dots */}
-                  <div className="flex flex-col items-center gap-[3.5px] z-10 shrink-0">
-                    <div className="inline-flex items-center gap-1 rounded-full bg-[#080B10] border border-white/[0.14] px-2 py-[2.5px] text-[7.2px] font-extrabold uppercase tracking-[0.06em] text-white whitespace-nowrap tabular-nums leading-none">
-                      <span className="w-[4px] h-[4px] rounded-full bg-[#00BFFF] shrink-0" />
-                      <span>
-                        {tx(
-                          `Análisis · Tiro 1 · ${calibration.distanceM}m`,
-                          `Analysis · Shot 1 · ${calibration.distanceM}m`
-                        )}
+                  {/* Watch Footer INICIO / FINAL Pills + Pagination Dots */}
+                  <div className="flex flex-col items-center gap-[3.5px] z-10 shrink-0 w-full px-1">
+                    <div className="grid grid-cols-2 gap-[4px] w-full">
+                      <span className="h-[17px] rounded-full bg-[#00BFFF] text-black text-[7px] font-black uppercase tracking-[0.06em] flex items-center justify-center">
+                        ▶ {tx("Inicio", "Start")}
+                      </span>
+                      <span className="h-[17px] rounded-full bg-[#FF1E1E] text-white text-[7px] font-black uppercase tracking-[0.06em] flex items-center justify-center">
+                        ■ {tx("Final", "End")}
                       </span>
                     </div>
                     <div className="flex items-center gap-[3.5px]" aria-hidden="true">
-                      <span className="w-[3px] h-[3px] rounded-full bg-white/25" />
-                      <span className="w-[3px] h-[3px] rounded-full bg-white/25" />
                       <span className="w-[9px] h-[3px] rounded-full bg-[#00BFFF]" />
-                      <span className="w-[3px] h-[3px] rounded-full bg-white/25" />
-                      <span className="w-[3px] h-[3px] rounded-full bg-white/25" />
                       <span className="w-[3px] h-[3px] rounded-full bg-white/25" />
                     </div>
                   </div>
@@ -1095,8 +1150,8 @@ export default function AnalysisView({
             </h2>
             <p className="text-[15.5px] font-normal text-white leading-snug">
               {tx(
-                "Colócalo en la muñeca que sostiene el arco para medir trazo en diana, tiempos y pulsaciones reales en cada flecha.",
-                "Wear it on your bow wrist to measure target trace, phase timing, and live heart rate on every arrow."
+                "Colócalo en la muñeca del arco y usa INICIO / FINAL desde el teléfono o con el botón físico del reloj.",
+                "Wear it on your bow wrist and use START / END from your phone or the physical watch button."
               )}
             </p>
           </div>
@@ -1159,18 +1214,27 @@ export default function AnalysisView({
                   isEs ? "whitespace-nowrap" : "truncate max-w-full"
                 }`}
               >
-                {tx("Tira normal", "Shoot normal")}
+                {tx("Inicio / Final", "Start / End")}
               </span>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsWatchModalOpen(true)}
-            className="w-full min-h-[50px] rounded-[15px] bg-white hover:bg-neutral-100 text-black font-bold text-[16.5px] tracking-wide flex items-center justify-center cursor-pointer active:scale-[0.99] transition"
-          >
-            {tx("Vincular reloj inteligente", "Link smartwatch")}
-          </button>
+          <div className="w-full flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setIsWatchModalOpen(true)}
+              className="w-full min-h-[50px] rounded-[15px] bg-white hover:bg-neutral-100 text-black font-bold text-[16.5px] tracking-wide flex items-center justify-center cursor-pointer active:scale-[0.99] transition"
+            >
+              {tx("Vincular reloj inteligente", "Link smartwatch")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreviewLivePanel(true)}
+              className="w-full min-h-[42px] rounded-[13px] bg-[#0D1119] border border-white/[0.12] text-white font-bold text-[13.5px] tracking-wide flex items-center justify-center cursor-pointer active:scale-[0.99] transition"
+            >
+              {tx("Ver pantalla de Análisis →", "Open Analysis controls →")}
+            </button>
+          </div>
         </section>
 
         {/* Saved Past Analyses Card (Accessible Offline Without Watch) */}
@@ -1281,21 +1345,24 @@ export default function AnalysisView({
           <div className="h-[34px] bg-[#0D1017] border border-white/[0.10] rounded-[11px] p-[3px] flex items-center gap-0.5">
             <button
               type="button"
-              onClick={() => setCaptureMode("AUTO")}
-              className={`h-[26px] px-2 rounded-[8px] text-[10.5px] font-extrabold tracking-[0.03em] cursor-pointer transition ${
-                captureMode === "AUTO" ? "bg-[#00BFFF] text-black font-black" : "text-white"
-              }`}
-            >
-              AUTO
-            </button>
-            <button
-              type="button"
               onClick={() => setCaptureMode("MANUAL")}
-              className={`h-[26px] px-2 rounded-[8px] text-[10.5px] font-extrabold tracking-[0.03em] cursor-pointer transition ${
+              className={`h-[26px] px-2.5 rounded-[8px] text-[10.5px] font-extrabold tracking-[0.03em] cursor-pointer transition ${
                 captureMode === "MANUAL" ? "bg-[#00BFFF] text-black font-black" : "text-white"
               }`}
             >
               MANUAL
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsManualRecording(false);
+                setCaptureMode("AUTO");
+              }}
+              className={`h-[26px] px-2.5 rounded-[8px] text-[10.5px] font-extrabold tracking-[0.03em] cursor-pointer transition ${
+                captureMode === "AUTO" ? "bg-[#00BFFF] text-black font-black" : "text-white"
+              }`}
+            >
+              AUTO
             </button>
           </div>
 
@@ -1318,6 +1385,24 @@ export default function AnalysisView({
           </button>
         </div>
       </div>
+
+      {!isWatchConnected && (
+        <button
+          type="button"
+          onClick={() => setIsWatchModalOpen(true)}
+          className="w-full bg-[#121006] border border-[#FFE500]/55 rounded-[14px] px-3.5 py-2.5 flex items-center justify-between gap-2 text-left cursor-pointer active:scale-[0.99] transition"
+        >
+          <span className="text-[12.5px] font-extrabold text-white leading-snug">
+            {tx(
+              "Reloj sin vincular · Toca aquí para conectar tu reloj antes de iniciar",
+              "Watch not linked · Tap here to connect your watch before starting"
+            )}
+          </span>
+          <span className="px-2.5 py-1 rounded-[8px] bg-[#FFE500] text-black text-[11px] font-black uppercase shrink-0">
+            {tx("Vincular", "Link")}
+          </span>
+        </button>
+      )}
 
       {/* HERO FULL-WIDTH DIANA STAGE (312x312px — OUTDOOR HIGH CONTRAST) */}
       <section className="bg-[#0B0E15] border border-white/[0.09] rounded-[26px] p-3.5 flex flex-col items-center gap-3">
@@ -1344,7 +1429,7 @@ export default function AnalysisView({
             >
               {shots.length > 0
                 ? `${tx("Tiro", "Shot")} ${activeShot?.shotNumber || 1} / ${shots.length}`
-                : tx("Esperando Tiro 1", "Waiting Shot 1")}
+                : tx("Listo · Tiro 1", "Ready · Shot 1")}
             </span>
             <button
               type="button"
@@ -1371,6 +1456,48 @@ export default function AnalysisView({
           </div>
         </div>
 
+        {/* Live Step-by-Step Status Banner */}
+        <div
+          className={`w-full rounded-[13px] px-3 py-2 border flex items-center justify-between gap-2 tabular-nums ${
+            isManualRecording
+              ? "bg-[#151105] border-[#FFE500]/75"
+              : "bg-[#06080D] border-white/[0.09]"
+          }`}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className={`w-2 h-2 rounded-full shrink-0 ${
+                isManualRecording
+                  ? "bg-[#FFE500] animate-pulse"
+                  : captureMode === "MANUAL"
+                  ? "bg-[#00BFFF]"
+                  : "bg-[#00C853]"
+              }`}
+            />
+            <span className="text-[12px] font-extrabold text-white leading-snug truncate">
+              {isManualRecording
+                ? tx(
+                    "Analizando tiro en vivo · Presiona FINAL al soltar",
+                    "Recording live shot · Tap END after release"
+                  )
+                : captureMode === "MANUAL"
+                ? tx(
+                    "Presiona INICIO antes de subir el arco (o usa el botón del reloj)",
+                    "Tap START before raising bow (or press watch button)"
+                  )
+                : tx(
+                    "Modo Automático · Levanta el arco y dispara normal",
+                    "Auto Mode · Raise your bow and shoot normally"
+                  )}
+            </span>
+          </div>
+          {isManualRecording && (
+            <span className="px-2 py-0.5 rounded-[7px] bg-[#FFE500] text-black text-[11.5px] font-black shrink-0">
+              {manualElapsedSec.toFixed(1)} s
+            </span>
+          )}
+        </div>
+
         {/* GIANT 312x312 OUTDOOR HIGH-CONTRAST BRAND-LINE DIANA */}
         <div className="w-[312px] max-w-full aspect-square flex items-center justify-center relative">
           <AnalysisDianaSvg
@@ -1382,7 +1509,77 @@ export default function AnalysisView({
           />
         </div>
 
-        {/* Live Heart Rate & Real-Time Red ECG Waveform Module (Directly Below Target) */}
+        {/* Visual Legend Strip (Explains target curves immediately at first glance) */}
+        <div className="w-full bg-[#06080D] border border-white/[0.07] rounded-[11px] px-3 py-1.5 flex items-center justify-around gap-2 text-[11px] font-bold text-white">
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+            <span className="w-[12px] border-t-2 border-dashed border-white inline-block" />
+            <span>{tx("Subida", "Raise")}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+            <span className="w-[12px] h-[2.8px] rounded-full bg-[#00BFFF] inline-block" />
+            <span>{tx("Apuntado", "Aiming")}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+            <span className="w-[7px] h-[7px] rounded-full bg-white inline-block" />
+            <span>{tx("Suelta", "Release")}</span>
+          </span>
+        </div>
+
+        {/* PRIMARY MANUAL INICIO & FINAL CONTROLS */}
+        {captureMode === "MANUAL" && (
+          <div className="w-full flex flex-col gap-1.5">
+            <div className="w-full grid grid-cols-2 gap-2.5 tabular-nums">
+              <button
+                type="button"
+                disabled={isManualRecording}
+                onClick={handleManualStart}
+                className={`h-[50px] rounded-[15px] text-[14.5px] font-black uppercase tracking-[0.06em] flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition ${
+                  isManualRecording
+                    ? "bg-[#091420] border border-[#00BFFF]/55 text-white"
+                    : "bg-[#00BFFF] hover:brightness-105 text-black"
+                }`}
+              >
+                <Play
+                  size={15}
+                  fill={isManualRecording ? "#00BFFF" : "#000000"}
+                  strokeWidth={2.2}
+                  aria-hidden="true"
+                />
+                <span>
+                  {isManualRecording
+                    ? `${tx("En curso", "Active")} · ${manualElapsedSec.toFixed(1)}s`
+                    : tx("Inicio", "Start")}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                disabled={!isManualRecording}
+                onClick={handleManualStop}
+                className={`h-[50px] rounded-[15px] text-[14.5px] font-black uppercase tracking-[0.06em] flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] transition ${
+                  isManualRecording
+                    ? "bg-[#FF1E1E] hover:brightness-105 text-white border border-white/20"
+                    : "bg-[#121621] border border-white/[0.10] text-white/40 cursor-not-allowed"
+                }`}
+              >
+                <Square
+                  size={14}
+                  fill={isManualRecording ? "#FFFFFF" : "currentColor"}
+                  aria-hidden="true"
+                />
+                <span>{tx("Final", "End")}</span>
+              </button>
+            </div>
+            <span className="text-[11px] font-semibold text-white/75 text-center leading-tight">
+              {tx(
+                "También puedes iniciar y finalizar con el botón físico del reloj.",
+                "You can also start and end using the physical button on your watch."
+              )}
+            </span>
+          </div>
+        )}
+
+        {/* Live Heart Rate & Real-Time Red ECG Waveform Module */}
         <button
           type="button"
           onClick={() => setIsBleHrModalOpen(true)}
@@ -1421,49 +1618,46 @@ export default function AnalysisView({
           <LiveHeartRateEcgGraph bpm={liveBpmDisplay} />
         </button>
 
-        {/* 2-Button Tactile Action Bar */}
-        <div className="w-full grid grid-cols-[1.15fr_1fr] gap-2">
-          <button
-            type="button"
-            disabled={!activeShot}
-            onClick={() => setIsMarkMode((v) => !v)}
-            className={`h-[42px] rounded-[14px] text-[13px] font-black flex items-center justify-center gap-1.5 cursor-pointer transition disabled:opacity-45 ${
-              isMarkMode
-                ? "bg-[#FFE500] text-black"
-                : "bg-white hover:bg-neutral-100 text-black"
-            }`}
-          >
-            <Plus size={15} strokeWidth={2.8} aria-hidden="true" />
-            <span>
-              {isMarkMode
-                ? tx("Toca la Diana", "Tap Target")
-                : tx("Marcar en Diana", "Mark Target")}
-            </span>
-          </button>
+        {/* Secondary Review Tools (Replay Shot + Optional Real Arrow Impact Annotation) */}
+        {activeShot && (
+          <div className="w-full flex flex-col gap-1.5">
+            <div className="w-full grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setReplayNonce((n) => n + 1)}
+                className="h-[42px] rounded-[14px] bg-[#141823] border border-white/[0.11] text-white text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition"
+              >
+                <Play size={13} fill="#FFFFFF" aria-hidden="true" />
+                <span>{tx("Repetir Tiro", "Replay Shot")}</span>
+              </button>
 
-          <button
-            type="button"
-            disabled={!activeShot}
-            onClick={() => setReplayNonce((n) => n + 1)}
-            className="h-[42px] rounded-[14px] bg-[#141823] border border-white/[0.11] text-white text-[13px] font-extrabold flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition disabled:opacity-45"
-          >
-            <Play size={13} fill="#FFFFFF" aria-hidden="true" />
-            <span>{tx("Repetir Tiro", "Replay Shot")}</span>
-          </button>
-        </div>
+              <button
+                type="button"
+                onClick={() => setIsMarkMode((v) => !v)}
+                className={`h-[42px] rounded-[14px] text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition ${
+                  isMarkMode
+                    ? "bg-[#FFE500] text-black font-black"
+                    : "bg-[#141823] border border-white/[0.11] text-white"
+                }`}
+              >
+                <Plus size={15} strokeWidth={2.6} aria-hidden="true" />
+                <span>
+                  {isMarkMode
+                    ? tx("Toca dónde cayó", "Tap arrow hit")
+                    : tx("Anotar impacto real", "Log real hit")}
+                </span>
+              </button>
+            </div>
 
-        {captureMode === "MANUAL" && (
-          <button
-            type="button"
-            onClick={() => {
-              triggerHaptic("arrow");
-              setManualCaptureAt(Date.now());
-              sendWatchCommand({ type: "ANALYSIS_MANUAL_CAPTURE" });
-            }}
-            className="w-full h-[40px] rounded-[12px] bg-[#081320] border border-[#00BFFF]/55 text-white text-[12px] font-black uppercase tracking-wider cursor-pointer active:scale-[0.99] transition"
-          >
-            {tx("Capturar tiro actual del reloj", "Capture current shot from watch")}
-          </button>
+            {isMarkMode && (
+              <div className="w-full rounded-[10px] bg-[#171405] border border-[#FFE500]/55 px-3 py-1.5 text-[11.5px] font-bold text-[#FFE500] text-center leading-snug">
+                {tx(
+                  "Toca en la diana el anillo donde cayó tu flecha real en el parapeto (opcional).",
+                  "Tap the ring on the target where your physical arrow landed (optional)."
+                )}
+              </div>
+            )}
+          </div>
         )}
       </section>
 
@@ -1591,8 +1785,8 @@ export default function AnalysisView({
         {shots.length === 0 ? (
           <div className="bg-[#080A0F] border border-white/[0.07] rounded-[14px] px-3 py-4 text-center text-[13.8px] font-normal text-white leading-snug">
             {tx(
-              "Dispara tu primera flecha con el reloj en la muñeca del arco para registrar trazo, tiempos y estabilidad.",
-              "Shoot your first arrow with the watch on your bow wrist to record trace, timing, and stability."
+              "Toca INICIO (o el botón físico del reloj), realiza tu tiro y presiona FINAL para ver tu trazo, tiempos y estabilidad.",
+              "Tap START (or the physical watch button), shoot your arrow, and tap END to view trace, timing, and stability."
             )}
           </div>
         ) : (

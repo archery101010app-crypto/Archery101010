@@ -52,6 +52,16 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     @Published var avgHeartRateBpm: Int = 0
     @Published var maxHeartRateBpm: Int = 0
     @Published var autoDetectEnabled: Bool = false
+    @Published var analysisMode: Bool = false
+    @Published var manualAnalysisRecording: Bool = false
+    @Published var manualAnalysisElapsedSec: Double = 0.0
+    @Published var lastAnalysisStabPct: Int = 0
+    var bowTypeStr: String = "Barebow"
+    var bowWristStr: String = "LEFT"
+    private var manualAnalysisStartMs: Int64 = 0
+    private var manualTimer: Timer?
+    private var lastHandledStartAt: Int64 = 0
+    private var lastHandledStopAt: Int64 = 0
     @Published var sensitivityLevel: Int = 1 // 0: BAJA/LOW, 1: MEDIA/MED, 2: ALTA/HIGH
     @Published var isWalkingPaused: Bool = false
     @Published var isPhoneConnected: Bool = false
@@ -616,6 +626,11 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     }
 
     private func syncShotDetectionMotionSensors() {
+        if analysisMode {
+            stopAcousticSnapEngine()
+            startInertial100HzSensors()
+            return
+        }
         guard autoDetectEnabled else {
             pendingShotActive = false
             isWalkingPaused = false
@@ -634,7 +649,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     }
 
     private func startInertial100HzSensors() {
-        guard autoDetectEnabled else { return }
+        guard autoDetectEnabled || analysisMode else { return }
 
         if motionManager.isGyroAvailable && !motionManager.isGyroActive {
             motionManager.gyroUpdateInterval = 0.01 // 100 Hz
@@ -791,8 +806,8 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                     linG: linearG,
                     gyroRad: activeGyro
                 ))
-                if self.motionBuf.count > 600 {
-                    self.motionBuf.removeFirst(self.motionBuf.count - 600)
+                if self.motionBuf.count > 3000 {
+                    self.motionBuf.removeFirst(self.motionBuf.count - 3000)
                 }
             }
         }
@@ -964,6 +979,14 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
         } else if eventType == "TOGGLE_AUTO_DETECT" {
             cmdFields["enabled"] = ["booleanValue": autoDetectEnabled]
             cmdFields["sensitivityLevel"] = ["integerValue": "\(sensitivityLevel)"]
+        } else if eventType == "ANALYSIS_MANUAL_START" || eventType == "ANALYSIS_MANUAL_STOP" {
+            cmdFields["ts"] = ["integerValue": "\(nowMs)"]
+            cmdFields["source"] = ["stringValue": "watch_manual"]
+        } else if eventType == "ANALYSIS_SHOT", let shotJson = extraValue {
+            cmdFields["analysisShotJson"] = ["stringValue": shotJson]
+            if heartRateBpm >= 30 && heartRateBpm <= 245 {
+                cmdFields["heartRateBpm"] = ["integerValue": "\(heartRateBpm)"]
+            }
         } else if eventType == "SYNC_TELEMETRY_FROM_WATCH" {
             cmdFields["stepsCount"] = ["integerValue": "\(stepsCount)"]
             cmdFields["distanceWalkedM"] = ["integerValue": "\(walkedMetersInt)"]
@@ -1083,6 +1106,9 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                     let hasAutoField = fields["autoDetectEnabled"] != nil
                     let fsAuto = fsBool("autoDetectEnabled", self.autoDetectEnabled)
                     let fsSens = max(0, min(2, fsInt("sensitivityLevel", self.sensitivityLevel)))
+                    let ptStr = ((fields["practiceType"] as? [String: Any])?["stringValue"] as? String) ?? ""
+                    let fsAnalysis = fsBool("analysisMode", ptStr == "Análisis")
+                    let calJson = ((fields["analysisCalibrationJson"] as? [String: Any])?["stringValue"] as? String) ?? ""
 
                     // Detect genuine remote cloud state changes to immediately resume Active Tier
                     let remoteSig = "\(sessionActive ? 1 : 0)|\(incomingSid)|\(fsArrows)|\(fsScore)|\(fsEnd)|\(endArrowsJoined)|\(fsDistM)|\(fsPerEnd)|\(fsEnds)|\(fsAuto ? 1 : 0)|\(fsSens)"
@@ -1124,6 +1150,32 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                     self.distanceM = fsDistM
                     self.arrowsPerEnd = fsPerEnd
                     self.endsCount = fsEnds
+                    if self.analysisMode != fsAnalysis {
+                        self.analysisMode = fsAnalysis
+                        if !fsAnalysis {
+                            self.manualAnalysisRecording = false
+                            self.manualTimer?.invalidate()
+                        }
+                        self.syncShotDetectionMotionSensors()
+                    }
+                    if !calJson.isEmpty,
+                       let calData = calJson.data(using: .utf8),
+                       let calObj = try? JSONSerialization.jsonObject(with: calData) as? [String: Any] {
+                        if let bt = calObj["bowType"] as? String, !bt.isEmpty { self.bowTypeStr = bt }
+                        if let bw = calObj["bowWrist"] as? String, (bw == "LEFT" || bw == "RIGHT") { self.bowWristStr = bw }
+                        let reqStart = (calObj["manualStartAt"] as? Int64) ?? Int64((calObj["manualStartAt"] as? Double) ?? 0)
+                        let reqStop = (calObj["manualStopAt"] as? Int64) ?? Int64((calObj["manualStopAt"] as? Double) ?? 0)
+                        if reqStart > 0 && reqStart != self.lastHandledStartAt && (nowMs - reqStart) <= 25_000 && reqStop < reqStart {
+                            self.lastHandledStartAt = reqStart
+                            self.startManualAnalysis(notifyPhone: false)
+                        }
+                        if reqStop > 0 && reqStop != self.lastHandledStopAt && (nowMs - reqStop) <= 15_000 {
+                            self.lastHandledStopAt = reqStop
+                            if self.manualAnalysisRecording {
+                                self.stopManualAnalysis(notifyPhone: false)
+                            }
+                        }
+                    }
                     let cloudWalk = Double(fsInt("distanceWalkedM", 0))
                     if cloudWalk > self.distanceWalkedM {
                         self.distanceWalkedM = cloudWalk
@@ -1137,6 +1189,155 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                 DispatchQueue.main.async { self.isCloudSynced = false }
             }
         }.resume()
+    }
+
+    func startManualAnalysis(notifyPhone: Bool = true) {
+        guard analysisMode, !manualAnalysisRecording else { return }
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        manualAnalysisRecording = true
+        manualAnalysisStartMs = nowMs
+        manualAnalysisElapsedSec = 0.0
+        screenIndex = 0
+        markUserActivity(isWriteAction: true)
+        WKInterfaceDevice.current().play(.start)
+        manualTimer?.invalidate()
+        manualTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
+            guard let self = self, self.manualAnalysisRecording else { return }
+            let curMs = Int64(Date().timeIntervalSince1970 * 1000)
+            let sec = Double(max(0, curMs - self.manualAnalysisStartMs)) / 1000.0
+            self.manualAnalysisElapsedSec = sec
+            if sec >= 30.0 {
+                self.stopManualAnalysis(notifyPhone: true)
+            }
+        }
+        if notifyPhone {
+            sendCommandToPhone([
+                "type": "ANALYSIS_MANUAL_START",
+                "ts": nowMs,
+                "source": "watch_manual"
+            ])
+        }
+    }
+
+    func stopManualAnalysis(notifyPhone: Bool = true) {
+        guard manualAnalysisRecording else { return }
+        let endMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let startMs = manualAnalysisStartMs
+        manualAnalysisRecording = false
+        manualAnalysisStartMs = 0
+        manualTimer?.invalidate()
+        manualTimer = nil
+        markUserActivity(isWriteAction: true)
+        WKInterfaceDevice.current().play(.stop)
+
+        let windowSamples = motionBuf.filter { $0.t >= startMs && $0.t <= endMs - 40 }
+        guard windowSamples.count >= 6 else {
+            if notifyPhone {
+                sendCommandToPhone(["type": "ANALYSIS_MANUAL_STOP", "ts": endMs, "source": "watch_manual"])
+            }
+            return
+        }
+
+        let refSlice = Array(windowSamples.suffix(min(15, windowSamples.count)))
+        let refAx = refSlice.reduce(0.0) { $0 + $1.ax } / Double(refSlice.count)
+        let refAy = refSlice.reduce(0.0) { $0 + $1.ay } / Double(refSlice.count)
+        let refAz = refSlice.reduce(0.0) { $0 + $1.az } / Double(refSlice.count)
+        let refNorm = max(0.4, sqrt(refAx * refAx + refAy * refAy + refAz * refAz))
+        let wristSign = (bowWristStr == "RIGHT") ? -1.0 : 1.0
+        let faceRadiusCm = (distanceM <= 20) ? 20.0 : ((distanceM <= 26) ? 30.0 : ((distanceM <= 36) ? 40.0 : 61.0))
+        let distCm = max(1000.0, Double(distanceM) * 100.0)
+
+        var sAy = windowSamples[0].ay
+        var sAz = windowSamples[0].az
+        var nxArr: [Double] = []
+        var nyArr: [Double] = []
+        for s in windowSamples {
+            sAy = 0.80 * sAy + 0.20 * s.ay
+            sAz = 0.80 * sAz + 0.20 * s.az
+            let yaw = ((sAy - refAy) / refNorm) * wristSign * 0.28
+            let pitch = ((sAz - refAz) / refNorm) * 0.28
+            let dxCm = tan(yaw) * distCm
+            let dyCm = tan(pitch) * distCm
+            nxArr.append(max(-1.08, min(1.08, dxCm / faceRadiusCm)))
+            nyArr.append(max(-1.08, min(1.08, dyCm / faceRadiusCm)))
+        }
+
+        let n = windowSamples.count
+        let settleIdx = max(1, min(n - 2, (n * 35) / 100))
+        let prepSec = max(0.4, min(10.0, Double(windowSamples[settleIdx].t - windowSamples[0].t) / 1000.0))
+        let aimSec = max(0.5, min(24.0, Double(windowSamples[n - 1].t - windowSamples[settleIdx].t) / 1000.0))
+
+        var sumSq = 0.0
+        let aimCount = max(1, n - settleIdx)
+        for i in settleIdx..<n {
+            let cxCm = nxArr[i] * faceRadiusCm
+            let cyCm = nyArr[i] * faceRadiusCm
+            sumSq += cxCm * cxCm + cyCm * cyCm
+        }
+        let swayCm = max(0.3, min(faceRadiusCm, sqrt(sumSq / Double(aimCount))))
+        let stabPct = max(38, min(99, Int(round(100.0 - (swayCm / faceRadiusCm) * 82.0))))
+        let preIdx = max(0, n - 8)
+        let relJumpCm = max(0.2, hypot(nxArr[n - 1] - nxArr[preIdx], nyArr[n - 1] - nyArr[preIdx]) * faceRadiusCm)
+
+        let pCount = min(8, max(2, settleIdx + 1))
+        var pPts: [[Double]] = []
+        for j in 0..<pCount {
+            let idx = min(n - 1, (j * settleIdx) / max(1, pCount - 1))
+            pPts.append([
+                (nxArr[idx] * 1000.0).rounded() / 1000.0,
+                (nyArr[idx] * 1000.0).rounded() / 1000.0
+            ])
+        }
+        let aCount = min(16, max(2, n - settleIdx))
+        var aPts: [[Double]] = []
+        for j in 0..<aCount {
+            let idx = min(n - 1, settleIdx + (j * (n - 1 - settleIdx)) / max(1, aCount - 1))
+            aPts.append([
+                (nxArr[idx] * 1000.0).rounded() / 1000.0,
+                (nyArr[idx] * 1000.0).rounded() / 1000.0
+            ])
+        }
+
+        arrowCount += 1
+        lastAnalysisStabPct = stabPct
+        var compact: [String: Any] = [
+            "id": "SHOT-\(endMs)-\(arrowCount)",
+            "n": arrowCount,
+            "ts": endMs,
+            "d": distanceM,
+            "bowType": bowTypeStr,
+            "prepSec": (prepSec * 10.0).rounded() / 10.0,
+            "aimSec": (aimSec * 10.0).rounded() / 10.0,
+            "stab": stabPct,
+            "swayCm": (swayCm * 10.0).rounded() / 10.0,
+            "relCm": (relJumpCm * 10.0).rounded() / 10.0,
+            "p": pPts,
+            "a": aPts,
+            "r": aPts.last ?? [0.0, 0.0]
+        ]
+        if heartRateBpm >= 30 && heartRateBpm <= 245 {
+            compact["bpm"] = heartRateBpm
+        }
+        if let jsonData = try? JSONSerialization.data(withJSONObject: compact),
+           let jsonStr = String(data: jsonData, encoding: .utf8) {
+            var cmd: [String: Any] = [
+                "type": "ANALYSIS_SHOT",
+                "analysisShotJson": jsonStr,
+                "value": jsonStr
+            ]
+            if heartRateBpm >= 30 && heartRateBpm <= 245 {
+                cmd["heartRateBpm"] = heartRateBpm
+            }
+            sendCommandToPhone(cmd)
+        }
+    }
+
+    func toggleManualAnalysisFromHardware() {
+        if manualAnalysisRecording {
+            stopManualAnalysis(notifyPhone: true)
+        } else {
+            startManualAnalysis(notifyPhone: true)
+        }
     }
 
     func incrementArrow(delta: Int, source: String = "watch_manual") {
@@ -1221,7 +1422,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
 
     func sendCommandToPhone(_ payload: [String: Any]) {
         if let evtType = payload["type"] as? String {
-            let extra = (payload["value"] as? String) ?? (payload["source"] as? String)
+            let extra = (payload["analysisShotJson"] as? String) ?? (payload["value"] as? String) ?? (payload["source"] as? String)
             syncWithFirestoreCloud(eventType: evtType, extraValue: extra)
         }
         guard WCSession.isSupported() else { return }
@@ -1392,6 +1593,22 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                 self.distanceWalkedM = max(self.distanceWalkedM, Double(walkedInt))
             }
             if let kcal = obj["activeKcal"] as? Int { self.syncedActiveKcal = kcal }
+            let nextAnalysis = (obj["analysisMode"] as? Bool) ?? ((obj["practiceType"] as? String) == "Análisis")
+            if self.analysisMode != nextAnalysis {
+                self.analysisMode = nextAnalysis
+                if !nextAnalysis {
+                    self.manualAnalysisRecording = false
+                    self.manualTimer?.invalidate()
+                }
+                self.syncShotDetectionMotionSensors()
+            }
+            if let cmdType = obj["type"] as? String {
+                if cmdType == "ANALYSIS_MANUAL_START" {
+                    self.startManualAnalysis(notifyPhone: false)
+                } else if cmdType == "ANALYSIS_MANUAL_STOP" {
+                    self.stopManualAnalysis(notifyPhone: false)
+                }
+            }
         }
     }
 }
@@ -1463,6 +1680,79 @@ struct CounterWatchScreen: View {
 
     var body: some View {
         let syncedNow = vm.isPhoneConnected || vm.isCloudSynced
+        if vm.analysisMode {
+            VStack(spacing: 6) {
+                WatchBrandHeaderView(
+                    pillText: vm.manualAnalysisRecording
+                        ? String(format: "%@ · %.1fs", vm.tr("GRABANDO", "REC"), vm.manualAnalysisElapsedSec)
+                        : (vm.arrowCount > 0
+                            ? "\(vm.tr("TIRO", "SHOT")) \(vm.arrowCount) · \(vm.distanceM)M"
+                            : "\(vm.tr("ANÁLISIS · LISTO", "ANALYSIS · READY"))"),
+                    isYellowPill: vm.manualAnalysisRecording,
+                    isMutedPill: false
+                )
+
+                Text(
+                    vm.manualAnalysisRecording
+                        ? String(format: "%@ · %.1f s", vm.tr("EN CURSO", "ACTIVE"), vm.manualAnalysisElapsedSec)
+                        : (vm.lastAnalysisStabPct > 0
+                            ? "\(vm.tr("ESTABILIDAD", "STABILITY")) \(vm.lastAnalysisStabPct)%"
+                            : vm.tr("TOCA INICIO O BOTÓN DE ACCIÓN", "TAP START OR ACTION BTN"))
+                )
+                .font(.system(size: 10.5, weight: .black, design: .rounded).monospacedDigit())
+                .foregroundColor(vm.manualAnalysisRecording ? Color(red: 1, green: 229/255, blue: 0) : .white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .background(Color(red: 11/255, green: 14/255, blue: 21/255))
+                .cornerRadius(9)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9)
+                        .stroke(
+                            vm.manualAnalysisRecording
+                                ? Color(red: 1, green: 229/255, blue: 0).opacity(0.8)
+                                : Color(red: 0, green: 191/255, blue: 1).opacity(0.6),
+                            lineWidth: 1.1
+                        )
+                )
+
+                HStack(spacing: 7) {
+                    Button(action: { vm.startManualAnalysis(notifyPhone: true) }) {
+                        Text(vm.tr("▶ INICIO", "▶ START"))
+                            .font(.system(size: 11, weight: .black, design: .rounded))
+                            .foregroundColor(vm.manualAnalysisRecording ? .white.opacity(0.55) : .black)
+                            .frame(maxWidth: .infinity, minHeight: 37)
+                            .background(
+                                vm.manualAnalysisRecording
+                                    ? Color(red: 9/255, green: 19/255, blue: 30/255)
+                                    : Color(red: 0, green: 191/255, blue: 1)
+                            )
+                            .cornerRadius(11)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(vm.manualAnalysisRecording)
+
+                    Button(action: { vm.stopManualAnalysis(notifyPhone: true) }) {
+                        Text(vm.tr("■ FINAL", "■ END"))
+                            .font(.system(size: 11, weight: .black, design: .rounded))
+                            .foregroundColor(vm.manualAnalysisRecording ? .white : .white.opacity(0.4))
+                            .frame(maxWidth: .infinity, minHeight: 37)
+                            .background(
+                                vm.manualAnalysisRecording
+                                    ? Color(red: 1, green: 30/255, blue: 30/255)
+                                    : Color(red: 17/255, green: 21/255, blue: 30/255)
+                            )
+                            .cornerRadius(11)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!vm.manualAnalysisRecording)
+                }
+            }
+            .padding(.horizontal, 8)
+            .onPlayPauseCommand {
+                vm.toggleManualAnalysisFromHardware()
+            }
+        } else {
         VStack(spacing: 5) {
             WatchBrandHeaderView(
                 pillText: vm.currentStatusPillLabel,
@@ -1544,6 +1834,7 @@ struct CounterWatchScreen: View {
             }
         }
         .padding(.horizontal, 8)
+        }
     }
 }
 

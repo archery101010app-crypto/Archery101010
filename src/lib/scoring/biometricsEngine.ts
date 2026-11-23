@@ -86,6 +86,8 @@ export type WatchCommandMessage =
     }
   | { type: "TOGGLE_AUTO_DETECT"; enabled: boolean; sensitivityLevel?: 0 | 1 | 2 }
   | { type: "ANALYSIS_SHOT"; analysisShotJson: string; heartRateBpm?: number }
+  | { type: "ANALYSIS_MANUAL_START"; ts?: number; source?: string }
+  | { type: "ANALYSIS_MANUAL_STOP"; ts?: number; source?: string }
   | { type: "ANALYSIS_MANUAL_CAPTURE" }
   | { type: "ANALYSIS_CALIBRATE_ZERO" }
   | {
@@ -1269,6 +1271,13 @@ function buildCompactCloudWatchCmd(
     }
     if (typeof cmd.heartRateBpm === "number" && cmd.heartRateBpm >= 30 && cmd.heartRateBpm <= 250) {
       out.heartRateBpm = Math.round(cmd.heartRateBpm);
+    }
+  } else if (cmd.type === "ANALYSIS_MANUAL_START" || cmd.type === "ANALYSIS_MANUAL_STOP") {
+    if (typeof cmd.ts === "number" && cmd.ts > 0) {
+      out.ts = Math.round(cmd.ts);
+    }
+    if (typeof cmd.source === "string") {
+      out.source = cmd.source.slice(0, 32);
     }
   } else if (cmd.type === "ANALYSIS_ZERO_VECTOR") {
     if (Array.isArray(cmd.zeroGravityVec) && cmd.zeroGravityVec.length === 3) {
