@@ -1206,7 +1206,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 className="flex items-center gap-1.5 text-start cursor-pointer group"
                 title={tx("Cambiar tu alias para retos online", "Change your handle for online matches")}
               >
-                <span className="text-[12.8px] tabular-nums font-bold text-cyan-neon truncate max-w-[110px]">
+                <span className="text-[12.8px] tabular-nums font-bold text-cyan-neon break-words leading-tight max-w-[110px]">
                   @{currentAlias}
                 </span>
                 <Edit3 size={10} className="text-white group-hover:text-white transition shrink-0" />
@@ -1296,7 +1296,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           {isEs ? (
             tx("Arena 1 vs 1", "1 vs 1 Arena")
           ) : (
-            <span className="truncate px-1">{tx("Arena 1 vs 1", "1 vs 1 Arena")}</span>
+            <span className="break-words leading-tight px-1">{tx("Arena 1 vs 1", "1 vs 1 Arena")}</span>
           )}
         </button>
         <button
@@ -1309,7 +1309,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
               : "text-white hover:text-white"
           }`}
         >
-          <span className={isEs ? undefined : "truncate"}>{tx("En Curso", "In Progress")}</span>
+          <span className={isEs ? undefined : "break-words leading-tight"}>{tx("En Curso", "In Progress")}</span>
           {drafts.length > 0 && (
             <span
               className={`px-1.5 py-0.5 rounded-full bg-yellow-gold text-black text-[10.5px] font-black leading-none tabular-nums${
@@ -1333,7 +1333,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           {isEs ? (
             tx("Historial", "History")
           ) : (
-            <span className="truncate px-1">{tx("Historial", "History")}</span>
+            <span className="break-words leading-tight px-1">{tx("Historial", "History")}</span>
           )}
         </button>
       </div>
@@ -1393,7 +1393,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                         key={b}
                         type="button"
                         onClick={() => setCustomBow(b)}
-                        className={`h-9 px-1 rounded-xl text-[12.6px] sm:text-[13.2px] tracking-tight font-black uppercase border transition cursor-pointer flex items-center justify-center whitespace-nowrap truncate ${
+                        className={`h-9 px-1 rounded-xl text-[12.6px] sm:text-[13.2px] tracking-tight font-black uppercase border transition cursor-pointer flex items-center justify-center leading-tight break-words ${
                           customBow === b
                             ? "bg-white/[0.12] border-cyan-neon text-white"
                             : "bg-[#080A0F] border-white/[0.06] text-white hover:text-white"
@@ -1480,7 +1480,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                     : "bg-yellow-gold hover:brightness-105 text-black"
                 }`}
               >
-                <span className="truncate">
+                <span className="break-words leading-tight">
                   {duelMode === "FRIEND"
                     ? tx("Crear Sala Online y Enviar Reto", "Create Online Room & Send Challenge")
                     : tx("Iniciar Eliminatoria vs Bot", "Start Match vs Bot")}
@@ -1621,7 +1621,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                               
                               <div className="flex flex-col min-w-0">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-white text-xs font-bold truncate">{riv.fullName}</span>
+                                  <span className="text-white text-xs font-bold break-words leading-tight">{riv.fullName}</span>
                                   {riv.nickname && (
                                     <span className="text-cyan-neon tabular-nums text-[10.5px] font-bold">@{riv.nickname}</span>
                                   )}
@@ -1629,9 +1629,9 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                                     {formatBowLabel(riv.bowConfig.type)}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-1 mt-0.5 truncate text-[11.6px] text-white">
+                                <div className="flex items-center gap-1 mt-0.5 break-words leading-tight text-[11.6px] text-white">
                                   <ClubLogoIcon logo={riv.clubLogo} className="w-3 h-3 shrink-0" />
-                                  <span className="truncate">{riv.clubName}</span>
+                                  <span className="break-words leading-tight">{riv.clubName}</span>
                                   <span>·</span>
                                   <span className="shrink-0 tabular-nums">{riv.bowConfig.defaultDistance}m</span>
                                 </div>
@@ -1687,14 +1687,14 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                           
                           <div className="flex flex-col min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-white text-xs font-bold truncate">{riv.fullName}</span>
+                              <span className="text-white text-xs font-bold break-words leading-tight">{riv.fullName}</span>
                               <span className="text-[9.3px] px-1.5 py-0.5 rounded bg-[#080A0F] border border-white/[0.06] text-white font-bold uppercase shrink-0">
                                 {formatBowLabel(riv.bowConfig.type)}
                               </span>
                             </div>
-                            <div className="flex items-center gap-1 mt-0.5 truncate text-[11.6px] text-white">
+                            <div className="flex items-center gap-1 mt-0.5 break-words leading-tight text-[11.6px] text-white">
                               <ClubLogoIcon logo={riv.clubLogo} className="w-3 h-3 shrink-0 opacity-75" />
-                              <span className="truncate">{riv.clubName}</span>
+                              <span className="break-words leading-tight">{riv.clubName}</span>
                               <span>·</span>
                               <span className="shrink-0 tabular-nums">{riv.bowConfig.defaultDistance}m</span>
                             </div>
@@ -1745,12 +1745,12 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                 >
                   <div className="flex flex-col gap-1 w-[68%]">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-white text-xs font-bold truncate">vs {dr.opponent}</span>
+                      <span className="text-white text-xs font-bold break-words leading-tight">vs {dr.opponent}</span>
                       <span className="text-[9.3px] px-1.5 py-0.5 rounded bg-[#080A0F] border border-white/[0.06] text-cyan-neon font-extrabold uppercase shrink-0">
                         {formatBowLabel(dr.bowConfig?.type)}
                       </span>
                     </div>
-                    <span className="text-[11.6px] text-white truncate tabular-nums">
+                    <span className="text-[11.6px] text-white break-words leading-tight tabular-nums">
                       {dr.opponentClubName} · Set {dr.currentEnd + 1} · {dr.distance} m
                     </span>
                   </div>
@@ -1821,7 +1821,7 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
                   >
                     <div className="flex flex-col gap-1 w-[70%]">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-white text-xs font-bold truncate">vs {h.opponent} ({flag})</span>
+                        <span className="text-white text-xs font-bold break-words leading-tight">vs {h.opponent} ({flag})</span>
                         <span className="text-[9.3px] px-1.5 py-0.5 rounded bg-[#080A0F] border border-white/[0.06] text-yellow-gold font-extrabold uppercase shrink-0">
                           {formatBowLabel(h.bowConfig?.type)}
                         </span>

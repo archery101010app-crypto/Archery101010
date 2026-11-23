@@ -590,7 +590,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
 
               <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
                 <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
-                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " break-words leading-tight" : ""}`}>
                     {t("fullName")} *
                   </label>
                   <input
@@ -603,7 +603,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 </div>
 
                 <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-white truncate">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-white break-words leading-tight">
                     {t("nickname")}
                   </label>
                   <input
@@ -618,7 +618,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
 
               <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
                 <div className="flex flex-col gap-1 min-w-0">
-                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " break-words leading-tight" : ""}`}>
                     {t("birthDate")} *
                   </label>
                   <input
@@ -631,7 +631,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 </div>
 
                 <div className="flex flex-col gap-1 min-w-0">
-                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " break-words leading-tight" : ""}`}>
                     {t("country")} *
                   </label>
                   <select
@@ -650,7 +650,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
 
               <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
                 <div className="flex flex-col gap-1 min-w-0">
-                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " break-words leading-tight" : ""}`}>
                     {t("city")}
                   </label>
                   <input
@@ -663,7 +663,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                 </div>
 
                 <div className="flex flex-col gap-1 min-w-0">
-                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " break-words leading-tight" : ""}`}>
                     {t("gender")} *
                   </label>
                   <select
@@ -705,7 +705,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   <button
                     type="button"
                     onClick={() => setClubMode("NONE")}
-                    className={`py-2 px-1.5 rounded-xl border text-[11px] font-black uppercase tracking-tight truncate transition cursor-pointer ${
+                    className={`py-2 px-1.5 rounded-xl border text-[11px] font-black uppercase tracking-tight break-words leading-tight transition cursor-pointer ${
                       clubMode === "NONE"
                         ? "bg-cyan-neon text-black border-cyan-neon"
                         : "bg-[#0D1017] text-white border-white/10 hover:border-white/25"
@@ -714,13 +714,13 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                     {isEs ? (
                       t("roleAthlete")
                     ) : (
-                      <span className="block truncate max-w-full text-center">{t("roleAthlete")}</span>
+                      <span className="block break-words leading-tight max-w-full text-center">{t("roleAthlete")}</span>
                     )}
                   </button>
                   <button
                     type="button"
                     onClick={() => setClubMode("JOIN")}
-                    className={`py-2 px-1.5 rounded-xl border text-[11px] font-black uppercase tracking-tight truncate transition cursor-pointer ${
+                    className={`py-2 px-1.5 rounded-xl border text-[11px] font-black uppercase tracking-tight break-words leading-tight transition cursor-pointer ${
                       clubMode === "JOIN"
                         ? "bg-cyan-neon text-black border-cyan-neon"
                         : "bg-[#0D1017] text-white border-white/10 hover:border-white/25"
@@ -729,13 +729,13 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                     {isEs ? (
                       t("clubOptB")
                     ) : (
-                      <span className="block truncate max-w-full text-center">{t("clubOptB")}</span>
+                      <span className="block break-words leading-tight max-w-full text-center">{t("clubOptB")}</span>
                     )}
                   </button>
                   <button
                     type="button"
                     onClick={() => setClubMode("CREATE_NEW")}
-                    className={`py-2 px-1.5 rounded-xl border text-[11px] font-black uppercase tracking-tight truncate transition cursor-pointer ${
+                    className={`py-2 px-1.5 rounded-xl border text-[11px] font-black uppercase tracking-tight break-words leading-tight transition cursor-pointer ${
                       clubMode === "CREATE_NEW"
                         ? "bg-cyan-neon text-black border-cyan-neon"
                         : "bg-[#0D1017] text-white border-white/10 hover:border-white/25"
@@ -744,7 +744,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                     {isEs ? (
                       <>{t("roleCoach")} 18+</>
                     ) : (
-                      <span className="block truncate max-w-full text-center">{t("roleCoach")} 18+</span>
+                      <span className="block break-words leading-tight max-w-full text-center">{t("roleCoach")} 18+</span>
                     )}
                   </button>
                 </div>
@@ -798,7 +798,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   <button
                     type="button"
                     onClick={() => handleManualUnitSwitch("metric")}
-                    className={`h-9 px-2 rounded-xl border text-[11.5px] font-black transition cursor-pointer truncate ${
+                    className={`h-9 px-2 rounded-xl border text-[11.5px] font-black transition cursor-pointer break-words leading-tight ${
                       unitSystem === "metric"
                         ? "bg-cyan-neon text-black border-cyan-neon"
                         : "bg-[#080A0F] text-white border-white/10 hover:border-white/25"
@@ -809,7 +809,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   <button
                     type="button"
                     onClick={() => handleManualUnitSwitch("imperial")}
-                    className={`h-9 px-2 rounded-xl border text-[11.5px] font-black transition cursor-pointer truncate ${
+                    className={`h-9 px-2 rounded-xl border text-[11.5px] font-black transition cursor-pointer break-words leading-tight ${
                       unitSystem === "imperial"
                         ? "bg-cyan-neon text-black border-cyan-neon"
                         : "bg-[#080A0F] text-white border-white/10 hover:border-white/25"
@@ -839,7 +839,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                         key={bType}
                         type="button"
                         onClick={() => handleBowTypeChange(bType)}
-                        className={`h-9 px-1.5 rounded-xl border text-[11.5px] font-black uppercase tracking-tight truncate transition cursor-pointer ${
+                        className={`h-9 px-1.5 rounded-xl border text-[11.5px] font-black uppercase tracking-tight break-words leading-tight transition cursor-pointer ${
                           selected
                             ? "bg-cyan-neon text-black border-cyan-neon"
                             : "bg-[#0D1017] text-white border-white/10 hover:border-white/25"
@@ -848,7 +848,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                         {isEs ? (
                           label
                         ) : (
-                          <span className="block truncate max-w-full text-center">{label}</span>
+                          <span className="block break-words leading-tight max-w-full text-center">{label}</span>
                         )}
                       </button>
                     );
@@ -859,7 +859,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
               {/* Brand & Model */}
               <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
                 <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
-                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " break-words leading-tight" : ""}`}>
                     {t("bowBrand")}
                   </label>
                   <input
@@ -871,7 +871,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   />
                 </div>
                 <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
-                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " break-words leading-tight" : ""}`}>
                     {t("bowModel")}
                   </label>
                   <input
@@ -887,7 +887,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
               {/* Poundage & Draw Length (Decimal comma friendly) */}
               <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
                 <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
-                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " break-words leading-tight" : ""}`}>
                     {t("poundage")}
                   </label>
                   <input
@@ -900,7 +900,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                   />
                 </div>
                 <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
-                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
+                  <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " break-words leading-tight" : ""}`}>
                     {tx("Apertura (in)", "Draw length (in)")}
                   </label>
                   <input
@@ -944,7 +944,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
               {unitSystem === "imperial" ? (
                 <div className="grid grid-cols-3 gap-2">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10.5px] font-bold uppercase tracking-wider text-white truncate">
+                    <label className="text-[10.5px] font-bold uppercase tracking-wider text-white break-words leading-tight">
                       {t("heightImperialFeet")}
                     </label>
                     <input
@@ -957,7 +957,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10.5px] font-bold uppercase tracking-wider text-white truncate">
+                    <label className="text-[10.5px] font-bold uppercase tracking-wider text-white break-words leading-tight">
                       {t("heightImperialInches")}
                     </label>
                     <input
@@ -970,7 +970,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10.5px] font-bold uppercase tracking-wider text-white truncate">
+                    <label className="text-[10.5px] font-bold uppercase tracking-wider text-white break-words leading-tight">
                       {t("weightImperialLbs")}
                     </label>
                     <input
@@ -986,7 +986,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
               ) : (
                 <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
                   <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
-                    <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
+                    <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " break-words leading-tight" : ""}`}>
                       {t("height")}
                     </label>
                     <input
@@ -999,7 +999,7 @@ export default function RegisterView({ onRegisterSuccess, onNavigateToLogin }: R
                     />
                   </div>
                   <div className={`flex flex-col gap-1${!isEs ? " min-w-0" : ""}`}>
-                    <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " truncate" : ""}`}>
+                    <label className={`text-[11px] font-bold uppercase tracking-wider text-white${!isEs ? " break-words leading-tight" : ""}`}>
                       {t("weight")}
                     </label>
                     <input

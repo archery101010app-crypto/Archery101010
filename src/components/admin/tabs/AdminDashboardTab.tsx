@@ -537,7 +537,7 @@ export default function AdminDashboardTab() {
                   const pct = Math.round((count / totalUsersCount) * 100);
                   return (
                     <div key={code} className="flex items-center justify-between">
-                      <span className="text-white font-medium truncate">
+                      <span className="text-white font-medium break-words leading-tight">
                         {cInfo.flag} {cInfo.name}
                       </span>
                       <span className="text-white font-bold tabular-nums">
@@ -557,7 +557,7 @@ export default function AdminDashboardTab() {
               ) : (
                 topCities.slice(0, 3).map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between">
-                    <span className="text-white font-medium truncate">
+                    <span className="text-white font-medium break-words leading-tight">
                       {item.city} ({item.countryCode})
                     </span>
                     <span className="text-yellow-gold font-bold tabular-nums">{item.count}</span>
@@ -602,7 +602,7 @@ export default function AdminDashboardTab() {
               ) : (
                 topBrands.slice(0, 3).map(([brand, count]) => (
                   <div key={brand} className="flex items-center justify-between">
-                    <span className="text-white font-medium truncate">{brand}</span>
+                    <span className="text-white font-medium break-words leading-tight">{brand}</span>
                     <span className="text-white font-bold tabular-nums">{count} arq.</span>
                   </div>
                 ))
@@ -653,7 +653,7 @@ export default function AdminDashboardTab() {
                       <p className="text-xs text-white leading-relaxed font-medium">
                         <span className="font-bold text-white">{act.user}</span> {act.action}
                       </p>
-                      <span className="text-[11.6px] text-cyan-neon font-bold mt-0.5 truncate">{act.detail}</span>
+                      <span className="text-[11.6px] text-cyan-neon font-bold mt-0.5 break-words leading-tight">{act.detail}</span>
                     </div>
 
                     <div className="text-[10.5px] text-white font-semibold self-start whitespace-nowrap pt-1">

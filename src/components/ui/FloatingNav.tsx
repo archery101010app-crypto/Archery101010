@@ -114,7 +114,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
                     : isEs
                     ? "text-[10px] sm:text-[11.5px]"
                     : "text-[9.4px] min-[385px]:text-[10px] sm:text-[11.5px]"
-                } font-bold tracking-[-0.02em] leading-tight mt-1 transition-colors duration-200 relative z-10 text-center truncate max-w-full ${
+                } font-bold tracking-[-0.02em] leading-tight mt-1 transition-colors duration-200 relative z-10 text-center break-words leading-tight max-w-full ${
                   isActive ? "text-white font-black" : "text-white group-hover:text-white"
                 }`}
               >

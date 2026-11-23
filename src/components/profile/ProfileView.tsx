@@ -961,7 +961,7 @@ export default function ProfileView({
       return (
         <div className="grid grid-cols-3 gap-2.5">
           <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] text-white uppercase font-black tracking-wider truncate">
+            <label className="text-[12px] text-white uppercase font-black tracking-wider break-words leading-tight">
               {t("heightImperialFeet")}
             </label>
             <input
@@ -974,7 +974,7 @@ export default function ProfileView({
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] text-white uppercase font-black tracking-wider truncate">
+            <label className="text-[12px] text-white uppercase font-black tracking-wider break-words leading-tight">
               {t("heightImperialInches")}
             </label>
             <input
@@ -987,7 +987,7 @@ export default function ProfileView({
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-[12px] text-white uppercase font-black tracking-wider truncate">
+            <label className="text-[12px] text-white uppercase font-black tracking-wider break-words leading-tight">
               {t("weightImperialLbs")}
             </label>
             <input
@@ -1006,7 +1006,7 @@ export default function ProfileView({
     return (
       <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
         <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
-          <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
+          <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " break-words leading-tight" : ""}`}>
             {t("height")}
           </label>
           <input
@@ -1019,7 +1019,7 @@ export default function ProfileView({
           />
         </div>
         <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
-          <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
+          <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " break-words leading-tight" : ""}`}>
             {t("weight")}
           </label>
           <input
@@ -1048,7 +1048,7 @@ export default function ProfileView({
           <ArrowLeft size={16} aria-hidden="true" className="rtl:rotate-180" />
         </button>
         <div className="min-w-0">
-          <h2 className="text-white text-[20.2px] sm:text-[22.8px] font-black uppercase tracking-wide truncate leading-tight">
+          <h2 className="text-white text-[20.2px] sm:text-[22.8px] font-black uppercase tracking-wide break-words leading-tight">
             {t("settingsTitle")}
           </h2>
         </div>
@@ -1061,7 +1061,7 @@ export default function ProfileView({
         </div>
         <div className="flex flex-col min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-white font-extrabold text-[18.4px] truncate">{user.fullName}</span>
+            <span className="text-white font-extrabold text-[18.4px] break-words leading-tight">{user.fullName}</span>
             <span
               className={`text-[12.1px] font-black px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap shrink-0 ${
                 user.plan === "PRO"
@@ -1072,7 +1072,7 @@ export default function ProfileView({
               {user.plan}
             </span>
           </div>
-          <span className="text-[13.3px] text-white mt-0.5 truncate">{user.email}</span>
+          <span className="text-[13.3px] text-white mt-0.5 break-words leading-tight">{user.email}</span>
 
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             <span className="text-[12.1px] bg-cyan-neon/10 border border-cyan-neon/25 text-cyan-neon font-black px-2.5 py-0.5 rounded-full uppercase whitespace-nowrap">
@@ -1089,7 +1089,7 @@ export default function ProfileView({
                 : user.role}
             </span>
             {user.nickname && (
-              <span className="text-[12.1px] text-white font-bold tabular-nums truncate">
+              <span className="text-[12.1px] text-white font-bold tabular-nums break-words leading-tight">
                 @{user.nickname}
               </span>
             )}
@@ -1119,7 +1119,7 @@ export default function ProfileView({
           <div className="flex flex-col gap-3 mt-1">
             <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
               <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
-                <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
+                <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " break-words leading-tight" : ""}`}>
                   {t("fullName")}
                 </label>
                 <input
@@ -1132,7 +1132,7 @@ export default function ProfileView({
                 />
               </div>
               <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
-                <label className="text-[13.3px] text-white uppercase font-black tracking-widest truncate">
+                <label className="text-[13.3px] text-white uppercase font-black tracking-widest break-words leading-tight">
                   {t("nickname")}
                 </label>
                 <input
@@ -1147,7 +1147,7 @@ export default function ProfileView({
             </div>
             <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
               <div className="flex flex-col gap-1.5 min-w-0">
-                <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
+                <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " break-words leading-tight" : ""}`}>
                   {t("birthDate")}
                 </label>
                 <input
@@ -1158,7 +1158,7 @@ export default function ProfileView({
                 />
               </div>
               <div className="flex flex-col gap-1.5 min-w-0">
-                <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
+                <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " break-words leading-tight" : ""}`}>
                   {t("city")}
                 </label>
                 <input
@@ -1173,7 +1173,7 @@ export default function ProfileView({
             </div>
             <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
               <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
-                <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
+                <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " break-words leading-tight" : ""}`}>
                   {t("country")}
                 </label>
                 <select
@@ -1189,7 +1189,7 @@ export default function ProfileView({
                 </select>
               </div>
               <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
-                <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
+                <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " break-words leading-tight" : ""}`}>
                   {t("gender")}
                 </label>
                 <select
@@ -1215,7 +1215,7 @@ export default function ProfileView({
 
             <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
               <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
-                <label className="text-[12.5px] text-white uppercase font-black tracking-wider truncate">
+                <label className="text-[12.5px] text-white uppercase font-black tracking-wider break-words leading-tight">
                   {t("phoneMessagingLabel")}
                 </label>
                 <input
@@ -1229,7 +1229,7 @@ export default function ProfileView({
                 />
               </div>
               <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
-                <label className="text-[12.5px] text-white uppercase font-black tracking-wider truncate">
+                <label className="text-[12.5px] text-white uppercase font-black tracking-wider break-words leading-tight">
                   {tx("Club (Opcional)", "Club (Optional)")}
                 </label>
                 <input
@@ -1246,27 +1246,27 @@ export default function ProfileView({
         ) : (
           <div className="flex flex-col gap-2 mt-1">
             <div className={`flex justify-between items-center py-1.5 border-b border-gray-border/20${!isEs ? " gap-2 min-w-0" : ""}`}>
-              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] truncate" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] break-words leading-tight" : ""}`}>
                 {t("fullName")}:
               </span>
-              <span className={`text-white text-[13.8px] font-bold${!isEs ? " min-w-0 truncate text-end" : ""}`}>{user.fullName}</span>
+              <span className={`text-white text-[13.8px] font-bold${!isEs ? " min-w-0 break-words leading-tight text-end" : ""}`}>{user.fullName}</span>
             </div>
             <div className={`flex justify-between items-center py-1.5 border-b border-gray-border/20${!isEs ? " gap-2 min-w-0" : ""}`}>
-              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] truncate" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] break-words leading-tight" : ""}`}>
                 {tx("Alias para Retos:", "Match Alias:")}
               </span>
-              <span className={`text-cyan-neon text-[13.8px] tabular-nums font-bold${!isEs ? " min-w-0 truncate text-end" : ""}`}>
+              <span className={`text-cyan-neon text-[13.8px] tabular-nums font-bold${!isEs ? " min-w-0 break-words leading-tight text-end" : ""}`}>
                 @{user.nickname || "arquero"}
               </span>
             </div>
             <div className={`flex justify-between items-center py-1.5 border-b border-gray-border/20${!isEs ? " gap-2 min-w-0" : ""}`}>
-              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] truncate" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] break-words leading-tight" : ""}`}>
                 {tx("Club (Opcional):", "Club (Optional):")}
               </span>
-              <span className={`text-white text-[13.8px] font-bold${!isEs ? " min-w-0 truncate text-end" : ""}`}>{clubName.trim() || "—"}</span>
+              <span className={`text-white text-[13.8px] font-bold${!isEs ? " min-w-0 break-words leading-tight text-end" : ""}`}>{clubName.trim() || "—"}</span>
             </div>
             <div className={`flex justify-between items-center py-1.5 border-b border-gray-border/20${!isEs ? " gap-2 min-w-0" : ""}`}>
-              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " min-w-0 truncate" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " min-w-0 break-words leading-tight" : ""}`}>
                 {t("birthDate")}:
               </span>
               <span className={`text-white text-[13.8px] tabular-nums font-bold${!isEs ? " shrink-0 text-end" : ""}`}>
@@ -1274,26 +1274,26 @@ export default function ProfileView({
               </span>
             </div>
             <div className={`flex justify-between items-center py-1.5 border-b border-gray-border/20${!isEs ? " gap-2 min-w-0" : ""}`}>
-              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] truncate" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] break-words leading-tight" : ""}`}>
                 {t("city")}:
               </span>
-              <span className={`text-white text-[13.8px] font-bold${!isEs ? " min-w-0 truncate text-end" : ""}`}>{user.city || "—"}</span>
+              <span className={`text-white text-[13.8px] font-bold${!isEs ? " min-w-0 break-words leading-tight text-end" : ""}`}>{user.city || "—"}</span>
             </div>
             <div className={`flex justify-between items-center py-1.5 border-b border-gray-border/20${!isEs ? " gap-2 min-w-0" : ""}`}>
-              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] truncate" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] break-words leading-tight" : ""}`}>
                 {t("country")}:
               </span>
-              <span className={`text-white text-[13.8px] font-bold${!isEs ? " min-w-0 truncate text-end" : ""}`}>
+              <span className={`text-white text-[13.8px] font-bold${!isEs ? " min-w-0 break-words leading-tight text-end" : ""}`}>
                 {COUNTRIES_MAP[user.country]?.flag ||
                   COUNTRIES.find((c) => c.code === user.country)?.flag}{" "}
                 {getLocalizedCountryName(user.country, language)}
               </span>
             </div>
             <div className={`flex justify-between items-center py-1.5 border-b border-gray-border/20${!isEs ? " gap-2 min-w-0" : ""}`}>
-              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] truncate" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " shrink-0 max-w-[55%] break-words leading-tight" : ""}`}>
                 {t("gender")}:
               </span>
-              <span className={`text-white text-[13.8px] font-bold${!isEs ? " min-w-0 truncate text-end" : ""}`}>
+              <span className={`text-white text-[13.8px] font-bold${!isEs ? " min-w-0 break-words leading-tight text-end" : ""}`}>
                 {user.gender === "M"
                   ? t("genderM")
                   : user.gender === "F"
@@ -1302,7 +1302,7 @@ export default function ProfileView({
               </span>
             </div>
             <div className={`flex justify-between items-center py-1.5 border-b border-gray-border/20${!isEs ? " gap-2 min-w-0" : ""}`}>
-              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " min-w-0 truncate" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " min-w-0 break-words leading-tight" : ""}`}>
                 {unitSystem === "imperial"
                   ? tx("Estatura (ft/in):", "Height (ft/in):")
                   : `${t("height")}:`}
@@ -1312,7 +1312,7 @@ export default function ProfileView({
               </span>
             </div>
             <div className={`flex justify-between items-center py-1.5${!isEs ? " gap-2 min-w-0" : ""}`}>
-              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " min-w-0 truncate" : ""}`}>
+              <span className={`text-[12.1px] text-white uppercase font-black tracking-widest${!isEs ? " min-w-0 break-words leading-tight" : ""}`}>
                 {unitSystem === "imperial" ? `${t("weightImperialLbs")}:` : `${t("weight")}:`}
               </span>
               <span dir={!isEs ? "ltr" : undefined} className={`text-white text-[13.8px] tabular-nums font-bold${!isEs ? " shrink-0 text-end" : ""}`}>
@@ -1394,7 +1394,7 @@ export default function ProfileView({
                             key={typeOption}
                             type="button"
                             onClick={() => handleUpdateBow(idx, { type: typeOption })}
-                            className={`h-10 px-1 flex items-center justify-center rounded-xl text-[12.6px] sm:text-[15px] font-black uppercase tracking-tighter sm:tracking-tight whitespace-nowrap truncate transition border cursor-pointer ${
+                            className={`h-10 px-1 flex items-center justify-center rounded-xl text-[12.6px] sm:text-[15px] font-black uppercase tracking-tighter sm:tracking-tight leading-tight break-words transition border cursor-pointer ${
                               isSelected
                                 ? "bg-cyan-neon text-black border-cyan-neon"
                                 : "bg-neutral-900 text-white border-white/5 hover:border-white/15 hover:text-white"
@@ -1403,7 +1403,7 @@ export default function ProfileView({
                             {isEs ? (
                               label
                             ) : (
-                              <span className="block truncate max-w-full text-center">{label}</span>
+                              <span className="block break-words leading-tight max-w-full text-center">{label}</span>
                             )}
                           </button>
                         );
@@ -1414,7 +1414,7 @@ export default function ProfileView({
                   {/* Fila: Marca y Modelo */}
                   <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
                     <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
-                      <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
+                      <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " break-words leading-tight" : ""}`}>
                         {t("bowBrand")}
                       </label>
                       <input
@@ -1426,7 +1426,7 @@ export default function ProfileView({
                       />
                     </div>
                     <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
-                      <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
+                      <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " break-words leading-tight" : ""}`}>
                         {t("bowModel")}
                       </label>
                       <input
@@ -1442,7 +1442,7 @@ export default function ProfileView({
                   {/* Fila: Potencia y Apertura (Decimal comma friendly) */}
                   <div className={`grid grid-cols-2 gap-2.5${!isEs ? " items-end" : ""}`}>
                     <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
-                      <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
+                      <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " break-words leading-tight" : ""}`}>
                         {t("poundage")}
                       </label>
                       <div dir="ltr" className="relative flex items-center">
@@ -1461,7 +1461,7 @@ export default function ProfileView({
                       </div>
                     </div>
                     <div className={`flex flex-col gap-1.5${!isEs ? " min-w-0" : ""}`}>
-                      <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " truncate" : ""}`}>
+                      <label className={`text-[13.3px] text-white uppercase font-black tracking-widest${!isEs ? " break-words leading-tight" : ""}`}>
                         {tx("Apertura", "Draw Length")}
                       </label>
                       <div dir="ltr" className="relative flex items-center">
@@ -1495,7 +1495,7 @@ export default function ProfileView({
                         className={`h-11 flex items-center justify-center rounded-xl ${
                           isEs
                             ? "text-[13.8px] font-black uppercase tracking-wider whitespace-nowrap"
-                            : "px-2 text-[11.8px] min-[390px]:text-[12.6px] sm:text-[13.8px] font-black uppercase whitespace-nowrap truncate min-w-0"
+                            : "px-2 text-[11.8px] min-[390px]:text-[12.6px] sm:text-[13.8px] font-black uppercase leading-tight break-words min-w-0"
                         } transition border cursor-pointer ${
                           (bow.hand || "RH") === "RH"
                             ? "bg-cyan-neon text-black border-cyan-neon"
@@ -1505,7 +1505,7 @@ export default function ProfileView({
                         {isEs ? (
                           tx("Diestro (RH)", "Right-Handed (RH)")
                         ) : (
-                          <span className="block truncate max-w-full text-center">
+                          <span className="block break-words leading-tight max-w-full text-center">
                             {tx("Diestro (RH)", "Right-Handed (RH)")}
                           </span>
                         )}
@@ -1516,7 +1516,7 @@ export default function ProfileView({
                         className={`h-11 flex items-center justify-center rounded-xl ${
                           isEs
                             ? "text-[13.8px] font-black uppercase tracking-wider whitespace-nowrap"
-                            : "px-2 text-[11.8px] min-[390px]:text-[12.6px] sm:text-[13.8px] font-black uppercase whitespace-nowrap truncate min-w-0"
+                            : "px-2 text-[11.8px] min-[390px]:text-[12.6px] sm:text-[13.8px] font-black uppercase leading-tight break-words min-w-0"
                         } transition border cursor-pointer ${
                           bow.hand === "LH"
                             ? "bg-cyan-neon text-black border-cyan-neon"
@@ -1526,7 +1526,7 @@ export default function ProfileView({
                         {isEs ? (
                           tx("Zurdo (LH)", "Left-Handed (LH)")
                         ) : (
-                          <span className="block truncate max-w-full text-center">
+                          <span className="block break-words leading-tight max-w-full text-center">
                             {tx("Zurdo (LH)", "Left-Handed (LH)")}
                           </span>
                         )}
@@ -1604,7 +1604,7 @@ export default function ProfileView({
                       <span className="text-[12.1px] text-white uppercase font-black tracking-widest">
                         {t("bowBrand")}
                       </span>
-                      <span className="text-white text-[13.8px] font-bold truncate">
+                      <span className="text-white text-[13.8px] font-bold break-words leading-tight">
                         {bow.brand || tx("Sin especificar", "Unspecified")}
                       </span>
                     </div>
@@ -1612,7 +1612,7 @@ export default function ProfileView({
                       <span className="text-[12.1px] text-white uppercase font-black tracking-widest">
                         {t("bowModel")}
                       </span>
-                      <span className="text-white text-[13.8px] font-bold truncate">
+                      <span className="text-white text-[13.8px] font-bold break-words leading-tight">
                         {bow.model || tx("Sin especificar", "Unspecified")}
                       </span>
                     </div>
@@ -1629,7 +1629,7 @@ export default function ProfileView({
                       <span className="text-[12.1px] text-white uppercase font-black tracking-widest">
                         {tx("Orientación", "Handedness")}
                       </span>
-                      <span className="text-cyan-neon text-[13.8px] font-black uppercase truncate">
+                      <span className="text-cyan-neon text-[13.8px] font-black uppercase break-words leading-tight">
                         {(bow.hand || "RH") === "RH"
                           ? tx("Diestro (RH)", "Right (RH)")
                           : tx("Zurdo (LH)", "Left (LH)")}
@@ -1746,10 +1746,10 @@ export default function ProfileView({
                 )}
               </div>
               <div className="flex items-center justify-between gap-2 min-w-0 text-[13.8px]">
-                <span className="text-white font-bold truncate min-w-0">
+                <span className="text-white font-bold break-words leading-tight min-w-0">
                   {coachProfile?.fullName || user.coachName || tx("Entrenador Asignado", "Assigned Coach")}
                 </span>
-                <span className="text-[13.3px] text-white truncate min-w-0">
+                <span className="text-[13.3px] text-white break-words leading-tight min-w-0">
                   {coachProfile?.email || user.coachEmail || tx("En línea", "Online")}
                 </span>
               </div>
@@ -1812,7 +1812,7 @@ export default function ProfileView({
       {isCoachProfile && (
         <div className="bg-[#0D1017] border border-white/[0.08] rounded-3xl p-4 flex flex-col gap-3">
           <div className="flex justify-between items-center gap-2 min-w-0">
-            <h4 className="text-white text-[13.8px] font-black uppercase tracking-wider truncate">
+            <h4 className="text-white text-[13.8px] font-black uppercase tracking-wider break-words leading-tight">
               {tx("Configuración de Coach", "Coach Settings")}
             </h4>
             {user.role !== "superadmin" && (
@@ -1856,7 +1856,7 @@ export default function ProfileView({
                   dir={!isEs ? "ltr" : undefined}
                   className={`flex-1 ${
                     !isEs ? "shrink-0 min-w-[96px] " : "min-w-0 "
-                  }text-[16.1px] tabular-nums font-black text-cyan-neon tracking-widest bg-neutral-950 p-2.5 rounded-xl border border-white/5 text-center select-all truncate`}
+                  }text-[16.1px] tabular-nums font-black text-cyan-neon tracking-widest bg-neutral-950 p-2.5 rounded-xl border border-white/5 text-center select-all break-words leading-tight`}
                 >
                   {user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode)
                     ? user.clubInviteCode
@@ -1872,7 +1872,7 @@ export default function ProfileView({
                     title={t("share")}
                   >
                     <Share2 size={14} aria-hidden="true" className="shrink-0" />
-                    <span className={!isEs ? "truncate max-w-[115px]" : undefined}>{t("share")}</span>
+                    <span className={!isEs ? "break-words leading-tight max-w-[115px]" : undefined}>{t("share")}</span>
                   </button>
                 )}
                 <button
@@ -1949,7 +1949,7 @@ export default function ProfileView({
             {/* Linked students roster directly in Coach Profile */}
             <div className="flex flex-col gap-2 pt-2 border-t border-white/[0.06]">
               <div className="flex items-center justify-between gap-2 min-w-0">
-                <span className="text-[12.1px] text-white font-bold uppercase tracking-wider tabular-nums truncate">
+                <span className="text-[12.1px] text-white font-bold uppercase tracking-wider tabular-nums break-words leading-tight">
                   {tx(
                     `Mis Alumnos Vinculados (${coachStudents.length})`,
                     `My Linked Athletes (${coachStudents.length})`
@@ -1988,10 +1988,10 @@ export default function ProfileView({
                           {(student.fullName || "A").charAt(0).toUpperCase()}
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <span className="text-[13.8px] font-bold text-white truncate">
+                          <span className="text-[13.8px] font-bold text-white break-words leading-tight">
                             {student.fullName || tx("Arquero", "Archer")}
                           </span>
-                          <span className="text-[11.5px] text-white truncate">
+                          <span className="text-[11.5px] text-white break-words leading-tight">
                             {student.email}
                             {student.clubName ? ` • ${student.clubName}` : ""}
                           </span>
@@ -2040,7 +2040,7 @@ export default function ProfileView({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <Ruler size={17} className="text-cyan-neon shrink-0" />
-            <h4 className="text-white text-[13.8px] font-black uppercase tracking-wider truncate">
+            <h4 className="text-white text-[13.8px] font-black uppercase tracking-wider break-words leading-tight">
               {t("unitSystemLabel")}
             </h4>
           </div>
@@ -2059,7 +2059,7 @@ export default function ProfileView({
                 : "bg-[#090B0F] border-white/[0.06] text-white hover:border-white/20"
             }`}
           >
-            <span className="truncate">{t("unitMetric")}</span>
+            <span className="break-words leading-tight">{t("unitMetric")}</span>
             {unitSystem === "metric" && <Check size={15} className="text-cyan-neon shrink-0" />}
           </button>
 
@@ -2072,7 +2072,7 @@ export default function ProfileView({
                 : "bg-[#090B0F] border-white/[0.06] text-white hover:border-white/20"
             }`}
           >
-            <span className="truncate">{t("unitImperial")}</span>
+            <span className="break-words leading-tight">{t("unitImperial")}</span>
             {unitSystem === "imperial" && <Check size={15} className="text-cyan-neon shrink-0" />}
           </button>
         </div>

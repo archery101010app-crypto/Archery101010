@@ -26,6 +26,9 @@ description: >-
 
 - **PROHIBICIÓN ESTRICTA DE MARCAS REGISTRADAS DE TERCEROS:**
   - **JAMÁS** incluir nombres de marcas registradas externas (`Strava`, `WHOOP`, `Nike`, `Garmin`, `Apple Watch`, `Instagram`, `Facebook`, etc.) en pósters, carruseles, publicaciones de marketing, capturas promocionales ni textos visibles de la app. Usar únicamente **`ARCHERY 101010`** / **`THE APP`** y descriptores genéricos (*"Redes Sociales"*, *"Reloj Inteligente"*, *"Smartwatch Deportivo"*).
+- **PROHIBICIÓN ABSOLUTA DE PALABRAS CORTADAS O OCULTAS CON `...`:**
+  - **NUNCA** usar `truncate`, `text-ellipsis` ni `line-clamp` en textos visibles de la app. Ninguna palabra puede cortarse ni ocultarse con `...`.
+  - Todo texto dentro de cuadros, badges o botones debe quedar **100% dentro, completo y centrado** (`leading-tight`, ajuste tipográfico o 2 líneas limpias centradas).
 
 ## 2. Flujo de Muestra Previa 4K Retina (Sin Instalar sin Autorización)
 1. Generar la maqueta HTML/CSS y renderizar la captura con Microsoft Edge Headless a `--force-device-scale-factor=4` (calidad 4K Retina).

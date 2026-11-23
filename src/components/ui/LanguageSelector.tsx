@@ -59,9 +59,9 @@ export default function LanguageSelector({ variant = "pill" }: LanguageSelectorP
                     : "bg-[#090B0F] border-white/[0.06] text-white hover:border-white/20"
                 }`}
               >
-                <span className="flex items-center gap-2 truncate">
+                <span className="flex items-center gap-2 break-words leading-tight">
                   <span>{lang.flag}</span>
-                  <span className="truncate">{lang.nativeName}</span>
+                  <span className="break-words leading-tight">{lang.nativeName}</span>
                 </span>
                 {isSelected && <Check size={15} className="text-cyan-neon shrink-0" />}
               </button>
@@ -139,9 +139,9 @@ export default function LanguageSelector({ variant = "pill" }: LanguageSelectorP
                           : "bg-[#0E1117] border-white/[0.06] text-white hover:border-white/20"
                       }`}
                     >
-                      <span className="flex items-center gap-2 truncate">
+                      <span className="flex items-center gap-2 break-words leading-tight">
                         <span>{lang.flag}</span>
-                        <span className="truncate">{lang.nativeName}</span>
+                        <span className="break-words leading-tight">{lang.nativeName}</span>
                       </span>
                       {isSelected && <Check size={14} className="text-cyan-neon shrink-0" />}
                     </button>

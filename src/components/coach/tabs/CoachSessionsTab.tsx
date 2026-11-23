@@ -246,8 +246,8 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                     {idx + 1}
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
-                    <span className="text-white text-xs font-bold truncate">{rank.userName}</span>
-                    <span className="text-[9.3px] text-white uppercase truncate">{rank.format}</span>
+                    <span className="text-white text-xs font-bold break-words leading-tight">{rank.userName}</span>
+                    <span className="text-[9.3px] text-white uppercase break-words leading-tight">{rank.format}</span>
                   </div>
                 </div>
 
@@ -296,7 +296,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             <select
               value={selectedAthleteUid}
               onChange={(e) => setSelectedAthleteUid(e.target.value)}
-              className="bg-neutral-950 border border-white/10 rounded-xl px-2.5 py-1.5 text-white text-xs outline-none flex-1 min-w-0 truncate cursor-pointer"
+              className="bg-neutral-950 border border-white/10 rounded-xl px-2.5 py-1.5 text-white text-xs outline-none flex-1 min-w-0 break-words leading-tight cursor-pointer"
             >
               <option value="ALL">
                 {tx(`Todos los Alumnos (${athletes.length})`, `All Athletes (${athletes.length})`)}
@@ -313,7 +313,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
           <div className="grid grid-cols-3 sm:flex gap-1.5 shrink-0">
             <button
               onClick={() => setSubMode("SCORES")}
-              className={`px-2.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-center transition-all cursor-pointer truncate ${
+              className={`px-2.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-center transition-all cursor-pointer break-words leading-tight ${
                 subMode === "SCORES"
                   ? "bg-cyan-neon text-black font-extrabold"
                   : "bg-neutral-950 border border-white/5 text-white hover:text-white"
@@ -323,7 +323,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             </button>
             <button
               onClick={() => setSubMode("VOLUME")}
-              className={`px-2.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-center transition-all cursor-pointer truncate ${
+              className={`px-2.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-center transition-all cursor-pointer break-words leading-tight ${
                 subMode === "VOLUME"
                   ? "bg-cyan-neon text-black font-extrabold"
                   : "bg-neutral-950 border border-white/5 text-white hover:text-white"
@@ -333,7 +333,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
             </button>
             <button
               onClick={() => setSubMode("ANALYSIS")}
-              className={`px-2.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-center transition-all cursor-pointer truncate ${
+              className={`px-2.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider text-center transition-all cursor-pointer break-words leading-tight ${
                 subMode === "ANALYSIS"
                   ? "bg-cyan-neon text-black font-extrabold"
                   : "bg-neutral-950 border border-white/5 text-white hover:text-white"
@@ -412,7 +412,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-white text-xs font-bold leading-tight truncate">
+                      <span className="text-white text-xs font-bold leading-tight break-words">
                         {sess.userName || t("roleAthlete")}
                       </span>
                       {sess.isDraft && (
@@ -421,7 +421,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                         </span>
                       )}
                     </div>
-                    <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
+                    <span className="text-[10.5px] text-white mt-0.5 break-words leading-tight tabular-nums">
                       {dateStr} · {formatPracticeType(sess.practiceType, t("navSession"))} · {sess.distance || 18}m ·{" "}
                       {getSessionActiveKcal(sess, sessAthlete)} kcal ·{" "}
                       {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
@@ -487,7 +487,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
 
                     <div className="flex flex-col min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-white text-xs font-bold leading-tight truncate">
+                        <span className="text-white text-xs font-bold leading-tight break-words">
                           {sess.userName || t("roleAthlete")}
                         </span>
                         {sess.isDraft && (
@@ -499,7 +499,7 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                           {formatPracticeType(sess.practiceType, t("practiceControl"))}
                         </span>
                       </div>
-                      <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
+                      <span className="text-[10.5px] text-white mt-0.5 break-words leading-tight tabular-nums">
                         {formatSessionFormat(sess.format, "WA 720")} · {sess.distance || 18}m · {bowTypeLabel}
                         {sess.isDraft
                           ? ` · ${scoredArrows} ${tx("fl. en curso", "arr. live")}`
@@ -718,31 +718,31 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                           return (
                             <div className={`w-full grid ${hr.avgHeartRateBpm ? "grid-cols-3" : "grid-cols-2"} gap-2 mt-1`}>
                               <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col min-w-0">
-                                <span className="text-[9.5px] font-black uppercase text-white tracking-wider truncate">
+                                <span className="text-[9.5px] font-black uppercase text-white tracking-wider break-words leading-tight">
                                   {t("cardCalories")}
                                 </span>
-                                <span className="text-sm font-black text-white tabular-nums mt-0.5 truncate">
+                                <span className="text-sm font-black text-white tabular-nums mt-0.5 break-words leading-tight">
                                   {getSessionActiveKcal(sess, sessAthlete)} kcal
                                 </span>
                               </div>
                               <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col min-w-0">
-                                <span className="text-[9.5px] font-black uppercase text-white tracking-wider truncate">
+                                <span className="text-[9.5px] font-black uppercase text-white tracking-wider break-words leading-tight">
                                   {t("cardWalked")}
                                 </span>
-                                <span className="text-sm font-black text-white tabular-nums mt-0.5 truncate">
+                                <span className="text-sm font-black text-white tabular-nums mt-0.5 break-words leading-tight">
                                   {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
                                 </span>
                               </div>
                               {hr.avgHeartRateBpm && (
                                 <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col min-w-0">
-                                  <span className="text-[9.5px] font-black uppercase text-white tracking-wider truncate">
+                                  <span className="text-[9.5px] font-black uppercase text-white tracking-wider break-words leading-tight">
                                     {t("cardHeartRate")}
                                   </span>
-                                  <span className="text-sm font-black text-white tabular-nums mt-0.5 truncate">
+                                  <span className="text-sm font-black text-white tabular-nums mt-0.5 break-words leading-tight">
                                     {hr.avgHeartRateBpm} BPM
                                   </span>
                                   {hr.maxHeartRateBpm && (
-                                    <span className="text-[9px] font-bold text-yellow-gold tabular-nums truncate">
+                                    <span className="text-[9px] font-bold text-yellow-gold tabular-nums break-words leading-tight">
                                       {tx("Máx", "Max")} {hr.maxHeartRateBpm}
                                     </span>
                                   )}
@@ -871,10 +871,10 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
                   </div>
 
                   <div className="flex flex-col min-w-0 flex-1">
-                    <span className="text-white text-xs font-extrabold truncate">
+                    <span className="text-white text-xs font-extrabold break-words leading-tight">
                       {rank.userName}
                     </span>
-                    <span className="text-[9.3px] text-white uppercase font-bold truncate">
+                    <span className="text-[9.3px] text-white uppercase font-bold break-words leading-tight">
                       {rank.starName} · {formatBowLabel(rank.bowType)}
                     </span>
                   </div>

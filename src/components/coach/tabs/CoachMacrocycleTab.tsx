@@ -705,12 +705,12 @@ export default function CoachMacrocycleTab({
                     >
                       <div className="flex justify-between items-start gap-2">
                         <div className="flex flex-col gap-1 min-w-0 flex-1">
-                          <h4 className="text-white text-sm font-bold group-hover:text-cyan-neon transition-colors truncate">
+                          <h4 className="text-white text-sm font-bold group-hover:text-cyan-neon transition-colors break-words leading-tight">
                             {mac.name}
                           </h4>
                           <span className="text-[10.5px] text-white flex items-center gap-1 tabular-nums">
                             <Calendar size={10} className="shrink-0" />
-                            <span className="truncate">
+                            <span className="break-words leading-tight">
                               {mac.startDate} — {mac.endDate}
                             </span>
                           </span>
@@ -722,7 +722,7 @@ export default function CoachMacrocycleTab({
                               backgroundColor: `${currentPhase.color}15`,
                               borderColor: `${currentPhase.color}30`
                             }}
-                            className="text-[9.3px] font-black uppercase px-2.5 py-1 rounded-full border shrink-0 max-w-[45%] truncate"
+                            className="text-[9.3px] font-black uppercase px-2.5 py-1 rounded-full border shrink-0 max-w-[45%] break-words leading-tight"
                           >
                             {tx("Etapa:", "Stage:")} {currentPhase.name}
                           </span>
@@ -753,18 +753,18 @@ export default function CoachMacrocycleTab({
 
                       {/* Assignment Badge */}
                       <div className="flex justify-between items-center border-t border-white/[0.03] pt-3 text-[10.5px] text-white gap-2">
-                        <span className="flex items-center gap-1 font-bold min-w-0 flex-1 truncate">
+                        <span className="flex items-center gap-1 font-bold min-w-0 flex-1 break-words leading-tight">
                           {mac.assignmentType === "club" ||
                           !mac.assignedAthleteIds ||
                           mac.assignedAthleteIds.length === 0 ? (
                             <>
                               <Layout size={10} className="shrink-0 text-cyan-neon" />
-                              <span className="truncate">{tx("Todo el Club", "Entire Club")}</span>
+                              <span className="break-words leading-tight">{tx("Todo el Club", "Entire Club")}</span>
                             </>
                           ) : (
                             <>
                               <Users size={10} className="shrink-0 text-cyan-neon" />
-                              <span className="truncate">
+                              <span className="break-words leading-tight">
                                 {mac.assignedAthleteIds
                                   .map((id) => {
                                     const found = roster.find((r) => r.uid === id)?.fullName;
@@ -1068,10 +1068,10 @@ export default function CoachMacrocycleTab({
                                 {athlete.fullName[0]}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <span className="text-xs font-bold text-white block truncate">
+                                <span className="text-xs font-bold text-white block break-words leading-tight">
                                   {athlete.fullName}
                                 </span>
-                                <span className="text-[10.5px] text-white uppercase block truncate">
+                                <span className="text-[10.5px] text-white uppercase block break-words leading-tight">
                                   {athlete.bowConfig?.type || ""}
                                 </span>
                               </div>
@@ -1470,7 +1470,7 @@ export default function CoachMacrocycleTab({
                                 <div className="h-6 w-6 rounded bg-white/5 border border-white/5 flex items-center justify-center font-bold text-[11.6px] text-white shrink-0">
                                   {athlete.fullName[0]}
                                 </div>
-                                <span className="text-xs font-bold truncate">
+                                <span className="text-xs font-bold break-words leading-tight">
                                   {athlete.fullName}
                                 </span>
                               </div>
@@ -1652,7 +1652,7 @@ export default function CoachMacrocycleTab({
                         <h3 className="text-sm font-black text-white uppercase tracking-wider">
                           {tx("Sincronizar Calendario", "Sync Calendar")}
                         </h3>
-                        <span className="text-[10.5px] text-white block truncate">
+                        <span className="text-[10.5px] text-white block break-words leading-tight">
                           Plan: <strong className="text-white">{macroToSync.name}</strong>
                         </span>
                       </div>
@@ -1803,7 +1803,7 @@ export default function CoachMacrocycleTab({
                                       : "bg-neutral-950/80 border-white/10 text-white hover:border-white/25"
                                   }`}
                                 >
-                                  <span className="text-xs font-bold truncate min-w-0 flex-1">
+                                  <span className="text-xs font-bold break-words leading-tight min-w-0 flex-1">
                                     {ath.fullName || ath.email} ·{" "}
                                     {ath.bowConfig?.type || t("roleAthlete")}
                                   </span>
@@ -1853,7 +1853,7 @@ export default function CoachMacrocycleTab({
                       className="w-full mt-2 py-3 px-3 rounded-xl bg-yellow-gold hover:bg-[#ffe919] text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition disabled:opacity-40 min-w-0"
                     >
                       <RefreshCw size={14} className="shrink-0" />
-                      <span className="truncate">
+                      <span className="break-words leading-tight">
                         {isSyncing
                           ? t("syncing")
                           : syncTargetType === "selected"

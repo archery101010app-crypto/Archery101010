@@ -102,7 +102,7 @@ export function AnalysisHistoryListSection({
       {/* 4-Column Period Averages Summary Strip */}
       <div className="bg-gradient-to-b from-[#10141E] to-[#090C12] border border-white/[0.11] rounded-[20px] p-3 grid grid-cols-4 gap-1.5">
         <div className="flex flex-col gap-0.5 min-w-0">
-          <span className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-white truncate">
+          <span className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-white break-words leading-tight">
             {tx("Estabilidad", "Stability")}
           </span>
           <span className="text-[18px] font-black text-white tabular-nums leading-tight">
@@ -116,7 +116,7 @@ export function AnalysisHistoryListSection({
             isEs ? "border-l border-white/[0.08] pl-2" : "border-s border-white/[0.08] ps-2"
           }`}
         >
-          <span className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-white truncate">
+          <span className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-white break-words leading-tight">
             {tx("Prep. Media", "Avg Prep")}
           </span>
           <span className="text-[18px] font-black text-white tabular-nums leading-tight">
@@ -130,7 +130,7 @@ export function AnalysisHistoryListSection({
             isEs ? "border-l border-white/[0.08] pl-2" : "border-s border-white/[0.08] ps-2"
           }`}
         >
-          <span className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-white truncate">
+          <span className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-white break-words leading-tight">
             {tx("Apuntado", "Aiming")}
           </span>
           <span className="text-[18px] font-black text-white tabular-nums leading-tight">
@@ -144,7 +144,7 @@ export function AnalysisHistoryListSection({
             isEs ? "border-l border-white/[0.08] pl-2" : "border-s border-white/[0.08] ps-2"
           }`}
         >
-          <span className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-white truncate">
+          <span className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-white break-words leading-tight">
             {tx("Suelta", "Release")}
           </span>
           <span className="text-[18px] font-black text-white tabular-nums leading-tight">
@@ -190,7 +190,7 @@ export function AnalysisHistoryListSection({
                   )}
                   <span className="text-[14px] font-extrabold text-white">{dateLabel}</span>
                 </div>
-                <span className="text-[12px] font-semibold text-white tabular-nums truncate">
+                <span className="text-[12px] font-semibold text-white tabular-nums break-words leading-tight">
                   {getBowLabel(sess.bowType)} · {sess.distance || 18}m · {shots.length}{" "}
                   {tx("flechas", "arrows")}
                   {sessSummary.avgHeartRateBpm ? ` · ${sessSummary.avgHeartRateBpm} BPM` : ""}

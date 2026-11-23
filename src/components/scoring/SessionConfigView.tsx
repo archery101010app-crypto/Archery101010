@@ -216,10 +216,10 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
           <ArrowLeft size={18} className="rtl:rotate-180" />
         </button>
         <div className="min-w-0">
-          <h2 className="text-white text-[21.1px] sm:text-[23.8px] font-black uppercase tracking-wide truncate leading-tight">
+          <h2 className="text-white text-[21.1px] sm:text-[23.8px] font-black uppercase tracking-wide break-words leading-tight">
             {t("newSession")}
           </h2>
-          <p className="text-[13.9px] text-white uppercase tracking-wider truncate">
+          <p className="text-[13.9px] text-white uppercase tracking-wider break-words leading-tight">
             {tx("Configuración", "Configuration")}
           </p>
         </div>
@@ -243,13 +243,13 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
               <span
                 className={`text-[16px] min-[390px]:text-[16.7px] sm:text-[17.5px] font-bold text-white uppercase tracking-wider ${
                   isEs ? "leading-none" : "leading-snug py-0.5 pe-0.5"
-                } whitespace-nowrap truncate`}
+                } leading-tight break-words`}
               >
                 {t("bleHrTitle")}
               </span>
             </div>
             {bleHrStatus.state === "connected" && (
-              <span className="text-[13px] font-semibold text-white leading-snug mt-1 tabular-nums truncate ps-4.5">
+              <span className="text-[13px] font-semibold text-white leading-snug mt-1 tabular-nums break-words leading-tight ps-4.5">
                 {`${
                   bleHrStatus.currentBpm >= 30 ? `${bleHrStatus.currentBpm} BPM · ` : ""
                 }${bleHrStatus.deviceName || tx("Conectado en vivo", "Connected live")}`}
@@ -285,7 +285,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                   <RotateCcw size={13} />
                   {tx("Sesión Pausada", "Paused Session")}
                 </span>
-                <h4 className="text-white text-[18.4px] font-bold mt-1 truncate tabular-nums">
+                <h4 className="text-white text-[18.4px] font-bold mt-1 break-words leading-tight tabular-nums">
                   {draftSession.format === "Libre" ? tx("Libre", "Custom") : draftSession.format} ·{" "}
                   {`${Math.round(Number(draftSession.distance) || 18)}m`} ·{" "}
                   {getLocalizedBowName(draftSession.bowType)}
@@ -336,7 +336,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 onClick={() => setPracticeType(type)}
                 className={`${
                   isEs
-                    ? "h-12 px-1 sm:px-2 rounded-xl border text-[14.5px] min-[390px]:text-[16.5px] sm:text-[18.7px] leading-none tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer"
+                    ? "h-12 px-1 sm:px-2 rounded-xl border text-[14.5px] min-[390px]:text-[16.5px] sm:text-[18.7px] leading-none tracking-tight font-bold flex items-center justify-center text-center leading-tight break-words transition-all duration-200 cursor-pointer"
                     : "h-12 min-w-0 px-1.5 sm:px-2 rounded-xl border text-[13.5px] min-[390px]:text-[15px] sm:text-[17.5px] leading-none tracking-tight font-bold flex items-center justify-center text-center transition-all duration-200 cursor-pointer"
                 } ${
                   practiceType === type
@@ -347,7 +347,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 {isEs ? (
                   getLocalizedPracticeName(type)
                 ) : (
-                  <span className="block truncate max-w-full text-center">
+                  <span className="block break-words leading-tight max-w-full text-center">
                     {getLocalizedPracticeName(type)}
                   </span>
                 )}
@@ -390,7 +390,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 key={fmt.id}
                 type="button"
                 onClick={() => handleFormatChange(fmt.id)}
-                className={`h-11 px-1 sm:px-2 rounded-xl border text-[16.5px] sm:text-[18.7px] leading-none tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate tabular-nums transition-all duration-200 cursor-pointer ${
+                className={`h-11 px-1 sm:px-2 rounded-xl border text-[16.5px] sm:text-[18.7px] leading-none tracking-tight font-bold flex items-center justify-center text-center leading-tight break-words tabular-nums transition-all duration-200 cursor-pointer ${
                   idx === 4 ? "col-span-2 sm:col-span-1" : ""
                 } ${
                   format === fmt.id
@@ -428,7 +428,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 onClick={() => setBowType(type)}
                 className={`${
                   isEs
-                    ? "h-12 px-1 sm:px-2 rounded-xl border text-[14.5px] min-[390px]:text-[16.5px] sm:text-[18.7px] leading-none tracking-tight font-bold flex items-center justify-center text-center whitespace-nowrap truncate transition-all duration-200 cursor-pointer"
+                    ? "h-12 px-1 sm:px-2 rounded-xl border text-[14.5px] min-[390px]:text-[16.5px] sm:text-[18.7px] leading-none tracking-tight font-bold flex items-center justify-center text-center leading-tight break-words transition-all duration-200 cursor-pointer"
                     : "h-12 min-w-0 px-1.5 sm:px-2 rounded-xl border text-[13.5px] min-[390px]:text-[15px] sm:text-[17.5px] leading-none tracking-tight font-bold flex items-center justify-center text-center transition-all duration-200 cursor-pointer"
                 } ${
                   bowType === type
@@ -439,7 +439,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 {isEs ? (
                   getLocalizedBowName(type)
                 ) : (
-                  <span className="block truncate max-w-full text-center">
+                  <span className="block break-words leading-tight max-w-full text-center">
                     {getLocalizedBowName(type)}
                   </span>
                 )}

@@ -1490,7 +1490,7 @@ export default function SmartwatchMiniApp({
                       <span className="w-[9px] h-0 border-t-2 border-dashed border-white shrink-0" />
                       <span
                         className={`text-[7.5px] font-black tracking-[0.04em] text-white uppercase ${
-                          isEs ? "whitespace-nowrap" : "truncate"
+                          isEs ? "whitespace-nowrap" : "break-words leading-tight"
                         }`}
                       >
                         {tx("Preparatorio", "Preparatory")}
@@ -1553,7 +1553,7 @@ export default function SmartwatchMiniApp({
               <div className="flex flex-col items-center gap-[4px] z-10 shrink-0">
                 <span
                   className={`text-[7.8px] font-extrabold tracking-[0.09em] text-white uppercase tabular-nums${
-                    isEs ? "" : " max-w-[144px] truncate"
+                    isEs ? "" : " max-w-[144px] break-words leading-tight"
                   }`}
                 >
                   {activeState.distanceM}m · {watchBowLabel}
@@ -1783,14 +1783,14 @@ export default function SmartwatchMiniApp({
                 <div className="min-w-0">
                   <div
                     className={`text-[7.5px] font-bold tracking-[0.12em] text-[#8E96A4] uppercase ${
-                      isEs ? "whitespace-nowrap" : "min-w-0 truncate"
+                      isEs ? "whitespace-nowrap" : "min-w-0 break-words leading-tight"
                     }`}
                   >
                     {tx("DISTANCIA RECORRIDA", "WALKED DISTANCE")}
                   </div>
                   <div
                     className={`text-[13.5px] font-extrabold text-white tracking-tight leading-tight mt-0.5 tabular-nums ${
-                      isEs ? "whitespace-nowrap" : "min-w-0 truncate"
+                      isEs ? "whitespace-nowrap" : "min-w-0 break-words leading-tight"
                     }`}
                   >
                     {walkedDualStr}
@@ -2177,7 +2177,7 @@ export default function SmartwatchMiniApp({
                 <div className="text-[7.5px] font-extrabold tracking-[0.11em] text-[#8E96A4] uppercase whitespace-nowrap">
                   {tx("CÓDIGO NUBE · RELOJ DEPORTIVO", "CLOUD CODE · SPORTS WATCH")}
                 </div>
-                <div className="text-[9px] font-bold text-white/80 truncate">
+                <div className="text-[9px] font-bold text-white/80 break-words leading-tight">
                   {hasCloudWatchLinked
                     ? tx("● Reloj vinculado en vivo", "● Watch linked live")
                     : tx(
@@ -2217,7 +2217,7 @@ export default function SmartwatchMiniApp({
                 <span>{t("bleHrTitle")}</span>
               </div>
               {bleHrStatus.state === "connected" && (
-                <div className="text-[10px] font-semibold text-white truncate tabular-nums mt-0.5">
+                <div className="text-[10px] font-semibold text-white break-words leading-tight tabular-nums mt-0.5">
                   {`${
                     bleHrStatus.currentBpm >= 30 ? `${bleHrStatus.currentBpm} BPM · ` : ""
                   }${bleHrStatus.deviceName || tx("Conectado en vivo", "Connected live")}`}

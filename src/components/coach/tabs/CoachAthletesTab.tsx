@@ -317,7 +317,7 @@ export default function CoachAthletesTab({
               value={bowFilter}
               onChange={(e) => setBowFilter(e.target.value)}
               aria-label={tx("Filtrar por tipo de arco", "Filter by bow type")}
-              className={`w-full h-10 bg-[#0D1017] border border-white/[0.09] hover:border-cyan-neon/40 focus:border-cyan-neon text-white text-xs font-bold ps-7 pe-6 rounded-xl outline-none transition cursor-pointer appearance-none truncate${
+              className={`w-full h-10 bg-[#0D1017] border border-white/[0.09] hover:border-cyan-neon/40 focus:border-cyan-neon text-white text-xs font-bold ps-7 pe-6 rounded-xl outline-none transition cursor-pointer appearance-none break-words leading-tight${
                 isEs ? "" : " text-center"
               }`}
             >
@@ -390,7 +390,7 @@ export default function CoachAthletesTab({
 
                   <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-white text-[13.5px] font-extrabold leading-snug group-hover:text-cyan-neon transition-colors truncate">
+                      <span className="text-white text-[13.5px] font-extrabold leading-snug group-hover:text-cyan-neon transition-colors break-words leading-tight">
                         {ath.fullName}
                       </span>
                       {stats.isLiveNow && (
@@ -399,7 +399,7 @@ export default function CoachAthletesTab({
                         </span>
                       )}
                     </div>
-                    <span className="text-[11.5px] text-white truncate tabular-nums">
+                    <span className="text-[11.5px] text-white break-words leading-tight tabular-nums">
                       {bowLabel} · {ath.bowConfig?.poundage ? `${ath.bowConfig.poundage}#` : "—"} ·{" "}
                       {ath.bowConfig?.defaultDistance || 70}m · {stats.count}{" "}
                       {stats.count === 1

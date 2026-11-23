@@ -194,7 +194,7 @@ export default function AnalysisCalibrationModal({
               className={`${
                 isEs
                   ? "text-[14.2px] min-[380px]:text-[15.2px] font-extrabold uppercase tracking-[0.035em] text-white leading-none whitespace-nowrap"
-                  : "truncate min-w-0 text-[12.8px] min-[380px]:text-[14.2px] font-extrabold uppercase tracking-[0.035em] text-white leading-none"
+                  : "break-words leading-tight min-w-0 text-[12.8px] min-[380px]:text-[14.2px] font-extrabold uppercase tracking-[0.035em] text-white leading-none"
               }`}
             >
               {tx("Calibración única", "One-time calibration")}

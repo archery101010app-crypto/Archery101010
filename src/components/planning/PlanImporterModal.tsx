@@ -969,7 +969,7 @@ export default function PlanImporterModal({
                                 >
                                   {isChecked && <Check size={11} strokeWidth={3} />}
                                 </div>
-                                <span className="text-xs font-bold truncate">
+                                <span className="text-xs font-bold break-words leading-tight">
                                   {ath.fullName}
                                 </span>
                               </div>

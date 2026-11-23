@@ -178,7 +178,7 @@ export default function CoachPaymentModal({
                   }`}
                 >
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs font-extrabold uppercase tracking-wider text-white truncate">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-white break-words leading-tight">
                       {isAnnual ? t("annualPlan") : t("monthlyPlan")}
                     </span>
                     {isAnnual && (

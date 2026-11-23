@@ -184,12 +184,23 @@ function verifyWorkspaceSourceTree(rootDir = process.cwd()) {
   const srcDir = path.join(rootDir, "src");
   const files = collectSourceFiles(srcDir);
   const allViolations = [];
+  const TRUNCATE_RE = /\b(?:truncate|text-ellipsis|line-clamp-\d+)\b/;
   for (const file of files) {
     const rel = path.relative(rootDir, file);
     const content = fs.readFileSync(file, "utf8");
     const v = inspectSourceText(content, rel);
     if (v.length > 0) {
       allViolations.push(...v);
+    }
+    if (file.endsWith(".tsx")) {
+      const lines = content.split(/\r?\n/);
+      for (let i = 0; i < lines.length; i++) {
+        if (TRUNCATE_RE.test(lines[i])) {
+          allViolations.push(
+            `${rel}:${i + 1} - Forbidden text truncation/ellipsis class found (words must never be cut off with "...").`
+          );
+        }
+      }
     }
   }
   return { filesScanned: files.length, violations: allViolations };

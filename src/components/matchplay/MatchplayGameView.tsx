@@ -3024,12 +3024,12 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               </div>
               <span className="absolute -bottom-1 -end-2 text-[9.3px] font-black uppercase tracking-wider bg-neutral-950/95 border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none whitespace-nowrap">{userFlag}</span>
             </div>
-            <span className="text-[12.8px] text-white font-extrabold truncate max-w-full mt-1">
+            <span className="text-[12.8px] text-white font-extrabold break-words leading-tight max-w-full mt-1">
               {tx("Tú", "You")} ({bowDivisionLabel})
             </span>
-            <span className="text-[10.5px] text-white flex items-center justify-center gap-0.5 max-w-full truncate mt-0.5">
+            <span className="text-[10.5px] text-white flex items-center justify-center gap-0.5 max-w-full break-words leading-tight mt-0.5">
               <ClubLogoIcon logo={user.clubLogo || "0"} className="w-3 h-3 shrink-0" />
-              <span className="truncate">{user.clubName || tx("Independiente", "Independent")}</span>
+              <span className="break-words leading-tight">{user.clubName || tx("Independiente", "Independent")}</span>
             </span>
           </div>
 
@@ -3069,12 +3069,12 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               </div>
               <span className="absolute -bottom-1 -end-2 text-[9.3px] font-black uppercase tracking-wider bg-neutral-950/95 border border-white/15 text-red-rival px-1 py-0.5 rounded leading-none whitespace-nowrap">{currentRivalFlag}</span>
             </div>
-            <span className="text-[12.8px] text-white font-extrabold truncate max-w-full mt-1">
+            <span className="text-[12.8px] text-white font-extrabold break-words leading-tight max-w-full mt-1">
               {currentRivalName}
             </span>
-            <span className="text-[10.5px] text-white flex items-center justify-center gap-0.5 max-w-full truncate mt-0.5">
+            <span className="text-[10.5px] text-white flex items-center justify-center gap-0.5 max-w-full break-words leading-tight mt-0.5">
               <ClubLogoIcon logo={config.rival.clubLogo || "0"} className="w-3 h-3 shrink-0" />
-              <span className="truncate">{config.rival.clubName || tx("Club Rival", "Rival Club")}</span>
+              <span className="break-words leading-tight">{config.rival.clubName || tx("Club Rival", "Rival Club")}</span>
             </span>
           </div>
         </div>
@@ -3224,7 +3224,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                     }`}
                   />
                 </div>
-                <span className="text-[11.6px] font-bold truncate max-w-full">{tx("Tú", "You")}</span>
+                <span className="text-[11.6px] font-bold break-words leading-tight max-w-full">{tx("Tú", "You")}</span>
                 <span className="text-[10.5px] font-black uppercase tracking-wider whitespace-nowrap">
                   {isUserReady
                     ? tx("Listo", "Ready")
@@ -3241,7 +3241,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                     {config.rival.fullName.substring(0, 2).toUpperCase()}
                     <span className="absolute -bottom-0.5 -end-0.5 w-3 h-3 rounded-full bg-white border-2 border-neutral-950" />
                   </div>
-                  <span className="text-[11.6px] font-bold truncate max-w-full">{config.rival.fullName}</span>
+                  <span className="text-[11.6px] font-bold break-words leading-tight max-w-full">{config.rival.fullName}</span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-white text-black font-black uppercase tracking-wider whitespace-nowrap">
                     {tx("Desconectado", "Disconnected")}
                   </span>
@@ -3304,7 +3304,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                       }`}
                     />
                   </div>
-                  <span className="text-[11.6px] font-bold truncate max-w-full">{config.rival.fullName}</span>
+                  <span className="text-[11.6px] font-bold break-words leading-tight max-w-full">{config.rival.fullName}</span>
                   <span className="text-[10.5px] font-black uppercase tracking-wider whitespace-nowrap">
                     {isRivalReady
                       ? tx("Listo", "Ready")

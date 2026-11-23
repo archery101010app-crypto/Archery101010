@@ -258,7 +258,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
                     : "bg-[#8E96A4]"
                 }`}
               />
-              <span className={isEs ? undefined : "max-w-[128px] truncate"}>{statusBadgeText}</span>
+              <span className={isEs ? undefined : "max-w-[128px] break-words leading-tight"}>{statusBadgeText}</span>
             </span>
           </div>
 
@@ -288,7 +288,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
             </span>
             <div className="flex items-center gap-2 min-w-0">
               {status.deviceName && (
-                <span className="text-[13px] font-bold text-[#00BFFF] truncate max-w-[175px] tabular-nums">
+                <span className="text-[13px] font-bold text-[#00BFFF] break-words leading-tight max-w-[175px] tabular-nums">
                   {status.deviceName}
                 </span>
               )}
@@ -327,7 +327,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
                 className={
                   isEs
                     ? "text-[11.5px] font-bold tracking-[0.06em] uppercase text-white block"
-                    : "truncate w-full text-center text-[10.5px] min-[385px]:text-[11.5px] font-bold tracking-[0.06em] uppercase text-white block"
+                    : "break-words leading-tight w-full text-center text-[10.5px] min-[385px]:text-[11.5px] font-bold tracking-[0.06em] uppercase text-white block"
                 }
               >
                 {isEs ? tx("PROMEDIO", "AVERAGE") : t("cardAverage")}
@@ -346,7 +346,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
                 className={
                   isEs
                     ? "text-[11.5px] font-bold tracking-[0.06em] uppercase text-white block"
-                    : "truncate w-full text-center text-[10.5px] min-[385px]:text-[11.5px] font-bold tracking-[0.06em] uppercase text-white block"
+                    : "break-words leading-tight w-full text-center text-[10.5px] min-[385px]:text-[11.5px] font-bold tracking-[0.06em] uppercase text-white block"
                 }
               >
                 {tx("MÁXIMO", "PEAK")}
@@ -414,7 +414,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
                       className="bg-[#0B0E15] border border-white/[0.14] rounded-2xl px-3.5 py-3 flex items-center justify-between gap-2.5"
                     >
                       <div className="flex flex-col min-w-0">
-                        <span className="text-[16px] font-bold text-white truncate">
+                        <span className="text-[16px] font-bold text-white break-words leading-tight">
                           {dev.name}
                         </span>
                         <div className={`flex items-center gap-1.5 mt-0.5${isEs ? "" : " min-w-0"}`}>
@@ -423,11 +423,11 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
                               {tx("● PULSO ACTIVO", "● HR READY")}
                             </span>
                           ) : isCompanionWatch ? (
-                            <span className={`text-[12px] font-bold uppercase tracking-wider text-[#FFE500]${isEs ? "" : " truncate"}`}>
+                            <span className={`text-[12px] font-bold uppercase tracking-wider text-[#FFE500]${isEs ? "" : " break-words leading-tight"}`}>
                               {tx("VÍA APP DEL RELOJ", "VIA WATCH APP")}
                             </span>
                           ) : dev.isBondedOrConnected ? (
-                            <span className={`text-[12px] font-bold uppercase tracking-wider text-[#00BFFF]${isEs ? "" : " truncate"}`}>
+                            <span className={`text-[12px] font-bold uppercase tracking-wider text-[#00BFFF]${isEs ? "" : " break-words leading-tight"}`}>
                               {tx("EMPAREJADO EN TELÉFONO", "PAIRED ON PHONE")}
                             </span>
                           ) : (
@@ -443,7 +443,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
                         disabled={isThisConnecting}
                         onClick={() => connectBleHeartRateDevice(dev.id, dev.name)}
                         className={`min-h-[42px] px-4 rounded-xl bg-[#00BFFF] hover:brightness-105 text-black font-bold text-[14px] uppercase tracking-wider shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-60${
-                          isEs ? "" : " max-w-[132px] truncate"
+                          isEs ? "" : " max-w-[132px] break-words leading-tight"
                         }`}
                       >
                         {isThisConnecting

@@ -2307,12 +2307,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             <ArrowLeft size={16} className="rtl:rotate-180" />
           </button>
           <div className="min-w-0">
-            <h3 className="text-white text-xs sm:text-sm font-black uppercase tracking-wide truncate leading-tight tabular-nums">
+            <h3 className="text-white text-xs sm:text-sm font-black uppercase tracking-wide break-words leading-tight tabular-nums">
               {config.format === "Libre" ? tx("Ajuste libre", "Custom") : config.format} · {shootingDistanceLabel}
               {presetType === "WA_300_COMPOUND" && tx(" · 10 Oficial", " · Official 10")}
               {presetType === "VEGAS_300" && " · Vegas 10"}
             </h3>
-            <p className="text-[11px] text-white uppercase tracking-wider truncate">
+            <p className="text-[11px] text-white uppercase tracking-wider break-words leading-tight">
               {config.practiceType === "Control"
                 ? t("practiceControl")
                 : config.practiceType === "Práctica"
@@ -2392,7 +2392,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               <span className="text-[11.5px] sm:text-[12px] text-white font-bold tracking-wider sm:tracking-widest uppercase shrink-0">
                 {tx("Puntos", "Score")}
               </span>
-              <span className="text-[22px] sm:text-[25px] font-black text-white leading-none tabular-nums truncate">
+              <span className="text-[22px] sm:text-[25px] font-black text-white leading-none tabular-nums break-words leading-tight">
                 {calculateTotalScore()} <span className="text-[12.6px] sm:text-[14px] text-white font-bold">/ {config.maxScore}</span>
               </span>
               {isBlockFormat && currentEndIdx >= Math.floor(config.endsCount / 2) && (
@@ -2481,10 +2481,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     : "bg-[#FFF200]"
                 }`}
               />
-              <span className={isEs ? "sm:hidden" : "sm:hidden truncate max-w-full"}>{t("cardDistance")}</span>
-              <span className={isEs ? "hidden sm:inline" : "hidden sm:inline truncate max-w-full"}>{t("cardWalked")}</span>
+              <span className={isEs ? "sm:hidden" : "sm:hidden break-words leading-tight max-w-full"}>{t("cardDistance")}</span>
+              <span className={isEs ? "hidden sm:inline" : "hidden sm:inline break-words leading-tight max-w-full"}>{t("cardWalked")}</span>
             </span>
-            <span className="text-[14.5px] sm:text-[17px] font-black text-white tabular-nums mt-0.5 sm:mt-1 leading-tight truncate max-w-full">
+            <span className="text-[14.5px] sm:text-[17px] font-black text-white tabular-nums mt-0.5 sm:mt-1 leading-tight break-words max-w-full">
               {formatWalkedDistanceRegional(distanceWalkedM, unitSystem)}
             </span>
           </div>
@@ -2492,7 +2492,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           <div className="flex flex-col items-center justify-center text-center min-w-0 px-1 sm:px-2 border-e border-white/10">
             <span
               className={`text-[10.5px] sm:text-[12px] font-black uppercase tracking-tight sm:tracking-wider text-white leading-tight whitespace-nowrap ${
-                isEs ? "" : "truncate max-w-full"
+                isEs ? "" : "break-words leading-tight max-w-full"
               }`}
             >
               KCAL
@@ -2522,7 +2522,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     : "bg-[#6E7785]"
                 }`}
               />
-              <span className={isEs ? undefined : "truncate max-w-full"}>{tx("PULSO", "BPM")}</span>
+              <span className={isEs ? undefined : "break-words leading-tight max-w-full"}>{tx("PULSO", "BPM")}</span>
             </span>
             <span className="text-[14.5px] sm:text-[17px] font-black text-white tabular-nums mt-0.5 sm:mt-1 leading-tight whitespace-nowrap">
               {bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
@@ -3189,7 +3189,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
               }`}
             />
           )}
-          <span className="truncate tabular-nums">
+          <span className="break-words leading-tight tabular-nums">
             {clockTimeStr ? `${tx("CRONÓMETRO", "TIMER")} · ${clockTimeStr}` : tx("CRONÓMETRO", "TIMER")}
           </span>
         </button>
@@ -3618,10 +3618,10 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                     <Crosshair size={18} />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-white text-xs sm:text-sm font-black uppercase tracking-wide truncate">
+                    <h3 className="text-white text-xs sm:text-sm font-black uppercase tracking-wide break-words leading-tight">
                       {tx("Centro y Ajuste de Mira", "Group Center & Sight Adjustment")}
                     </h3>
-                    <p className="text-[11.6px] text-white truncate tabular-nums">
+                    <p className="text-[11.6px] text-white break-words leading-tight tabular-nums">
                       {config.bowType === "Recurve"
                         ? t("bowRecurve")
                         : config.bowType === "Compound"
@@ -3736,7 +3736,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                   <div className="grid grid-cols-2 gap-2.5">
                     <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-0.5 min-w-0">
                       <span className="text-[10.5px] font-black uppercase text-white tracking-wider">{tx("Diana Oficial", "Official Target")}</span>
-                      <span className="tabular-nums font-bold text-xs text-white truncate">{activeAnalysis.targetName}</span>
+                      <span className="tabular-nums font-bold text-xs text-white break-words leading-tight">{activeAnalysis.targetName}</span>
                     </div>
                     <div className="bg-neutral-950/60 border border-white/5 rounded-2xl p-3 flex flex-col gap-0.5 min-w-0">
                       <span className="text-[10.5px] font-black uppercase text-white tracking-wider">{tx("Diámetro Grupo", "Group Spread")}</span>

@@ -423,10 +423,10 @@ export default function AdminSubscriptionsTab() {
                       {user.plan === "PRO" ? "★" : "☆"}
                     </div>
                     <div className="min-w-0">
-                      <h4 className="text-xs font-bold text-white leading-tight truncate">
+                      <h4 className="text-xs font-bold text-white leading-tight break-words">
                         {user.fullName}
                       </h4>
-                      <p className="text-[11.6px] text-white mt-0.5 truncate select-text">
+                      <p className="text-[11.6px] text-white mt-0.5 break-words leading-tight select-text">
                         {user.email}
                       </p>
                     </div>
@@ -527,7 +527,7 @@ export default function AdminSubscriptionsTab() {
                 >
                   <div className="absolute start-[-4.5px] top-1 h-2 w-2 rounded-full bg-cyan-neon" />
                   <div className="flex justify-between items-center gap-2">
-                    <span className="text-[11.6px] font-bold text-white truncate">
+                    <span className="text-[11.6px] font-bold text-white break-words leading-tight">
                       {log.userName}
                     </span>
                     <span className="text-[9.3px] text-white font-semibold tabular-nums shrink-0">

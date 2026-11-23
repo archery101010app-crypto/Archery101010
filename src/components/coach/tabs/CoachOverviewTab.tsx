@@ -127,10 +127,10 @@ export default function CoachOverviewTab({
             {tx("Atletas", "Athletes")}
           </span>
           <div className="flex flex-col min-w-0">
-            <span className="text-2xl font-black text-white truncate tabular-nums">
+            <span className="text-2xl font-black text-white break-words leading-tight tabular-nums">
               {athletes.length}
             </span>
-            <span className="text-[10.5px] sm:text-[11px] text-white truncate">
+            <span className="text-[10.5px] sm:text-[11px] text-white break-words leading-tight">
               {tx("Registrados", "Registered")}
             </span>
           </div>
@@ -140,12 +140,12 @@ export default function CoachOverviewTab({
             {t("practiceVolume")}
           </span>
           <div className="flex flex-col min-w-0">
-            <span className="text-2xl font-black text-cyan-neon truncate tabular-nums">
+            <span className="text-2xl font-black text-cyan-neon break-words leading-tight tabular-nums">
               {activityPool
                 .filter((act) => !act?.isDuel && !act?.deletedByArcher)
                 .reduce((acc, act) => acc + getSafeActivityArrows(act), 0)}
             </span>
-            <span className="text-[10.5px] sm:text-[11px] text-white truncate">
+            <span className="text-[10.5px] sm:text-[11px] text-white break-words leading-tight">
               {tx("Flechas tiradas", "Arrows shot")}
             </span>
           </div>
@@ -155,10 +155,10 @@ export default function CoachOverviewTab({
             {tx("Asistencia", "Attendance")}
           </span>
           <div className="flex flex-col min-w-0">
-            <span className="text-2xl font-black text-yellow-gold truncate tabular-nums">
+            <span className="text-2xl font-black text-yellow-gold break-words leading-tight tabular-nums">
               {presentCount}
             </span>
-            <span className="text-[10.5px] sm:text-[11px] text-white truncate">
+            <span className="text-[10.5px] sm:text-[11px] text-white break-words leading-tight">
               {tx("Presentes hoy", "Present today")}
             </span>
           </div>
@@ -202,10 +202,10 @@ export default function CoachOverviewTab({
                     {ath.fullName.substring(0, 2).toUpperCase()}
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
-                    <span className="text-white text-xs font-bold leading-tight truncate">
+                    <span className="text-white text-xs font-bold leading-tight break-words">
                       {ath.fullName}
                     </span>
-                    <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
+                    <span className="text-[10.5px] text-white mt-0.5 break-words leading-tight tabular-nums">
                       {formatBowType(ath.bowConfig?.type)} ·{" "}
                       {ath.bowConfig?.poundage ? `${ath.bowConfig.poundage}#` : "—"}
                     </span>
@@ -293,7 +293,7 @@ export default function CoachOverviewTab({
                   <div className="flex-1 flex flex-col">
                     <div className="flex justify-between items-start gap-2">
                       <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                        <span className="text-white text-xs font-bold leading-tight truncate">
+                        <span className="text-white text-xs font-bold leading-tight break-words">
                           {act.userName || t("roleAthlete")}
                         </span>
                         {act.isDraft && (

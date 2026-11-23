@@ -928,7 +928,7 @@ export default function AnalysisView({
             </h1>
             <div className="flex items-center gap-1.5 text-[14px] font-semibold text-white">
               <span className="w-2 h-2 rounded-full border-2 border-white/70 shrink-0" />
-              <span className={isEs ? undefined : "truncate"}>
+              <span className={isEs ? undefined : "break-words leading-tight"}>
                 {tx("Sin reloj conectado", "No watch connected")}
               </span>
             </div>
@@ -942,7 +942,7 @@ export default function AnalysisView({
               isEs ? "" : " max-w-[54%]"
             }`}
           >
-            <span className={isEs ? undefined : "truncate"}>
+            <span className={isEs ? undefined : "break-words leading-tight"}>
               {getBowLabel(calibration.bowType)} · {calibration.distanceM}m
             </span>
             <Settings size={14} className="text-white/80 shrink-0" aria-hidden="true" />
@@ -1164,14 +1164,14 @@ export default function AnalysisView({
             >
               <span
                 className={`text-[11.5px] font-bold uppercase tracking-wider text-[#00BFFF]${
-                  isEs ? "" : " truncate max-w-full"
+                  isEs ? "" : " break-words leading-tight max-w-full"
                 }`}
               >
                 {tx("Paso 1", "Step 1")}
               </span>
               <span
                 className={`text-[12.8px] min-[380px]:text-[13.2px] font-bold text-white ${
-                  isEs ? "whitespace-nowrap" : "truncate max-w-full"
+                  isEs ? "whitespace-nowrap" : "break-words leading-tight max-w-full"
                 }`}
               >
                 {tx("Abre en reloj", "Open watch")}
@@ -1184,14 +1184,14 @@ export default function AnalysisView({
             >
               <span
                 className={`text-[11.5px] font-bold uppercase tracking-wider text-[#00BFFF]${
-                  isEs ? "" : " truncate max-w-full"
+                  isEs ? "" : " break-words leading-tight max-w-full"
                 }`}
               >
                 {tx("Paso 2", "Step 2")}
               </span>
               <span
                 className={`text-[12.8px] min-[380px]:text-[13.2px] font-bold text-white ${
-                  isEs ? "whitespace-nowrap" : "truncate max-w-full"
+                  isEs ? "whitespace-nowrap" : "break-words leading-tight max-w-full"
                 }`}
               >
                 {tx("Vincula código", "Link code")}
@@ -1204,14 +1204,14 @@ export default function AnalysisView({
             >
               <span
                 className={`text-[11.5px] font-bold uppercase tracking-wider text-[#00BFFF]${
-                  isEs ? "" : " truncate max-w-full"
+                  isEs ? "" : " break-words leading-tight max-w-full"
                 }`}
               >
                 {tx("Paso 3", "Step 3")}
               </span>
               <span
                 className={`text-[12.8px] min-[380px]:text-[13.2px] font-bold text-white ${
-                  isEs ? "whitespace-nowrap" : "truncate max-w-full"
+                  isEs ? "whitespace-nowrap" : "break-words leading-tight max-w-full"
                 }`}
               >
                 {tx("Inicio / Final", "Start / End")}
@@ -1277,7 +1277,7 @@ export default function AnalysisView({
                   } cursor-pointer transition`}
                 >
                   <div className="flex flex-col min-w-0">
-                    <span className="text-[13px] font-extrabold text-white truncate">
+                    <span className="text-[13px] font-extrabold text-white break-words leading-tight">
                       {dStr} · {getBowLabel(sess.bowType)}
                     </span>
                     <span className="text-[11.5px] font-semibold text-white tabular-nums">
@@ -1315,15 +1315,15 @@ export default function AnalysisView({
   return (
     <div className="flex flex-col gap-3 py-2 w-full max-w-full overflow-x-hidden font-sans">
       {/* Top Context & Hardware Controls Bar */}
-      <div className="flex items-center justify-between gap-2 px-0.5">
-        <div className="flex flex-col gap-0.5 min-w-0">
-          <h1 className="text-[21.5px] sm:text-[23.8px] font-black uppercase tracking-wide text-white leading-tight">
+      <div className="flex items-start justify-between gap-2 px-0.5">
+        <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+          <h1 className="text-[21px] sm:text-[23.5px] font-black uppercase tracking-wide text-white leading-tight">
             {tx("Análisis", "Analysis")}
           </h1>
           <button
             type="button"
             onClick={() => setIsWatchModalOpen(true)}
-            className={`flex items-center gap-1.5 text-[14px] font-semibold text-white cursor-pointer ${
+            className={`flex items-center gap-1.5 text-[12.5px] sm:text-[13.5px] font-semibold text-white leading-tight cursor-pointer ${
               isEs ? "text-left" : "text-start"
             }`}
           >
@@ -1332,7 +1332,7 @@ export default function AnalysisView({
                 isWatchConnected ? "bg-[#00BFFF]" : "bg-[#FFE500]"
               }`}
             />
-            <span className="truncate">
+            <span className="leading-tight break-words">
               {getBowLabel(calibration.bowType)} ·{" "}
               {isWatchConnected
                 ? tx("Reloj conectado", "Watch connected")
@@ -1464,7 +1464,7 @@ export default function AnalysisView({
               : "bg-[#06080D] border-white/[0.09]"
           }`}
         >
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center justify-center gap-2 min-w-0 flex-1">
             <span
               className={`w-2 h-2 rounded-full shrink-0 ${
                 isManualRecording
@@ -1474,7 +1474,7 @@ export default function AnalysisView({
                   : "bg-[#00C853]"
               }`}
             />
-            <span className="text-[12px] font-extrabold text-white leading-snug truncate">
+            <span className="text-[12px] font-extrabold text-white leading-snug text-center break-words">
               {isManualRecording
                 ? tx(
                     "Analizando tiro en vivo · Presiona FINAL al soltar",
@@ -1588,13 +1588,13 @@ export default function AnalysisView({
           } cursor-pointer transition active:scale-[0.99] tabular-nums`}
         >
           <div className="flex flex-col gap-0.5 min-w-0">
-            <div className="flex items-center gap-1.5 whitespace-nowrap">
+            <div className="flex items-center gap-1.5">
               <span
                 className={`w-[7px] h-[7px] rounded-full bg-[#FF3B30] shrink-0 ${
                   liveBpmDisplay >= 30 ? "animate-pulse" : "opacity-50"
                 }`}
               />
-              <span className="text-[10.5px] font-extrabold uppercase tracking-[0.11em] text-white truncate">
+              <span className="text-[10.5px] font-extrabold uppercase tracking-[0.11em] text-white leading-tight break-words">
                 {t("bleHrTitle")}
               </span>
             </div>
@@ -1606,7 +1606,7 @@ export default function AnalysisView({
                 BPM
               </span>
             </div>
-            <span className="text-[11px] font-bold text-white whitespace-nowrap truncate">
+            <span className="text-[11px] font-bold text-white leading-tight break-words">
               {sessionAvgBpm >= 30 && sessionMaxBpm >= 30
                 ? `${tx("Prom.", "Avg")} ${sessionAvgBpm} · ${tx("Máx.", "Max")} ${sessionMaxBpm}`
                 : liveBpmDisplay >= 30

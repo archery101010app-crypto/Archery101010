@@ -714,7 +714,7 @@ export default function HistoryView({
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-white/70 font-semibold uppercase tracking-wider leading-tight mt-0.5 truncate">
+              <p className="text-[11px] text-white/70 font-semibold uppercase tracking-wider leading-tight mt-0.5 break-words leading-tight">
                 {isCoachResultsView ? tx("Sesiones y Volumen del Equipo", "Team Sessions & Volume") : t("historyTitle")}
               </p>
             </div>
@@ -766,7 +766,7 @@ export default function HistoryView({
                 : "text-white/80 hover:text-white hover:bg-white/[0.04]"
             }`}
           >
-            <span className={isEs ? "truncate" : "truncate max-w-full text-center"}>{getLocalizedPracticeName("Control")}</span>
+            <span className={isEs ? "break-words leading-tight" : "break-words leading-tight max-w-full text-center"}>{getLocalizedPracticeName("Control")}</span>
           </button>
           <button
             type="button"
@@ -777,7 +777,7 @@ export default function HistoryView({
                 : "text-white/80 hover:text-white hover:bg-white/[0.04]"
             }`}
           >
-            <span className={isEs ? "truncate" : "truncate max-w-full text-center"}>{getLocalizedPracticeName("Volumen")}</span>
+            <span className={isEs ? "break-words leading-tight" : "break-words leading-tight max-w-full text-center"}>{getLocalizedPracticeName("Volumen")}</span>
           </button>
           <button
             type="button"
@@ -788,7 +788,7 @@ export default function HistoryView({
                 : "text-white/80 hover:text-white hover:bg-white/[0.04]"
             }`}
           >
-            <span className={isEs ? "truncate" : "truncate max-w-full text-center"}>{t("navAnalysis")}</span>
+            <span className={isEs ? "break-words leading-tight" : "break-words leading-tight max-w-full text-center"}>{t("navAnalysis")}</span>
           </button>
         </div>
       </div>
@@ -919,7 +919,7 @@ export default function HistoryView({
                     <div className="flex flex-col gap-1 w-[70%] min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         {isCoachResultsView && (
-                          <span className="text-[9.5px] bg-cyan-neon/10 text-cyan-neon px-2 py-0.5 rounded-md border border-cyan-neon/25 font-black uppercase tracking-wider truncate max-w-[150px]">
+                          <span className="text-[9.5px] bg-cyan-neon/10 text-cyan-neon px-2 py-0.5 rounded-md border border-cyan-neon/25 font-black uppercase tracking-wider break-words leading-tight max-w-[150px]">
                             {getSessionAthleteName(session)}
                           </span>
                         )}
@@ -946,10 +946,10 @@ export default function HistoryView({
                           </>
                         )}
                       </div>
-                      <span className="text-[11.6px] text-white tabular-nums truncate">
+                      <span className="text-[11.6px] text-white tabular-nums break-words leading-tight">
                         {session.format === "Libre" ? tx("Libre", "Custom") : session.format} · {getLocalizedBowName(session.bowType)} · {getSessionShootingDistLabel(session)}
                       </span>
-                      <span className="text-[10.5px] font-bold text-white tabular-nums truncate">
+                      <span className="text-[10.5px] font-bold text-white tabular-nums break-words leading-tight">
                         {getSessionActiveKcal(session, user)} kcal · {formatWalkedDistanceRegional(getSessionDistanceWalkedM(session), unitSystem)}
                         {(() => {
                           const hr = getSessionHeartRateStats(session);
@@ -1000,7 +1000,7 @@ export default function HistoryView({
             
             {/* Widget: Arco Volumen */}
             <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-3 sm:p-4 flex flex-col gap-3 min-w-0 text-start">
-              <span className="text-[10.5px] text-yellow-gold font-black tracking-wider uppercase truncate">
+              <span className="text-[10.5px] text-yellow-gold font-black tracking-wider uppercase break-words leading-tight">
                 {tx("Por Tipo de Arco", "By Bow Type")}
               </span>
               
@@ -1014,7 +1014,7 @@ export default function HistoryView({
                   return (
                     <div key={item.name} className="flex flex-col gap-1 min-w-0">
                       <div className="flex items-center justify-between gap-1 text-[12.6px] sm:text-[13.2px] tracking-tight font-bold text-white min-w-0">
-                        <span className="min-w-0 truncate">{item.name}</span>
+                        <span className="min-w-0 break-words leading-tight">{item.name}</span>
                         <span className="text-yellow-gold tabular-nums shrink-0 whitespace-nowrap">{item.val} ({percent}%)</span>
                       </div>
                       <div className="w-full bg-neutral-950 h-1.5 rounded-full overflow-hidden border border-white/5">
@@ -1031,7 +1031,7 @@ export default function HistoryView({
 
             {/* Widget: Práctica Volumen */}
             <div className="bg-[#0D1017] border border-white/[0.08] rounded-2xl p-3 sm:p-4 flex flex-col gap-3 min-w-0 text-start">
-              <span className="text-[10.5px] text-cyan-brand font-black tracking-wider uppercase truncate">
+              <span className="text-[10.5px] text-cyan-brand font-black tracking-wider uppercase break-words leading-tight">
                 {tx("Por Práctica", "By Practice")}
               </span>
               
@@ -1045,7 +1045,7 @@ export default function HistoryView({
                   return (
                     <div key={item.name} className="flex flex-col gap-1 min-w-0">
                       <div className="flex items-center justify-between gap-1 text-[12.6px] sm:text-[13.2px] tracking-tight font-bold text-white min-w-0">
-                        <span className="min-w-0 truncate">{item.name}</span>
+                        <span className="min-w-0 break-words leading-tight">{item.name}</span>
                         <span className="text-cyan-neon tabular-nums shrink-0 whitespace-nowrap">{item.val} ({percent}%)</span>
                       </div>
                       <div className="w-full bg-neutral-950 h-1.5 rounded-full overflow-hidden border border-white/5">
@@ -1084,7 +1084,7 @@ export default function HistoryView({
                       <div className="flex flex-col gap-0.5 min-w-0 pe-2">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {isCoachResultsView && (
-                            <span className="text-[9px] bg-cyan-neon/10 text-cyan-neon px-1.5 py-0.5 rounded border border-cyan-neon/25 font-black uppercase tracking-wider truncate max-w-[140px]">
+                            <span className="text-[9px] bg-cyan-neon/10 text-cyan-neon px-1.5 py-0.5 rounded border border-cyan-neon/25 font-black uppercase tracking-wider break-words leading-tight max-w-[140px]">
                               {getSessionAthleteName(s)}
                             </span>
                           )}
@@ -1233,10 +1233,10 @@ export default function HistoryView({
                     : "bg-neutral-900/30 border border-white/5 py-2 px-1.5 rounded-xl text-center min-w-0 overflow-hidden"
                 }
               >
-                <span className={isEs ? "text-[9.3px] text-white uppercase block" : "text-[9.3px] text-white uppercase block truncate w-full text-center"}>
+                <span className={isEs ? "text-[9.3px] text-white uppercase block" : "text-[9.3px] text-white uppercase block break-words leading-tight w-full text-center"}>
                   {t("distance")}
                 </span>
-                <span className={isEs ? "text-xs font-extrabold text-cyan-neon mt-0.5 block tabular-nums" : "text-xs font-extrabold text-cyan-neon mt-0.5 block truncate w-full text-center tabular-nums"}>
+                <span className={isEs ? "text-xs font-extrabold text-cyan-neon mt-0.5 block tabular-nums" : "text-xs font-extrabold text-cyan-neon mt-0.5 block break-words leading-tight w-full text-center tabular-nums"}>
                   {getSessionShootingDistLabel(selectedSession)}
                 </span>
               </div>
@@ -1247,10 +1247,10 @@ export default function HistoryView({
                     : "bg-neutral-900/30 border border-white/5 py-2 px-1.5 rounded-xl text-center min-w-0 overflow-hidden"
                 }
               >
-                <span className={isEs ? "text-[9.3px] text-white uppercase block" : "text-[9.3px] text-white uppercase block truncate w-full text-center"}>
+                <span className={isEs ? "text-[9.3px] text-white uppercase block" : "text-[9.3px] text-white uppercase block break-words leading-tight w-full text-center"}>
                   {t("bowType")}
                 </span>
-                <span className={isEs ? "text-xs font-extrabold text-cyan-neon mt-0.5 block truncate" : "text-xs font-extrabold text-cyan-neon mt-0.5 block truncate w-full text-center"}>
+                <span className={isEs ? "text-xs font-extrabold text-cyan-neon mt-0.5 block break-words leading-tight" : "text-xs font-extrabold text-cyan-neon mt-0.5 block break-words leading-tight w-full text-center"}>
                   {getLocalizedBowName(selectedSession.bowType)}
                 </span>
               </div>
@@ -1261,10 +1261,10 @@ export default function HistoryView({
                     : "bg-neutral-900/30 border border-white/5 py-2 px-1.5 rounded-xl text-center min-w-0 overflow-hidden"
                 }
               >
-                <span className={isEs ? "text-[9.3px] text-white uppercase block" : "text-[9.3px] text-white uppercase block truncate w-full text-center"}>
+                <span className={isEs ? "text-[9.3px] text-white uppercase block" : "text-[9.3px] text-white uppercase block break-words leading-tight w-full text-center"}>
                   {t("practiceType")}
                 </span>
-                <span className={isEs ? "text-xs font-extrabold text-cyan-neon mt-0.5 block truncate" : "text-xs font-extrabold text-cyan-neon mt-0.5 block truncate w-full text-center"}>
+                <span className={isEs ? "text-xs font-extrabold text-cyan-neon mt-0.5 block break-words leading-tight" : "text-xs font-extrabold text-cyan-neon mt-0.5 block break-words leading-tight w-full text-center"}>
                   {getLocalizedPracticeName(selectedSession.practiceType)}
                 </span>
               </div>
@@ -1275,10 +1275,10 @@ export default function HistoryView({
                     : "bg-neutral-900/30 border border-white/5 py-2 px-1.5 rounded-xl text-center min-w-0 overflow-hidden"
                 }
               >
-                <span className={isEs ? "text-[9.3px] text-white uppercase block" : "text-[9.3px] text-white uppercase block truncate w-full text-center"}>
+                <span className={isEs ? "text-[9.3px] text-white uppercase block" : "text-[9.3px] text-white uppercase block break-words leading-tight w-full text-center"}>
                   {t("rounds")}
                 </span>
-                <span className={isEs ? "text-xs font-extrabold text-cyan-neon mt-0.5 block tabular-nums" : "text-xs font-extrabold text-cyan-neon mt-0.5 block truncate w-full text-center tabular-nums"}>
+                <span className={isEs ? "text-xs font-extrabold text-cyan-neon mt-0.5 block tabular-nums" : "text-xs font-extrabold text-cyan-neon mt-0.5 block break-words leading-tight w-full text-center tabular-nums"}>
                   {selectedSession.endsCount} {t("rounds")}
                 </span>
               </div>
@@ -1293,28 +1293,28 @@ export default function HistoryView({
                     <span className="text-[10px] text-white uppercase font-black tracking-wider block">
                       KCAL
                     </span>
-                    <span className="text-base font-black text-white mt-0.5 block tabular-nums truncate">
+                    <span className="text-base font-black text-white mt-0.5 block tabular-nums break-words leading-tight">
                       {getSessionActiveKcal(selectedSession, user)} kcal
                     </span>
                   </div>
                   <div className="bg-neutral-900/40 border border-white/10 p-3 rounded-2xl min-w-0">
-                    <span className="text-[10px] text-white uppercase font-black tracking-wider block truncate">
+                    <span className="text-[10px] text-white uppercase font-black tracking-wider block break-words leading-tight">
                       {t("cardWalked")}
                     </span>
-                    <span className="text-base font-black text-white mt-0.5 block tabular-nums truncate">
+                    <span className="text-base font-black text-white mt-0.5 block tabular-nums break-words leading-tight">
                       {formatWalkedDistanceRegional(getSessionDistanceWalkedM(selectedSession), unitSystem)}
                     </span>
                   </div>
                   {hr.avgHeartRateBpm && (
                     <div className="bg-neutral-900/40 border border-white/10 p-3 rounded-2xl min-w-0">
-                      <span className="text-[10px] text-white uppercase font-black tracking-wider block truncate">
+                      <span className="text-[10px] text-white uppercase font-black tracking-wider block break-words leading-tight">
                         {t("cardHeartRate")}
                       </span>
-                      <span className="text-base font-black text-white mt-0.5 block tabular-nums truncate">
+                      <span className="text-base font-black text-white mt-0.5 block tabular-nums break-words leading-tight">
                         {hr.avgHeartRateBpm} BPM
                       </span>
                       {hr.maxHeartRateBpm && (
-                        <span className="text-[9.5px] font-bold text-yellow-gold tabular-nums block truncate">
+                        <span className="text-[9.5px] font-bold text-yellow-gold tabular-nums block break-words leading-tight">
                           {tx("Máx", "Max")} {hr.maxHeartRateBpm}
                         </span>
                       )}

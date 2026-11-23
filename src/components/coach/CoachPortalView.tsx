@@ -946,7 +946,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             <div className="w-10 h-10 rounded-xl bg-cyan-neon/10 border border-cyan-neon/25 flex items-center justify-center font-black text-cyan-neon text-sm shrink-0">
               {user.fullName ? user.fullName.substring(0, 2).toUpperCase() : "CH"}
             </div>
-            <h2 className="text-white text-[16px] sm:text-[17.5px] font-black uppercase tracking-wide truncate min-w-0">
+            <h2 className="text-white text-[16px] sm:text-[17.5px] font-black uppercase tracking-wide break-words leading-tight min-w-0">
               {t("roleCoach")} {user.fullName || t("navDirector")}
             </h2>
           </div>
@@ -1092,7 +1092,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                             ? tx("Alumno Desvinculado", "Athlete Unlinked")
                             : tx("¡Nuevo Alumno Vinculado!", "New Linked Athlete!")}
                         </span>
-                        <span className="text-[13.5px] font-bold uppercase tracking-wide text-white truncate">
+                        <span className="text-[13.5px] font-bold uppercase tracking-wide text-white break-words leading-tight">
                           {notif.athleteName || t("roleAthlete")}
                         </span>
                       </div>
@@ -1171,8 +1171,8 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
               <span
                 className={
                   isEs
-                    ? "whitespace-nowrap leading-none truncate max-w-full"
-                    : "block w-full text-center whitespace-nowrap leading-none truncate"
+                    ? "whitespace-nowrap leading-tight break-words max-w-full"
+                    : "block w-full text-center whitespace-nowrap leading-tight break-words"
                 }
               >
                 {cleanLabel}

@@ -828,7 +828,7 @@ export default function AdminUsersTab() {
 
                     <div className="flex flex-col min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <h4 className="text-xs font-bold text-white truncate">{u.fullName}</h4>
+                        <h4 className="text-xs font-bold text-white break-words leading-tight">{u.fullName}</h4>
                         {u.nickname && (
                           <span className="text-[11.6px] text-cyan-neon tabular-nums font-semibold select-text">
                             @{u.nickname}
@@ -841,7 +841,7 @@ export default function AdminUsersTab() {
                         )}
                       </div>
 
-                      <p className="text-[11.6px] text-white truncate select-text">{u.email}</p>
+                      <p className="text-[11.6px] text-white break-words leading-tight select-text">{u.email}</p>
 
                       {/* Sub-row: Demographics, Club & Primary Bow */}
                       <div className="flex items-center gap-2 mt-1 text-[11px] text-white flex-wrap">
@@ -1008,7 +1008,7 @@ export default function AdminUsersTab() {
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <h3 className="text-sm font-bold text-white truncate">
+                    <h3 className="text-sm font-bold text-white break-words leading-tight">
                       {selectedUser.fullName}
                     </h3>
                     {selectedUser.nickname && (
@@ -1017,9 +1017,9 @@ export default function AdminUsersTab() {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-white flex items-center gap-1 mt-0.5 truncate">
+                  <p className="text-xs text-white flex items-center gap-1 mt-0.5 break-words leading-tight">
                     <Mail size={12} className="shrink-0" />
-                    <span className="select-text truncate">{selectedUser.email}</span>
+                    <span className="select-text break-words leading-tight">{selectedUser.email}</span>
                   </p>
                   <p className="text-[11.6px] text-cyan-neon mt-1 tabular-nums">
                     {tx("Inscripción:", "Registered:")}{" "}
@@ -1096,7 +1096,7 @@ export default function AdminUsersTab() {
                       <span className="text-[10.5px] text-white uppercase font-bold block">
                         {tx("Marca / Modelo", "Brand / Model")}
                       </span>
-                      <span className="text-white font-medium truncate block">
+                      <span className="text-white font-medium break-words leading-tight block">
                         {selectedUser.bowConfig?.brand || ""} {selectedUser.bowConfig?.model || ""}
                       </span>
                     </div>
@@ -1125,16 +1125,16 @@ export default function AdminUsersTab() {
                   </h4>
                   <div className="grid grid-cols-2 gap-1.5">
                     <span className="text-white">{tx("Club Deportivo:", "Club:")}</span>
-                    <span className="text-white font-bold text-end truncate">
+                    <span className="text-white font-bold text-end break-words leading-tight">
                       {selectedUser.clubName || t("independentLabel")}
                     </span>
                     <span className="text-white">{tx("ID Club:", "Club ID:")}</span>
-                    <span className="text-white font-bold text-end truncate text-[11.6px] select-text">
+                    <span className="text-white font-bold text-end break-words leading-tight text-[11.6px] select-text">
                       {selectedUser.clubId || tx("Ninguno", "None")}
                     </span>
 
                     <span className="text-white">{t("phoneMessagingLabel")}:</span>
-                    <span className="text-white font-bold text-end truncate select-text tabular-nums">
+                    <span className="text-white font-bold text-end break-words leading-tight select-text tabular-nums">
                       {selectedUser.whatsappNumber || tx("No indicado", "Not provided")}
                     </span>
 

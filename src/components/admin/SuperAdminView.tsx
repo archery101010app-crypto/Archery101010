@@ -87,7 +87,7 @@ export default function SuperAdminView({ user, onBack }: SuperAdminViewProps) {
               Super Admin
             </h1>
           </div>
-          <span className="text-[11.6px] font-bold text-white min-w-0 truncate select-text">
+          <span className="text-[11.6px] font-bold text-white min-w-0 break-words leading-tight select-text">
             {user.email}
           </span>
         </div>
@@ -177,7 +177,7 @@ export default function SuperAdminView({ user, onBack }: SuperAdminViewProps) {
               <span className="text-[10.5px] font-black text-white uppercase tracking-widest leading-none">
                 {tx("Usuario", "Account")}
               </span>
-              <span className="text-[11.6px] text-white truncate font-semibold mt-0.5 select-text">
+              <span className="text-[11.6px] text-white break-words leading-tight font-semibold mt-0.5 select-text">
                 {user.email}
               </span>
             </div>

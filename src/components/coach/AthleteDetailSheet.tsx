@@ -308,11 +308,11 @@ export default function AthleteDetailSheet({
             </div>
             <div className="flex flex-col flex-1 min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <h3 className="text-white text-base font-black truncate uppercase tracking-wide">
+                <h3 className="text-white text-base font-black break-words leading-tight uppercase tracking-wide">
                   {athlete.fullName}
                 </h3>
                 {athlete.nickname && (
-                  <span className="text-[10.5px] text-cyan-neon font-bold truncate select-text">
+                  <span className="text-[10.5px] text-cyan-neon font-bold break-words leading-tight select-text">
                     @{athlete.nickname}
                   </span>
                 )}
@@ -322,7 +322,7 @@ export default function AthleteDetailSheet({
                   </span>
                 )}
               </div>
-              <p className="text-[11.6px] text-white/85 leading-snug mt-0.5 truncate">
+              <p className="text-[11.6px] text-white/85 leading-snug mt-0.5 break-words leading-tight">
                 {formatBowLabel(athlete.bowConfig?.type || "Barebow")} ·{" "}
                 {athlete.gender === "M" ? t("genderM") : t("genderF")}
               </p>
@@ -338,7 +338,7 @@ export default function AthleteDetailSheet({
                   className="flex-1 min-w-0 py-2.5 px-3 rounded-xl bg-cyan-neon/15 hover:bg-cyan-neon/25 border border-cyan-neon/40 text-cyan-neon text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-98"
                 >
                   <FileSpreadsheet size={13} className="shrink-0" aria-hidden="true" />
-                  <span className="truncate">
+                  <span className="break-words leading-tight">
                     {tx("Cargar Plan Mensual", "Import Monthly Plan")}
                   </span>
                 </button>
@@ -404,8 +404,8 @@ export default function AthleteDetailSheet({
                 <span
                   className={
                     isEs
-                      ? "whitespace-nowrap leading-none truncate max-w-full"
-                      : "whitespace-nowrap leading-none truncate max-w-full text-center"
+                      ? "whitespace-nowrap leading-tight break-words max-w-full"
+                      : "whitespace-nowrap leading-tight break-words max-w-full text-center"
                   }
                 >
                   {cleanLabel}
@@ -439,7 +439,7 @@ export default function AthleteDetailSheet({
                         <Star size={18} className="fill-current" />
                       </div>
                       <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
-                        <span className="text-white text-xs font-black uppercase tracking-wide truncate">
+                        <span className="text-white text-xs font-black uppercase tracking-wide break-words leading-tight">
                           {maxStar.starName}
                         </span>
                         <span className="text-[9.3px] text-white mt-0.5 font-bold tabular-nums">
@@ -539,13 +539,13 @@ export default function AthleteDetailSheet({
                   </div>
                   <div className="min-w-0">
                     <span className="text-[10.5px] text-white block">{t("bowBrand")}</span>
-                    <span className="text-white text-xs font-bold truncate block">
+                    <span className="text-white text-xs font-bold break-words leading-tight block">
                       {athlete.bowConfig?.brand || "—"}
                     </span>
                   </div>
                   <div className="min-w-0">
                     <span className="text-[10.5px] text-white block">{t("bowModel")}</span>
-                    <span className="text-white text-xs font-bold truncate block">
+                    <span className="text-white text-xs font-bold break-words leading-tight block">
                       {athlete.bowConfig?.model || "—"}
                     </span>
                   </div>
@@ -665,10 +665,10 @@ export default function AthleteDetailSheet({
                             className="p-3.5 flex justify-between items-center gap-2 cursor-pointer hover:bg-neutral-900/60 transition"
                           >
                             <div className="flex flex-col min-w-0 flex-1">
-                              <span className="text-[12.8px] text-white font-extrabold uppercase truncate">
+                              <span className="text-[12.8px] text-white font-extrabold uppercase break-words leading-tight">
                                 {formatPracticeType(sess.practiceType)} · {formatSessionFormat(sess.format)}
                               </span>
-                              <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
+                              <span className="text-[10.5px] text-white mt-0.5 break-words leading-tight tabular-nums">
                                 {dateStr} · {sess.distance}m ·{" "}
                                 {getSessionActiveKcal(sess, athlete)} kcal ·{" "}
                                 {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
@@ -881,31 +881,31 @@ export default function AthleteDetailSheet({
                                       return (
                                         <div className={`w-full grid ${hr.avgHeartRateBpm ? "grid-cols-3" : "grid-cols-2"} gap-2 mt-1`}>
                                           <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col min-w-0">
-                                            <span className="text-[9.5px] font-black uppercase text-white tracking-wider truncate">
+                                            <span className="text-[9.5px] font-black uppercase text-white tracking-wider break-words leading-tight">
                                               {t("cardCalories")}
                                             </span>
-                                            <span className="text-sm font-black text-white tabular-nums mt-0.5 truncate">
+                                            <span className="text-sm font-black text-white tabular-nums mt-0.5 break-words leading-tight">
                                               {getSessionActiveKcal(sess, athlete)} kcal
                                             </span>
                                           </div>
                                           <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col min-w-0">
-                                            <span className="text-[9.5px] font-black uppercase text-white tracking-wider truncate">
+                                            <span className="text-[9.5px] font-black uppercase text-white tracking-wider break-words leading-tight">
                                               {t("cardWalked")}
                                             </span>
-                                            <span className="text-sm font-black text-white tabular-nums mt-0.5 truncate">
+                                            <span className="text-sm font-black text-white tabular-nums mt-0.5 break-words leading-tight">
                                               {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
                                             </span>
                                           </div>
                                           {hr.avgHeartRateBpm && (
                                             <div className="bg-neutral-900/70 border border-white/10 rounded-xl p-2.5 flex flex-col min-w-0">
-                                              <span className="text-[9.5px] font-black uppercase text-white tracking-wider truncate">
+                                              <span className="text-[9.5px] font-black uppercase text-white tracking-wider break-words leading-tight">
                                                 {t("cardHeartRate")}
                                               </span>
-                                              <span className="text-sm font-black text-white tabular-nums mt-0.5 truncate">
+                                              <span className="text-sm font-black text-white tabular-nums mt-0.5 break-words leading-tight">
                                                 {hr.avgHeartRateBpm} BPM
                                               </span>
                                               {hr.maxHeartRateBpm && (
-                                                <span className="text-[9px] font-bold text-yellow-gold tabular-nums truncate">
+                                                <span className="text-[9px] font-bold text-yellow-gold tabular-nums break-words leading-tight">
                                                   {tx("Máx", "Max")} {hr.maxHeartRateBpm}
                                                 </span>
                                               )}
@@ -993,7 +993,7 @@ export default function AthleteDetailSheet({
                           >
                             <div className="flex flex-col min-w-0 flex-1">
                               <span className="text-[12.8px] text-white font-extrabold uppercase flex items-center gap-1.5 flex-wrap">
-                                <span className="truncate">
+                                <span className="break-words leading-tight">
                                   {formatPracticeType(sess.practiceType)} · {formatSessionFormat(sess.format)}
                                 </span>
                                 <span className="text-[8.7px] bg-white border border-white text-black px-1.5 rounded-full font-black uppercase leading-none py-0.5 shrink-0">
@@ -1272,10 +1272,10 @@ export default function AthleteDetailSheet({
                             className="bg-neutral-900/40 rounded-2xl border border-white/5 p-3.5 flex justify-between items-center gap-2"
                           >
                             <div className="flex flex-col min-w-0 flex-1">
-                              <span className="text-[12.8px] text-white font-extrabold uppercase truncate">
+                              <span className="text-[12.8px] text-white font-extrabold uppercase break-words leading-tight">
                                 {dateStr}
                               </span>
-                              <span className="text-[10.5px] text-white mt-0.5 truncate tabular-nums">
+                              <span className="text-[10.5px] text-white mt-0.5 break-words leading-tight tabular-nums">
                                 {formatPracticeType(sess.practiceType, t("navSession"))} · {sess.distance || 18}m ·{" "}
                                 {getSessionActiveKcal(sess, athlete)} kcal ·{" "}
                                 {formatKmAndMiles(getSessionDistanceWalkedM(sess), false)}
@@ -1337,7 +1337,7 @@ export default function AthleteDetailSheet({
                       <span className="text-[11.6px] text-white uppercase font-black tracking-wider">
                         {t("personalBest")}
                       </span>
-                      <span className="text-white text-base font-extrabold truncate">{format}</span>
+                      <span className="text-white text-base font-extrabold break-words leading-tight">{format}</span>
                       <span className="text-[10.5px] text-yellow-gold mt-1 tabular-nums">
                         {formatRegionalDate(record.date, language, {
                           day: "numeric",
@@ -1555,7 +1555,7 @@ export default function AthleteDetailSheet({
                     <h4 className="text-white text-sm font-black uppercase tracking-wider">
                       {tx("¿Desvincular Alumno?", "Unlink Athlete?")}
                     </h4>
-                    <span className="text-xs text-cyan-neon font-bold truncate">
+                    <span className="text-xs text-cyan-neon font-bold break-words leading-tight">
                       {athlete.fullName}
                     </span>
                   </div>

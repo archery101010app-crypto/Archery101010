@@ -245,7 +245,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
                 alt="ARCHERY 101010"
                 className="h-5 w-auto object-contain select-none self-start"
               />
-              <span className="text-[11.5px] font-extrabold uppercase tracking-wider sm:tracking-[0.14em] text-white/85 truncate">
+              <span className="text-[11.5px] font-extrabold uppercase tracking-wider sm:tracking-[0.14em] text-white/85 break-words leading-tight">
                 {tx("Telemetría Oficial · Lista para Compartir", "Official Telemetry · Ready to Share")}
               </span>
             </div>
@@ -272,7 +272,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
                 }`}
               >
                 <Circle size={9.5} className={`shrink-0 ${activeTab === "black" ? "fill-current" : ""}`} />
-                <span className="truncate">{tx("Fondo Negro", "Black OLED")}</span>
+                <span className="break-words leading-tight">{tx("Fondo Negro", "Black OLED")}</span>
               </button>
 
               <button
@@ -285,7 +285,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
                 }`}
               >
                 <ImagePlus size={12} strokeWidth={2.5} className="shrink-0" />
-                <span className="truncate">{tx("Galería", "Photo")}</span>
+                <span className="break-words leading-tight">{tx("Galería", "Photo")}</span>
               </button>
 
               <button
@@ -298,7 +298,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
                 }`}
               >
                 <Camera size={12} strokeWidth={2.5} className="shrink-0" />
-                <span className="truncate">{tx("Cámara", "Camera")}</span>
+                <span className="break-words leading-tight">{tx("Cámara", "Camera")}</span>
               </button>
             </div>
 
@@ -309,7 +309,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
                 className="self-center px-3 py-1.5 rounded-xl bg-[#12151C] hover:bg-white/10 border border-white/12 text-[11.5px] font-black uppercase tracking-wider text-cyan-neon flex items-center gap-1.5 transition cursor-pointer"
               >
                 <RefreshCw size={11} strokeWidth={2.5} />
-                <span className="truncate">{tx("Cambiar foto", "Change photo")}</span>
+                <span className="break-words leading-tight">{tx("Cambiar foto", "Change photo")}</span>
               </button>
             )}
           </div>
@@ -337,7 +337,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
               className="w-full h-11 px-3 rounded-xl bg-white hover:bg-neutral-200 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition"
             >
               <Share2 size={16} strokeWidth={2.4} className="shrink-0" />
-              <span className="truncate">{t("shareNativeBtn")}</span>
+              <span className="break-words leading-tight">{t("shareNativeBtn")}</span>
             </button>
 
             <button
@@ -346,7 +346,7 @@ export default function StravaShareModal({ shareResult, onClose }: StravaShareMo
               className="w-full h-11 px-3 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition"
             >
               <MessageCircle size={16} className="text-emerald-400 shrink-0" strokeWidth={2.4} />
-              <span className="truncate">
+              <span className="break-words leading-tight">
                 {shareResult.params?.isVolumeOnly || shareResult.params?.practiceType === "Volumen"
                   ? tx("Enviar Foto + Resumen", "Share Photo + Summary")
                   : tx("Enviar Foto + Planilla", "Share Photo + Scorecard")}

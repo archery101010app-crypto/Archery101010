@@ -128,13 +128,13 @@ export default function BannerWidget({ campaign, onSlideClick, onClose, showClos
                   Patrocinador
                 </span>
                 {currentSlide.title && (
-                  <h4 className="text-sm md:text-base font-black text-white truncate flex items-center gap-1.5">
+                  <h4 className="text-sm md:text-base font-black text-white break-words leading-tight flex items-center gap-1.5">
                     {currentSlide.title}
                     <ExternalLink size={12} className="inline opacity-50" />
                   </h4>
                 )}
                 {currentSlide.subtitle && (
-                  <p className="text-[11.6px] md:text-sm text-white truncate font-medium">
+                  <p className="text-[11.6px] md:text-sm text-white break-words leading-tight font-medium">
                     {currentSlide.subtitle}
                   </p>
                 )}

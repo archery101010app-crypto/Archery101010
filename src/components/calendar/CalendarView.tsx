@@ -1200,8 +1200,8 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
           <span
             className={
               isEs
-                ? "text-white font-extrabold text-[14.5px] sm:text-[16.5px] tracking-tight capitalize truncate px-0.5 tabular-nums"
-                : "min-w-0 text-white font-extrabold text-[14px] sm:text-[16px] tracking-tight capitalize truncate px-0.5 tabular-nums"
+                ? "text-white font-extrabold text-[14.5px] sm:text-[16.5px] tracking-tight capitalize break-words leading-tight px-0.5 tabular-nums"
+                : "min-w-0 text-white font-extrabold text-[14px] sm:text-[16px] tracking-tight capitalize break-words leading-tight px-0.5 tabular-nums"
             }
           >
             {monthName}
@@ -1256,7 +1256,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 <select
                   value={selectedMacrocycleId}
                   onChange={(e) => setSelectedMacrocycleId(e.target.value)}
-                  className="flex-1 min-w-0 bg-[#07090E] border border-white/10 rounded-xl px-2.5 py-1.5 text-white text-xs uppercase font-bold outline-none focus:border-cyan-neon truncate cursor-pointer"
+                  className="flex-1 min-w-0 bg-[#07090E] border border-white/10 rounded-xl px-2.5 py-1.5 text-white text-xs uppercase font-bold outline-none focus:border-cyan-neon break-words leading-tight cursor-pointer"
                 >
                   <option value="ALL">
                     {tx("Todos los Planes", "All Plans")}
@@ -1279,7 +1279,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 <select
                   value={selectedAthleteFilter}
                   onChange={(e) => setSelectedAthleteFilter(e.target.value)}
-                  className="flex-1 min-w-0 bg-[#07090E] border border-cyan-neon/30 rounded-xl px-2.5 py-1.5 text-white text-xs font-bold outline-none focus:border-cyan-neon truncate cursor-pointer"
+                  className="flex-1 min-w-0 bg-[#07090E] border border-cyan-neon/30 rounded-xl px-2.5 py-1.5 text-white text-xs font-bold outline-none focus:border-cyan-neon break-words leading-tight cursor-pointer"
                 >
                   <option value="ALL">{tx("Todos los Alumnos", "All Athletes")}</option>
                   {roster.map((ath) => (
@@ -1406,7 +1406,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                         coachAssignment.title.toLowerCase() !== `${coachAssignment.targetArrows} arrows` && (
                           <span
                             style={{ color: coachAssignment.isRestDay ? "#4ADE80" : coachAssignment.phaseColor || "#FFFFFF" }}
-                            className="text-[9.3px] sm:text-[10.5px] font-bold tracking-tight leading-none truncate max-w-full text-center"
+                            className="text-[9.3px] sm:text-[10.5px] font-bold tracking-tight leading-tight break-words max-w-full text-center"
                           >
                             {coachAssignment.dailyItems && coachAssignment.dailyItems.length > 0
                               ? coachAssignment.dailyItems[0]
@@ -1416,22 +1416,22 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                       {coachAssignment.targetArrows && coachAssignment.targetArrows > 0 ? (
                         <span
                           style={{ color: coachAssignment.phaseColor || "#00E5FF" }}
-                          className="text-[9.3px] sm:text-[10.5px] font-black tracking-tight leading-none truncate max-w-full text-center tabular-nums"
+                          className="text-[9.3px] sm:text-[10.5px] font-black tracking-tight leading-tight break-words max-w-full text-center tabular-nums"
                         >
                           {coachAssignment.targetArrows} {tx("fl.", "arr.")}
                         </span>
                       ) : coachAssignment.dailyItems && coachAssignment.dailyItems.length > 1 ? (
-                        <span className="text-[8.8px] sm:text-[9.5px] font-black text-cyan-neon tracking-tight leading-none truncate max-w-full text-center tabular-nums">
+                        <span className="text-[8.8px] sm:text-[9.5px] font-black text-cyan-neon tracking-tight leading-tight break-words max-w-full text-center tabular-nums">
                           +{coachAssignment.dailyItems.length - 1} {tx("más", "more")}
                         </span>
                       ) : null}
                     </div>
                   ) : activePhaseInfo ? (
-                    <span className="text-[9.3px] sm:text-[10.5px] font-black uppercase tracking-tight opacity-90 leading-none truncate max-w-[94%] text-center">
+                    <span className="text-[9.3px] sm:text-[10.5px] font-black uppercase tracking-tight opacity-90 leading-tight break-words max-w-[94%] text-center">
                       {activePhaseInfo.phase.name}
                     </span>
                   ) : cell.dayEvents.length > 0 && cell.dayEvents[0].title ? (
-                    <span className="text-[9.3px] sm:text-[10.5px] font-bold text-white tracking-tight leading-none truncate max-w-[94%] text-center">
+                    <span className="text-[9.3px] sm:text-[10.5px] font-bold text-white tracking-tight leading-tight break-words max-w-[94%] text-center">
                       {cell.dayEvents[0].title}
                     </span>
                   ) : null}
@@ -1708,8 +1708,8 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                 <span className="text-[9.3px] font-black uppercase text-cyan-neon tracking-widest block">
                   {tx("Fase Activa Hoy", "Active Phase Today")}
                 </span>
-                <h4 className="text-sm font-black text-white uppercase mt-0.5 truncate">{phase.name}</h4>
-                <span className="text-[10.5px] text-white block mt-0.5 truncate">
+                <h4 className="text-sm font-black text-white uppercase mt-0.5 break-words leading-tight">{phase.name}</h4>
+                <span className="text-[10.5px] text-white block mt-0.5 break-words leading-tight">
                   Plan: {macroName}
                 </span>
               </div>
@@ -2294,7 +2294,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                         key={ath.uid}
                                         className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-[#0B0E14] border border-white/[0.06]"
                                       >
-                                        <span className="text-xs font-bold text-white truncate">
+                                        <span className="text-xs font-bold text-white break-words leading-tight">
                                           {ath.fullName || ath.email || ath.uid}
                                         </span>
                                         <div className="flex items-center gap-2 shrink-0">
@@ -2717,7 +2717,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                   : "bg-neutral-950 border-white/10 text-white"
                               }`}
                             >
-                              <span className="truncate">{ath.fullName}</span>
+                              <span className="break-words leading-tight">{ath.fullName}</span>
                               <span className="text-[10px] text-cyan-neon font-black">
                                 {checked ? tx("✓ Marcado", "✓ Selected") : tx("Marcar", "Select")}
                               </span>

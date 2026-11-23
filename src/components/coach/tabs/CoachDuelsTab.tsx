@@ -135,7 +135,7 @@ export default function CoachDuelsTab({
           <div className="flex items-center justify-between gap-2">
             <h4 className="text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 min-w-0">
               <Swords size={14} className="text-emerald-400 shrink-0" />
-              <span className="truncate">
+              <span className="break-words leading-tight">
                 {tx("Arena de Duelos en Vivo", "Live Duels Arena")}
               </span>
             </h4>
@@ -161,17 +161,17 @@ export default function CoachDuelsTab({
                   >
                     <div className="flex flex-col min-w-0 flex-1 gap-0.5">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-white text-xs font-black min-w-0 truncate">
+                        <span className="text-white text-xs font-black min-w-0 break-words leading-tight">
                           {match.creatorName || t("roleAthlete")}
                         </span>
                         <span className="text-[10px] text-white/60 font-bold uppercase shrink-0">
                           vs
                         </span>
-                        <span className="text-cyan-neon text-xs font-black min-w-0 truncate">
+                        <span className="text-cyan-neon text-xs font-black min-w-0 break-words leading-tight">
                           {match.playerName || tx("Esperando rival...", "Waiting for opponent...")}
                         </span>
                       </div>
-                      <span className="text-[10.5px] text-white/80 tabular-nums truncate">
+                      <span className="text-[10.5px] text-white/80 tabular-nums break-words leading-tight">
                         {formatBowLabel(match.bowType)}
                         {match.distance ? ` · ${match.distance}m` : ""}
                         {currentSetNum ? ` · Set ${currentSetNum}` : ""}
@@ -225,7 +225,7 @@ export default function CoachDuelsTab({
                           #{idx + 1}
                         </span>
                         <div className="flex flex-col min-w-0 flex-1">
-                          <span className="text-white text-xs font-bold leading-none truncate">
+                          <span className="text-white text-xs font-bold leading-tight break-words">
                             {st.userName || t("roleAthlete")}
                           </span>
                           <span className="text-[9.5px] text-white mt-1 tabular-nums">
@@ -280,10 +280,10 @@ export default function CoachDuelsTab({
                     className="bg-neutral-900/40 p-3.5 rounded-2xl border border-white/5 flex justify-between items-center gap-2"
                   >
                     <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                      <span className="text-white text-xs font-bold leading-tight truncate">
+                      <span className="text-white text-xs font-bold leading-tight break-words">
                         {duel.userName || t("roleAthlete")}
                       </span>
-                      <span className="text-[10.5px] text-white truncate tabular-nums">
+                      <span className="text-[10.5px] text-white break-words leading-tight tabular-nums">
                         vs{" "}
                         <span className="text-cyan-neon font-extrabold">
                           {duel.opponent || tx("Rival", "Opponent")}

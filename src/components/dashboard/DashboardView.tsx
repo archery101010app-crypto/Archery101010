@@ -379,11 +379,11 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
       <div className="flex items-center justify-between px-1 gap-2 sm:gap-3">
         <div className="flex flex-col min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-white text-[23px] sm:text-[26.4px] font-bold tracking-tight truncate">
+            <h2 className="text-white text-[23px] sm:text-[26.4px] font-bold tracking-tight break-words leading-tight">
               {t("helloLabel")}{user.fullName?.split(" ")[0] || user.fullName}
             </h2>
             {customClubName && (
-              <span className="text-cyan-neon text-[13.2px] font-bold bg-[#0D1017] px-2.5 py-0.5 rounded-full border border-white/15 tracking-wide truncate max-w-[180px] shrink-0">
+              <span className="text-cyan-neon text-[13.2px] font-bold bg-[#0D1017] px-2.5 py-0.5 rounded-full border border-white/15 tracking-wide break-words leading-tight max-w-[180px] shrink-0">
                 {customClubName}
               </span>
             )}
@@ -393,7 +393,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               </span>
             )}
           </div>
-          <p className="text-[16.7px] text-white mt-0.5 truncate flex items-center gap-1.5 font-semibold">
+          <p className="text-[16.7px] text-white mt-0.5 break-words leading-tight flex items-center gap-1.5 font-semibold">
             <span className="text-[13.9px] font-bold uppercase tracking-wider text-white shrink-0">
               {clubCountryObj.flag}
             </span>
@@ -401,12 +401,12 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             {needsSetup ? (
               <span 
                 onClick={() => onNavigate("PROFILE")} 
-                className="px-2 py-0.5 rounded-full bg-white text-black font-black text-[12.6px] uppercase tracking-wider cursor-pointer truncate"
+                className="px-2 py-0.5 rounded-full bg-white text-black font-black text-[12.6px] uppercase tracking-wider cursor-pointer break-words leading-tight"
               >
                 {language === "es" ? "Completar perfil" : "Complete profile"}
               </span>
             ) : (
-              <span className="text-white truncate">
+              <span className="text-white break-words leading-tight">
                 {isEs
                   ? user?.bowConfig?.type === "Recurve"
                     ? "Recurvo"
@@ -432,7 +432,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             className="h-9 px-2.5 sm:px-3 rounded-full bg-[#0D1017] border border-white/[0.1] hover:border-cyan-neon/40 text-[14.2px] sm:text-[15px] font-bold text-white flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors max-w-[155px] sm:max-w-[185px]"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon shrink-0" />
-            <span className="truncate">{todayMission.title}</span>
+            <span className="break-words leading-tight">{todayMission.title}</span>
           </button>
         )}
       </div>
@@ -532,7 +532,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
                 </div>
 
                 <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-white/[0.07] text-[13.2px] text-white tabular-nums leading-none">
-                  <span dir={!isEs ? "ltr" : undefined} className="truncate">
+                  <span dir={!isEs ? "ltr" : undefined} className="break-words leading-tight">
                     {language === "es" ? "Récord:" : "Best:"}{" "}
                     <strong className="text-white font-black">
                       {stats.bestScore > 0 ? `${stats.bestScore} pts` : "—"}
@@ -572,7 +572,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               </span>
             </div>
 
-            <span className="text-[12.2px] font-extrabold uppercase tracking-[0.06em] text-white truncate">
+            <span className="text-[12.2px] font-extrabold uppercase tracking-[0.06em] text-white break-words leading-tight">
               {language === "es" ? "Sets y Acumulado" : "Sets & Cumulative"}
             </span>
           </div>
@@ -606,7 +606,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
             </div>
 
             <div className="min-h-[44px] rounded-xl bg-cyan-neon group-hover:bg-[#19c8ff] text-black font-black text-[14.4px] sm:text-[15.6px] uppercase tracking-[0.12em] flex items-center justify-center transition-colors whitespace-nowrap px-4 overflow-hidden">
-              <span className="truncate">{language === "es" ? "Entrar" : "Enter"}</span>
+              <span className="break-words leading-tight">{language === "es" ? "Entrar" : "Enter"}</span>
             </div>
           </div>
         </motion.div>
@@ -619,7 +619,7 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
           onClick={() => onNavigate("TARGET")}
           className="col-span-3 w-full h-14 rounded-2xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-[16.3px] sm:text-[18.6px] tracking-[0.12em] uppercase transition-colors cursor-pointer flex justify-center items-center active:scale-[0.99] text-center px-4"
         >
-          <span className="truncate">{t("newSession")}</span>
+          <span className="break-words leading-tight">{t("newSession")}</span>
         </motion.button>
 
         {/* 5. Barra Integrada Estrellas 101010 */}
@@ -633,10 +633,10 @@ export default function DashboardView({ user, coachViewMode = false, onNavigate,
               <Star size={18} className="fill-yellow-gold text-yellow-gold" />
             </div>
             <div className="flex flex-col min-w-0 gap-0.5">
-              <span dir={!isEs ? "ltr" : undefined} className="text-[13.2px] font-black uppercase tracking-[0.08em] text-white truncate">
+              <span dir={!isEs ? "ltr" : undefined} className="text-[13.2px] font-black uppercase tracking-[0.08em] text-white break-words leading-tight">
                 {tx("Estrellas 101010 · WA 720", "101010 Stars · WA 720")}
               </span>
-              <span dir={!isEs ? "ltr" : undefined} className="text-[12.6px] font-semibold text-white tabular-nums truncate">
+              <span dir={!isEs ? "ltr" : undefined} className="text-[12.6px] font-semibold text-white tabular-nums break-words leading-tight">
                 {athleteStar && athleteStar.highestStarLevel > 0
                   ? tx(
                       `Nivel actual: Estrella ${athleteStar.highestStarLevel} (${athleteStar.highestScore} pts)`,

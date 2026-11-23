@@ -414,7 +414,7 @@ export default function AdminCampaignsTab() {
                     : tx("Barra Notificación", "Notification Bar")}
                 </span>
 
-                <h3 className="text-xs font-bold text-white mt-3 truncate max-w-[70%]">
+                <h3 className="text-xs font-bold text-white mt-3 break-words leading-tight max-w-[70%]">
                   {camp.name}
                 </h3>
 
@@ -483,7 +483,7 @@ export default function AdminCampaignsTab() {
                   <div className="flex justify-between items-start text-white">
                     <span>{tx("Pantallas:", "Screens:")}</span>
                     <span
-                      className="font-bold text-white text-[10.5px] max-w-[65%] text-end truncate"
+                      className="font-bold text-white text-[10.5px] max-w-[65%] text-end break-words leading-tight"
                       title={camp.targetScreens.join(", ")}
                     >
                       {camp.targetScreens.join(", ")}
@@ -1100,7 +1100,7 @@ export default function AdminCampaignsTab() {
                           <span className="text-[7px] font-black text-cyan-neon tracking-widest block uppercase">
                             {tx("Patrocinador", "Sponsor")}
                           </span>
-                          <span className="text-[10.5px] font-bold text-white truncate">
+                          <span className="text-[10.5px] font-bold text-white break-words leading-tight">
                             {slides[0]?.title || tx("Título del Banner", "Banner Title")}
                           </span>
                         </div>
@@ -1135,7 +1135,7 @@ export default function AdminCampaignsTab() {
                         }}
                         className="w-full max-w-xs rounded-full relative flex items-center justify-between px-3 overflow-hidden font-black text-center"
                       >
-                        <span className="truncate">
+                        <span className="break-words leading-tight">
                           {slides[0]?.title || tx("Aviso patrocinado...", "Sponsored notice...")}
                         </span>
                         <span className="text-[9.3px] opacity-60">✕</span>

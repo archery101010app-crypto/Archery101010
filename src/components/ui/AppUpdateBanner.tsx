@@ -480,7 +480,7 @@ export default function AppUpdateBanner() {
             <Sparkles size={15} />
           </div>
           <div className={`flex flex-col min-w-0${!isEs ? " text-start" : ""}`}>
-            <span className="text-white text-xs font-extrabold uppercase tracking-wider truncate tabular-nums">
+            <span className="text-white text-xs font-extrabold uppercase tracking-wider break-words leading-tight tabular-nums">
               {isEs ? (
                 `Nueva versión disponible · v${remoteInfo.version}`
               ) : (
@@ -489,7 +489,7 @@ export default function AppUpdateBanner() {
                 </>
               )}
             </span>
-            <span className="text-[10.5px] text-white truncate tabular-nums">
+            <span className="text-[10.5px] text-white break-words leading-tight tabular-nums">
               {isEs ? (
                 `Actualiza al instante con un toque (tienes v${APP_VERSION})`
               ) : (
