@@ -17,9 +17,9 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>2.150</string>
+    <string>2.151</string>
     <key>CFBundleVersion</key>
-    <string>155000</string>
+    <string>155100</string>
     <key>NSHealthShareUsageDescription</key>
     <string>ARCHERY 101010 lee tu frecuencia cardíaca en tiempo real durante tu práctica de tiro para mostrar tus pulsaciones, promedio y pico máximo en sesión.</string>
     <key>NSHealthUpdateUsageDescription</key>
