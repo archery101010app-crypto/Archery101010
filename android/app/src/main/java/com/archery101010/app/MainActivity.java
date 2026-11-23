@@ -1972,12 +1972,39 @@ public class MainActivity extends BridgeActivity {
                                 if (cmdJson != null && !cmdJson.isEmpty()) {
                                     handleIncomingWatchPayload("/archery101010/command", cmdJson, "");
                                 }
+                            } else if ("/archery101010/hr".equals(path)) {
+                                DataMap dataMap = DataMapItem.fromDataItem(item).getDataMap();
+                                String hrJson = dataMap.getString("hr_json", "");
+                                long sentAt = dataMap.getLong("sent_at", 0L);
+                                if (hrJson != null && !hrJson.isEmpty()
+                                        && (sentAt == 0L || Math.abs(System.currentTimeMillis() - sentAt) <= 35_000L)) {
+                                    handleIncomingWatchPayload("/archery101010/hr", hrJson, "");
+                                }
                             }
                         }
                     }
                 }
             };
             Wearable.getDataClient(this).addListener(wearDataListener);
+            Wearable.getDataClient(this).getDataItems().addOnSuccessListener(dataItems -> {
+                if (dataItems == null) return;
+                try {
+                    long nowMs = System.currentTimeMillis();
+                    for (DataItem item : dataItems) {
+                        if (item != null && item.getUri() != null && "/archery101010/hr".equals(item.getUri().getPath())) {
+                            DataMap dataMap = DataMapItem.fromDataItem(item).getDataMap();
+                            String hrJson = dataMap.getString("hr_json", "");
+                            long sentAt = dataMap.getLong("sent_at", 0L);
+                            if (hrJson != null && !hrJson.isEmpty() && sentAt > 0L && Math.abs(nowMs - sentAt) <= 30_000L) {
+                                handleIncomingWatchPayload("/archery101010/hr", hrJson, "");
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {
+                } finally {
+                    dataItems.release();
+                }
+            });
         } catch (Exception ignored) {}
 
         refreshWatchConnectionStatus();
@@ -3313,11 +3340,17 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public void requestWatchHeartRate() {
             try {
-                byte[] req = ("{\"type\":\"HR_REQUEST\",\"_ts\":" + System.currentTimeMillis() + "}")
+                long nowMs = System.currentTimeMillis();
+                byte[] req = ("{\"type\":\"HR_REQUEST\",\"_ts\":" + nowMs + "}")
                     .getBytes(StandardCharsets.UTF_8);
                 broadcastToWearNodes("/archery101010/hr_request", req);
+                try {
+                    PutDataMapRequest putReq = PutDataMapRequest.create("/archery101010/hr_request");
+                    putReq.getDataMap().putLong("requested_at", nowMs);
+                    Wearable.getDataClient(MainActivity.this).putDataItem(putReq.asPutDataRequest().setUrgent());
+                } catch (Exception ignored) {}
                 if (lastWearHrJson != null && !lastWearHrJson.isEmpty()
-                        && (System.currentTimeMillis() - lastWearHrReceivedMs) < 20_000L) {
+                        && (nowMs - lastWearHrReceivedMs) < 35_000L) {
                     final String quotedJson = JSONObject.quote(lastWearHrJson);
                     runOnUiThread(() -> {
                         if (getBridge() != null && getBridge().getWebView() != null) {
@@ -3333,7 +3366,7 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public String getLastWearHeartRateJson() {
             if (lastWearHrJson != null && !lastWearHrJson.isEmpty()
-                    && (System.currentTimeMillis() - lastWearHrReceivedMs) < 20_000L) {
+                    && (System.currentTimeMillis() - lastWearHrReceivedMs) < 35_000L) {
                 return lastWearHrJson;
             }
             return "";

@@ -1573,4 +1573,55 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     assert.ok(bioSrc.includes("lastObservedWatchHeartbeatAt"), "biometricsEngine must detect live heartbeat changes even with watch clock skew");
     assert.ok(bioSrc.includes("pushPairingCodeToNativeWatchBridge"), "biometricsEngine must auto-share pairingCode over native watch bridge");
   });
+
+  it("enforces v2.156 continuous live HR streaming across steady pulse (REPORTING_MODE_ON_CHANGE), DataClient, Analysis & Scoring", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { BleHeartRateSessionTracker } = await import("../src/lib/scoring/bleHeartRateService.ts");
+
+    // 1. Companion smartwatch window (35s) retains steady pulse across 5s Cloud / 2.5s Wear keepalives
+    const tracker = new BleHeartRateSessionTracker();
+    assert.equal(tracker.recordSample(78, true, 10_000), true);
+    assert.equal(tracker.getSnapshot(28_000, 35_000).currentBpm, 78, "Wear OS 35s window must keep steady BPM alive at +18s");
+    assert.equal(tracker.getSnapshot(46_000, 35_000).currentBpm, 0, "Wear OS 35s window must expire cleanly if silent >35s");
+    tracker.syncCompanionSummary(79, 94);
+    assert.equal(tracker.getSnapshot(28_000, 35_000).maxHeartRateBpm, 94, "Companion summary must sync peak BPM");
+
+    // 2. WearMainActivity keeps steady pulse alive via hrKeepaliveRunnable + DataClient /archery101010/hr + 5s Cloud push
+    const wearSrc = fs.readFileSync(
+      path.resolve(
+        process.cwd(),
+        "android/wear/src/main/java/com/archery101010/app/WearMainActivity.java"
+      ),
+      "utf8"
+    );
+    assert.ok(wearSrc.includes("hrKeepaliveRunnable"), "WearMainActivity must run periodic HR keepalive for REPORTING_MODE_ON_CHANGE");
+    assert.ok(wearSrc.includes("PutDataMapRequest.create(\"/archery101010/hr\")"), "WearMainActivity must sync urgent DataItem /archery101010/hr");
+    assert.ok(wearSrc.includes("HR_CLOUD_PUSH_INTERVAL_MS = 5000L"), "WearMainActivity must push live HR to Cloud every 5s");
+
+    // 3. Phone MainActivity + WearDataLayerService listen to DataItem /archery101010/hr
+    const mainJava = fs.readFileSync(
+      path.resolve(process.cwd(), "android/app/src/main/java/com/archery101010/app/MainActivity.java"),
+      "utf8"
+    );
+    const serviceJava = fs.readFileSync(
+      path.resolve(process.cwd(), "android/app/src/main/java/com/archery101010/app/WearDataLayerService.java"),
+      "utf8"
+    );
+    assert.ok(mainJava.includes("\"/archery101010/hr\".equals(path)"), "MainActivity DataClient listener must handle /archery101010/hr");
+    assert.ok(serviceJava.includes("\"/archery101010/hr\".equals(path)"), "WearDataLayerService DataClient listener must handle /archery101010/hr");
+
+    // 4. ScoringView & AnalysisView both request live watch HR and sync active session state after pairing code init
+    const scoringSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/scoring/ScoringView.tsx"),
+      "utf8"
+    );
+    const analysisSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/analysis/AnalysisView.tsx"),
+      "utf8"
+    );
+    assert.ok(scoringSrc.includes("ensureScoringWatchReady"), "ScoringView must initialize cloud watch & publish sessionActive:true");
+    assert.ok(scoringSrc.includes("requestWatchAppHeartRate()"), "ScoringView must actively request watch heart rate on entry");
+    assert.ok(analysisSrc.includes("requestWatchAppHeartRate()"), "AnalysisView must actively request watch heart rate on entry");
+  });
 });

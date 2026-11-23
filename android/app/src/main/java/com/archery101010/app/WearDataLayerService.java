@@ -60,6 +60,14 @@ public class WearDataLayerService extends WearableListenerService {
                         if (cmdJson != null && !cmdJson.isEmpty()) {
                             handleWatchEvent("/archery101010/command", cmdJson, "");
                         }
+                    } else if ("/archery101010/hr".equals(path)) {
+                        DataMap dataMap = DataMapItem.fromDataItem(item).getDataMap();
+                        String hrJson = dataMap.getString("hr_json", "");
+                        long sentAt = dataMap.getLong("sent_at", 0L);
+                        if (hrJson != null && !hrJson.isEmpty()
+                                && (sentAt == 0L || Math.abs(System.currentTimeMillis() - sentAt) <= 35_000L)) {
+                            handleWatchEvent("/archery101010/hr", hrJson, "");
+                        }
                     }
                 }
             }

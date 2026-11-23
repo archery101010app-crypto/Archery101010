@@ -40,7 +40,10 @@ export type HeartRateSource = "ble" | "wear_os";
  */
 export function isLikelyCompanionSmartwatch(dev: BleHrDiscoveredDevice | null | undefined): boolean {
   if (!dev || dev.hasHrService) return false;
-  return Boolean(dev.isBondedOrConnected) && /\bwatch/i.test(String(dev.name || ""));
+  return (
+    Boolean(dev.isBondedOrConnected) &&
+    /(?:\bwatch|watch\d|\breloj\b|galaxy\s*fit|wear\s*os)/i.test(String(dev.name || ""))
+  );
 }
 
 export interface BleHeartRateStatus {
@@ -177,11 +180,35 @@ export class BleHeartRateSessionTracker {
     this.currentBpmVal = 0;
   }
 
-  getSnapshot(nowMs?: number) {
+  syncCompanionSummary(avgBpm?: number, maxBpm?: number): void {
+    if (typeof maxBpm === "number" && isValidHeartRateBpm(maxBpm)) {
+      const cleanMax = Math.round(maxBpm);
+      if (cleanMax > this.maxBpmVal) {
+        this.maxBpmVal = cleanMax;
+      }
+    }
+    if (
+      this.sampleCount <= 1 &&
+      typeof avgBpm === "number" &&
+      isValidHeartRateBpm(avgBpm)
+    ) {
+      const cleanAvg = Math.round(avgBpm);
+      this.avgBpmVal = cleanAvg;
+      if (this.sampleCount === 0) {
+        this.sumBpm = cleanAvg;
+        this.sampleCount = 1;
+      }
+      if (cleanAvg > this.maxBpmVal) {
+        this.maxBpmVal = cleanAvg;
+      }
+    }
+  }
+
+  getSnapshot(nowMs?: number, staleWindowMs = 12_000) {
     const isStale =
       typeof nowMs === "number" &&
       this.lastSampleAtMs > 0 &&
-      nowMs - this.lastSampleAtMs > 12_000;
+      nowMs - this.lastSampleAtMs > staleWindowMs;
     return {
       currentBpm: isStale ? 0 : this.currentBpmVal,
       avgHeartRateBpm: this.avgBpmVal,
@@ -231,11 +258,12 @@ let webReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let staleSampleWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
 let lastNativeScanStartedAt = 0;
 
-// ── Watch-app pulse channel (ARCHERY 101010 watch app → phone via Wearable Data Layer) ──
-const WEAR_HR_LIVE_WINDOW_MS = 20_000;
+// ── Watch-app pulse channel (ARCHERY 101010 watch app → phone via Wearable Data Layer or 6-Digit Cloud) ──
+const WEAR_HR_LIVE_WINDOW_MS = 35_000;
 let wearHrLastAt = 0;
 let wearHrMuted = false;
 let wearHrTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
+let wearConnectFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
 function isWearHrLive(nowMs = Date.now()): boolean {
   return statusState.source === "wear_os" && nowMs - wearHrLastAt < WEAR_HR_LIVE_WINDOW_MS;
@@ -270,12 +298,28 @@ function applyWearPayload(payload: any): void {
 
   if (wearStatus !== "ok") {
     if (bleLive) return;
+    if (wearStatus === "reading") {
+      if (!isWearHrLive()) {
+        statusState.source = "wear_os";
+        statusState.state = "connecting";
+        statusState.errorCode = "";
+        if (wearName) statusState.deviceName = wearName;
+        emitStatus();
+      }
+      return;
+    }
+    if (wearConnectFallbackTimer) {
+      clearTimeout(wearConnectFallbackTimer);
+      wearConnectFallbackTimer = null;
+    }
     if (wearStatus === "no_contact") {
       statusState.contactDetected = false;
       sessionTracker.clearCurrentReading();
     } else if (wearStatus === "permission_denied") {
+      if (statusState.source === "wear_os") statusState.state = "disconnected";
       statusState.errorCode = "WEAR_HR_PERMISSION_DENIED";
     } else if (wearStatus === "no_sensor") {
+      if (statusState.source === "wear_os") statusState.state = "disconnected";
       statusState.errorCode = "WEAR_HR_NO_SENSOR";
     }
     if (wearName && statusState.source === "wear_os") statusState.deviceName = wearName;
@@ -286,6 +330,10 @@ function applyWearPayload(payload: any): void {
   const bpm = Number(payload.bpm);
   if (bleLive || !isValidHeartRateBpm(bpm)) return;
 
+  if (wearConnectFallbackTimer) {
+    clearTimeout(wearConnectFallbackTimer);
+    wearConnectFallbackTimer = null;
+  }
   const now = Date.now();
   const wasWearLive = isWearHrLive(now);
   wearHrLastAt = now;
@@ -305,6 +353,10 @@ function applyWearPayload(payload: any): void {
   statusState.deviceId = `wear:${String(payload.nodeId || "watch")}`;
   if (wearName) statusState.deviceName = wearName;
   if (sessionTracker.recordSample(bpm, true, now)) {
+    sessionTracker.syncCompanionSummary(
+      typeof payload.avgBpm === "number" ? payload.avgBpm : undefined,
+      typeof payload.maxBpm === "number" ? payload.maxBpm : undefined
+    );
     armStaleSampleWatchdog();
   }
   armWearHrTimeout();
@@ -318,11 +370,12 @@ function armStaleSampleWatchdog(): void {
     staleSampleWatchdogTimer = null;
   }
   if (statusState.state !== "connected") return;
+  const timeoutMs = statusState.source === "wear_os" ? WEAR_HR_LIVE_WINDOW_MS : 12_500;
   staleSampleWatchdogTimer = setTimeout(() => {
     staleSampleWatchdogTimer = null;
     sessionTracker.clearCurrentReading();
     emitStatus();
-  }, 12_500);
+  }, timeoutMs);
 }
 
 function getNativeBridge(): NativeBleBridge | null {
@@ -374,8 +427,12 @@ export function getSavedBleSensorMeta(): { id: string; name: string } | null {
   return null;
 }
 
+function getActiveStaleWindowMs(): number {
+  return statusState.source === "wear_os" ? WEAR_HR_LIVE_WINDOW_MS : 12_000;
+}
+
 function emitStatus(): void {
-  const trackerSnap = sessionTracker.getSnapshot(Date.now());
+  const trackerSnap = sessionTracker.getSnapshot(Date.now(), getActiveStaleWindowMs());
   const transport = detectTransport();
   statusState = {
     ...statusState,
@@ -413,9 +470,13 @@ function applyNativePayload(payload: any): void {
       }));
   }
 
-  // While the watch app is streaming live pulse, BLE scan/idle/error transitions must never
-  // overwrite it. Only a genuinely connected BLE sensor may take over.
-  if (isWearHrLive() && payload.state !== "connected") {
+  // While the watch app is streaming (or connecting) live pulse, BLE scan/idle/error transitions
+  // must never overwrite it. Only a genuinely connected BLE sensor may take over.
+  const wearPending =
+    statusState.source === "wear_os" &&
+    statusState.state === "connecting" &&
+    wearConnectFallbackTimer !== null;
+  if ((isWearHrLive() || wearPending) && payload.state !== "connected") {
     emitStatus();
     return;
   }
@@ -536,7 +597,7 @@ function ensureInitialized(): void {
 export function getBleHeartRateStatus(): BleHeartRateStatus {
   ensureInitialized();
   const transport = detectTransport();
-  const trackerSnap = sessionTracker.getSnapshot(Date.now());
+  const trackerSnap = sessionTracker.getSnapshot(Date.now(), getActiveStaleWindowMs());
   return {
     ...statusState,
     transport,
@@ -562,12 +623,21 @@ export function resetBleHeartRateSessionStats(
   seedMaxBpm = 0,
   seedSampleCount = 1
 ): void {
+  const now = Date.now();
+  const liveBeforeReset =
+    statusState.state === "connected"
+      ? sessionTracker.getSnapshot(now, getActiveStaleWindowMs()).currentBpm
+      : 0;
   sessionTracker.resetSessionStats(seedAvgBpm, seedMaxBpm, seedSampleCount);
+  if (!isValidHeartRateBpm(seedAvgBpm) && isValidHeartRateBpm(liveBeforeReset)) {
+    sessionTracker.recordSample(liveBeforeReset, statusState.contactDetected, now);
+  }
   emitStatus();
 }
 
 export function tryAutoReconnectBleHeartRate(): void {
   ensureInitialized();
+  requestWatchAppHeartRate();
   const bridge = getNativeBridge();
   if (bridge && typeof bridge.tryAutoReconnectSaved === "function") {
     try {
@@ -757,8 +827,10 @@ export function stopBleHeartRateScan(): void {
   }
 }
 
-/** Asks the ARCHERY 101010 watch app (if open on a paired watch) to start streaming live pulse. */
+/** Asks the ARCHERY 101010 watch app (via Bluetooth Data Layer & 6-Digit Cloud) to stream live pulse. */
 export function requestWatchAppHeartRate(): void {
+  ensureInitialized();
+  wearHrMuted = false;
   const bridge = getNativeBridge();
   if (bridge && typeof bridge.requestWatchHeartRate === "function") {
     try {
@@ -773,6 +845,11 @@ export function requestWatchAppHeartRate(): void {
       }
     } catch {}
   }
+  if (typeof window !== "undefined") {
+    try {
+      (window as unknown as { __requestCloudWatchHeartRate?: () => void }).__requestCloudWatchHeartRate?.();
+    } catch {}
+  }
 }
 
 export function connectBleHeartRateDevice(deviceId: string, deviceName?: string): void {
@@ -782,12 +859,34 @@ export function connectBleHeartRateDevice(deviceId: string, deviceName?: string)
 
   const target = statusState.discoveredDevices.find((d) => d.id === deviceId);
   if (isLikelyCompanionSmartwatch(target)) {
-    // Paired smartwatches don't expose standard Bluetooth pulse: route through the watch app.
+    // Paired smartwatches stream live pulse through the ARCHERY 101010 watch app (Wear Data Layer / 6-digit Cloud).
     wearHrMuted = false;
-    statusState.errorCode = "WEAR_APP_REQUIRED";
-    if (deviceName && !isWearHrLive()) statusState.deviceName = deviceName;
-    emitStatus();
+    try {
+      bridge.stopScan();
+    } catch {}
     requestWatchAppHeartRate();
+    if (isWearHrLive()) {
+      emitStatus();
+      return;
+    }
+    if (wearConnectFallbackTimer) {
+      clearTimeout(wearConnectFallbackTimer);
+      wearConnectFallbackTimer = null;
+    }
+    statusState.source = "wear_os";
+    statusState.state = "connecting";
+    statusState.errorCode = "";
+    statusState.deviceId = deviceId;
+    if (deviceName) statusState.deviceName = deviceName;
+    wearConnectFallbackTimer = setTimeout(() => {
+      wearConnectFallbackTimer = null;
+      if (!isWearHrLive() && statusState.source === "wear_os" && statusState.state !== "connected") {
+        statusState.state = "disconnected";
+        statusState.errorCode = "WEAR_APP_REQUIRED";
+        emitStatus();
+      }
+    }, 4_500);
+    emitStatus();
     return;
   }
 
@@ -813,6 +912,10 @@ export function disconnectBleHeartRateDevice(forgetSaved = false): void {
   if (webReconnectTimer) {
     clearTimeout(webReconnectTimer);
     webReconnectTimer = null;
+  }
+  if (wearConnectFallbackTimer) {
+    clearTimeout(wearConnectFallbackTimer);
+    wearConnectFallbackTimer = null;
   }
   if (statusState.source === "wear_os") {
     wearHrMuted = true;
@@ -860,4 +963,8 @@ export function disconnectBleHeartRateDevice(forgetSaved = false): void {
     persistSavedSensorMeta("", "");
   }
   emitStatus();
+}
+
+if (typeof window !== "undefined") {
+  ensureInitialized();
 }

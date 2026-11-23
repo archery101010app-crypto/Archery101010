@@ -8,6 +8,8 @@ import {
   parseLocaleDecimal
 } from "@/lib/i18n/regionalUtils";
 import { UserProfile } from "@/lib/authService";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 import { saveLocalSession, generateResilientId, addToSyncQueue, getLocalSetting, deleteLocalSession, sanitizeForFirestore } from "@/lib/db/indexedDB";
 import { runSync } from "@/lib/db/syncManager";
 import FloatingClock from "./FloatingClock";
@@ -47,6 +49,7 @@ import {
   BleHeartRateSessionTracker,
   BleHeartRateStatus,
   getBleHeartRateStatus,
+  requestWatchAppHeartRate,
   resetBleHeartRateSessionStats,
   subscribeBleHeartRate,
   tryAutoReconnectBleHeartRate
@@ -311,8 +314,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   const [bleHrStatus, setBleHrStatus] = useState<BleHeartRateStatus>(() => getBleHeartRateStatus());
   const bleHrStatusRef = useRef<BleHeartRateStatus>(bleHrStatus);
   bleHrStatusRef.current = bleHrStatus;
+  const [watchLiveHr, setWatchLiveHr] = useState<{ bpm: number; at: number }>({ bpm: 0, at: 0 });
   const bleTrackerRef = useRef<BleHeartRateSessionTracker>(new BleHeartRateSessionTracker());
-  const lastBleSampleAtRef = useRef<number>(Date.now() - 5000);
+  const lastBleSampleAtRef = useRef<number>(0);
   const lastWatchArrowSeqRef = useRef<number>(0);
   const [watchVolumeScore, setWatchVolumeScore] = useState<number>(0);
   const watchFinishedSessionRef = useRef<boolean>(false);
@@ -764,16 +768,6 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     }
   }, [config.draftId, config.id]);
 
-  // Initialize phone-watch cloud pairing code dynamically if exported by biometricsEngine
-  useEffect(() => {
-    if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") return;
-    try {
-      (biometricsEngine as any).getOrCreatePhoneWatchPairingCode?.(user.uid);
-    } catch {
-      // Ignore if cloud pairing helper is unavailable or offline
-    }
-  }, [user?.uid]);
-
   const liveWatchSnapshot = useMemo<BiometricSessionSnapshot>(() => {
     const currentArrows = (ends[currentEndIdx]?.arrows || []).filter(
       (a) => a !== "" && a !== undefined
@@ -782,6 +776,16 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       config.practiceType === "Volumen"
         ? tallyCount
         : Math.max(totalShotArrows, watchPhysicalArrows);
+    const freshWatchBpm =
+      watchLiveHr.bpm >= 30 && Date.now() - watchLiveHr.at <= 35_000 ? watchLiveHr.bpm : 0;
+    const effectiveLiveBpm =
+      bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
+        ? bleHrStatus.currentBpm
+        : freshWatchBpm >= 30
+        ? freshWatchBpm
+        : avgHeartRateBpm >= 30
+        ? avgHeartRateBpm
+        : 0;
     return {
       sessionId: activeSessionIdRef.current,
       sessionActive: true,
@@ -798,17 +802,14 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       distanceWalkedM,
       gpsActive,
       activeKcal,
-      ...(bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
-        ? { heartRateBpm: bleHrStatus.currentBpm }
-        : avgHeartRateBpm >= 30
-        ? { heartRateBpm: avgHeartRateBpm }
-        : {}),
+      ...(effectiveLiveBpm >= 30 ? { heartRateBpm: effectiveLiveBpm } : {}),
       ...(avgHeartRateBpm >= 30 ? { avgHeartRateBpm } : {}),
       ...(maxHeartRateBpm >= 30 ? { maxHeartRateBpm } : {}),
       bowPoundageLbs,
       practiceType: config.practiceType || "Práctica",
       bowType: config.bowType || user.bowConfig?.type || "Recurve",
       autoDetectEnabled,
+      analysisMode: false,
       updatedAt: Date.now()
     };
   }, [
@@ -831,6 +832,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     activeKcal,
     bleHrStatus.state,
     bleHrStatus.currentBpm,
+    watchLiveHr.bpm,
+    watchLiveHr.at,
     avgHeartRateBpm,
     maxHeartRateBpm,
     bowPoundageLbs,
@@ -839,6 +842,48 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     user.bowConfig?.type,
     autoDetectEnabled
   ]);
+
+  const latestWatchSnapshotRef = useRef<BiometricSessionSnapshot>(liveWatchSnapshot);
+  latestWatchSnapshotRef.current = liveWatchSnapshot;
+
+  // Initialize phone-watch cloud pairing code AND re-publish active session state + request live watch pulse
+  useEffect(() => {
+    if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") return;
+    let cancelled = false;
+    const ensureScoringWatchReady = (uid: string) => {
+      if (cancelled || !uid || uid === "USR-GUEST-OFFLINE") return;
+      if (!watchFinishedSessionRef.current && !isClosingSessionRef.current) {
+        publishWatchState(latestWatchSnapshotRef.current);
+      }
+      requestWatchAppHeartRate();
+      try {
+        biometricsEngine
+          .getOrCreatePhoneWatchPairingCode(uid)
+          .then(() => {
+            if (!cancelled && !watchFinishedSessionRef.current && !isClosingSessionRef.current) {
+              publishWatchState(latestWatchSnapshotRef.current);
+              requestWatchAppHeartRate();
+            }
+          })
+          .catch(() => {});
+      } catch {}
+    };
+
+    if (auth.currentUser?.uid) {
+      ensureScoringWatchReady(auth.currentUser.uid);
+    } else {
+      ensureScoringWatchReady(user.uid);
+    }
+    const unsubAuth = onAuthStateChanged(auth, (fbUser) => {
+      if (fbUser?.uid) {
+        ensureScoringWatchReady(fbUser.uid);
+      }
+    });
+    return () => {
+      cancelled = true;
+      unsubAuth();
+    };
+  }, [user?.uid]);
 
   const publishResetWatchState = () => {
     watchPhysicalArrowsRef.current = 0;
@@ -2218,15 +2263,31 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       gpsDistanceAccumRef.current = Math.max(gpsDistanceAccumRef.current, nextDistM);
       setGpsDistanceM((curr) => Math.max(curr, gpsDistanceAccumRef.current));
 
-      // Never overwrite phone BLE Heart Rate session stats when phone BLE HR tracker is connected or has active samples
+      const rawHr = Number(msg.payload?.heartRateBpm ?? msg.heartRateBpm) || 0;
+      const rawAvgHr = Number(msg.payload?.avgHeartRateBpm ?? msg.avgHeartRateBpm) || 0;
+      const rawMaxHr = Number(msg.payload?.maxHeartRateBpm ?? msg.maxHeartRateBpm) || 0;
+      if (rawHr >= 30 && rawHr <= 245) {
+        setWatchLiveHr({ bpm: Math.round(rawHr), at: Date.now() });
+        if (bleHrStatusRef.current.state !== "connected") {
+          try {
+            (window as any).__onNativeWearHrUpdate?.({
+              bpm: Math.round(rawHr),
+              ...(rawAvgHr >= 30 && rawAvgHr <= 245 ? { avgBpm: Math.round(rawAvgHr) } : {}),
+              ...(rawMaxHr >= 30 && rawMaxHr <= 245 ? { maxBpm: Math.round(rawMaxHr) } : {}),
+              status: "ok",
+              deviceName: "Reloj Inteligente",
+              nodeId: "watch:telemetry"
+            });
+          } catch {}
+        }
+      }
+
+      // Never overwrite dedicated BLE strap session stats when a BLE strap is connected
       const bleSnap = bleTrackerRef.current.getSnapshot();
-      const hasActivePhoneBleHr =
-        bleHrStatusRef.current.state === "connected" ||
-        bleSnap.samplesCount > 0;
-      if (!hasActivePhoneBleHr) {
-        const rawHr = Number(msg.payload?.heartRateBpm ?? msg.heartRateBpm) || 0;
-        const rawAvgHr = Number(msg.payload?.avgHeartRateBpm ?? msg.avgHeartRateBpm) || 0;
-        const rawMaxHr = Number(msg.payload?.maxHeartRateBpm ?? msg.maxHeartRateBpm) || 0;
+      const hasDedicatedBleHr =
+        (bleHrStatusRef.current.state === "connected" && bleHrStatusRef.current.source === "ble") ||
+        (bleHrStatusRef.current.source === "ble" && bleSnap.samplesCount > 0);
+      if (!hasDedicatedBleHr) {
         if (rawAvgHr >= 30 && rawAvgHr <= 250) {
           avgHeartRateRef.current = Math.round(rawAvgHr);
           setAvgHeartRateBpm(avgHeartRateRef.current);
@@ -2515,7 +2576,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             >
               <span
                 className={`w-2 h-2 rounded-full shrink-0 ${
-                  bleHrStatus.state === "connected"
+                  (bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30) ||
+                  (watchLiveHr.bpm >= 30 && Date.now() - watchLiveHr.at <= 35_000)
                     ? "bg-[#00C853]"
                     : avgHeartRateBpm >= 30
                     ? "bg-[#FF1E1E]"
@@ -2527,6 +2589,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             <span className="text-[14.5px] sm:text-[17px] font-black text-white tabular-nums mt-0.5 sm:mt-1 leading-tight whitespace-nowrap">
               {bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
                 ? `${bleHrStatus.currentBpm} BPM`
+                : watchLiveHr.bpm >= 30 && Date.now() - watchLiveHr.at <= 35_000
+                ? `${watchLiveHr.bpm} BPM`
                 : avgHeartRateBpm >= 30
                 ? `${avgHeartRateBpm} BPM`
                 : tx("Pulso BT", "BT HR")}

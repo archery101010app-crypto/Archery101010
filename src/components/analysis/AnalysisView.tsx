@@ -38,6 +38,7 @@ import {
 import {
   BleHeartRateStatus,
   getBleHeartRateStatus,
+  requestWatchAppHeartRate,
   resetBleHeartRateSessionStats,
   subscribeBleHeartRate,
   tryAutoReconnectBleHeartRate
@@ -459,6 +460,9 @@ export default function AnalysisView({
   useEffect(() => {
     const becameConnected = isWatchConnected && !prevWatchConnectedRef.current;
     prevWatchConnectedRef.current = isWatchConnected;
+    if (isWatchConnected) {
+      requestWatchAppHeartRate();
+    }
     if (becameConnected && isWatchModalOpen) {
       setIsWatchModalOpen(false);
     }
@@ -622,10 +626,12 @@ export default function AnalysisView({
     const ensureCloudWatchReady = (uid: string) => {
       if (cancelled || !uid || uid === "USR-GUEST-OFFLINE") return;
       publishWatchState(latestWatchSnapshotRef.current);
+      requestWatchAppHeartRate();
       getOrCreatePhoneWatchPairingCode(uid)
         .then(() => {
           if (!cancelled) {
             publishWatchState(latestWatchSnapshotRef.current);
+            requestWatchAppHeartRate();
           }
         })
         .catch(() => {});
@@ -661,8 +667,8 @@ export default function AnalysisView({
       const incomingHr =
         "heartRateBpm" in msg && typeof msg.heartRateBpm === "number"
           ? msg.heartRateBpm
-          : msg.type === "STATE_UPDATE" && typeof msg.payload?.heartRateBpm === "number"
-          ? msg.payload.heartRateBpm
+          : typeof (msg as any).payload?.heartRateBpm === "number"
+          ? (msg as any).payload.heartRateBpm
           : null;
       if (incomingHr !== null && incomingHr >= 30 && incomingHr <= 245) {
         setWatchLiveHr({ bpm: Math.round(incomingHr), at: Date.now() });
@@ -891,7 +897,7 @@ export default function AnalysisView({
   const activeShot = shots[safeShotIdx] || null;
   const isViewingLatestShot = shots.length === 0 || safeShotIdx === shots.length - 1;
   const freshWatchBpm =
-    watchLiveHr.bpm >= 30 && Date.now() - watchLiveHr.at <= 15_000 ? watchLiveHr.bpm : 0;
+    watchLiveHr.bpm >= 30 && Date.now() - watchLiveHr.at <= 35_000 ? watchLiveHr.bpm : 0;
   const liveStreamBpm =
     bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
       ? bleHrStatus.currentBpm

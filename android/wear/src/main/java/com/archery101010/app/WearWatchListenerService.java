@@ -69,15 +69,23 @@ public class WearWatchListenerService extends WearableListenerService {
         for (DataEvent event : dataEvents) {
             if (event.getType() == DataEvent.TYPE_CHANGED) {
                 DataItem item = event.getDataItem();
-                if (item != null && item.getUri() != null && "/archery101010/state".equals(item.getUri().getPath())) {
-                    DataMap dataMap = DataMapItem.fromDataItem(item).getDataMap();
-                    String snapshotJson = dataMap.getString("snapshot_json", "");
-                    if (snapshotJson != null && !snapshotJson.isEmpty()) {
+                if (item != null && item.getUri() != null) {
+                    String path = item.getUri().getPath();
+                    if ("/archery101010/state".equals(path)) {
+                        DataMap dataMap = DataMapItem.fromDataItem(item).getDataMap();
+                        String snapshotJson = dataMap.getString("snapshot_json", "");
+                        if (snapshotJson != null && !snapshotJson.isEmpty()) {
+                            WearMainActivity active = WearMainActivity.getActiveInstance();
+                            if (active != null) {
+                                active.onBackgroundPhoneEvent("/archery101010/telemetry", snapshotJson, "");
+                            } else {
+                                persistSnapshotToWatchPrefs(snapshotJson);
+                            }
+                        }
+                    } else if ("/archery101010/hr_request".equals(path)) {
                         WearMainActivity active = WearMainActivity.getActiveInstance();
                         if (active != null) {
-                            active.onBackgroundPhoneEvent("/archery101010/telemetry", snapshotJson, "");
-                        } else {
-                            persistSnapshotToWatchPrefs(snapshotJson);
+                            active.onBackgroundPhoneEvent("/archery101010/hr_request", "", "");
                         }
                     }
                 }

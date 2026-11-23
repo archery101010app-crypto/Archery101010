@@ -362,6 +362,14 @@ let watchHrCount = 0;
 let lastWatchHrSampleKey = "";
 let activeWatchHrSessionId = "";
 let lastObservedWatchHeartbeatAt = 0;
+let lastKnownCloudWatchHr: {
+  bpm: number;
+  avgBpm: number;
+  maxBpm: number;
+  deviceName: string;
+  nodeId: string;
+  at: number;
+} | null = null;
 
 // Standalone /watch client Cloud Sync state
 let activeWatchClientCode = "";
@@ -551,10 +559,96 @@ function dispatchWatchCommandInternal(jsonOrObj: any): string {
   }
 }
 
+function emitCloudWatchHrToWearBridge(
+  bpm: number,
+  avgBpm: number,
+  maxBpm: number,
+  watchSource: string | null
+): void {
+  if (typeof window === "undefined" || bpm < 30 || bpm > 245) return;
+  const friendlyWatchName =
+    watchSource === "WATCHOS"
+      ? "Reloj Vinculado (Nube)"
+      : watchSource === "GARMIN"
+      ? "Reloj Deportivo (Nube)"
+      : "Reloj Inteligente";
+  const nodeId = `cloud:${watchSource || "watch"}`;
+  lastKnownCloudWatchHr = {
+    bpm,
+    avgBpm: avgBpm >= 30 && avgBpm <= 245 ? avgBpm : 0,
+    maxBpm: maxBpm >= 30 && maxBpm <= 245 ? maxBpm : 0,
+    deviceName: friendlyWatchName,
+    nodeId,
+    at: Date.now()
+  };
+  try {
+    (window as any).__onNativeWearHrUpdate?.({
+      bpm,
+      ...(lastKnownCloudWatchHr.avgBpm >= 30 ? { avgBpm: lastKnownCloudWatchHr.avgBpm } : {}),
+      ...(lastKnownCloudWatchHr.maxBpm >= 30 ? { maxBpm: lastKnownCloudWatchHr.maxBpm } : {}),
+      status: "ok",
+      deviceName: friendlyWatchName,
+      nodeId
+    });
+  } catch {}
+}
+
+function requestCloudWatchHeartRateInternal(): void {
+  if (typeof window === "undefined" || activeWatchClientCode) return;
+  const now = Date.now();
+  if (lastKnownCloudWatchHr && now - lastKnownCloudWatchHr.at <= 35_000) {
+    try {
+      (window as any).__onNativeWearHrUpdate?.({
+        bpm: lastKnownCloudWatchHr.bpm,
+        ...(lastKnownCloudWatchHr.avgBpm >= 30 ? { avgBpm: lastKnownCloudWatchHr.avgBpm } : {}),
+        ...(lastKnownCloudWatchHr.maxBpm >= 30 ? { maxBpm: lastKnownCloudWatchHr.maxBpm } : {}),
+        status: "ok",
+        deviceName: lastKnownCloudWatchHr.deviceName,
+        nodeId: lastKnownCloudWatchHr.nodeId
+      });
+    } catch {}
+  }
+
+  const uid = auth.currentUser?.uid || "";
+  if (uid && (!activePhonePairingCode || activePhonePairingUid !== uid)) {
+    getOrCreatePhoneWatchPairingCode(uid).catch(() => {});
+    return;
+  }
+
+  if (activePhonePairingCode) {
+    const code = activePhonePairingCode;
+    getDoc(doc(db, "watch_sessions", code))
+      .then((snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data() || {};
+        const bpm =
+          typeof data.watchHeartRateBpm === "number" ? Math.round(data.watchHeartRateBpm) : 0;
+        const avg =
+          typeof data.watchAvgHeartRateBpm === "number" ? Math.round(data.watchAvgHeartRateBpm) : 0;
+        const max =
+          typeof data.watchMaxHeartRateBpm === "number" ? Math.round(data.watchMaxHeartRateBpm) : 0;
+        const hb = Number(data.watchHeartbeatAt) || 0;
+        const watchSource =
+          typeof data.watchSource === "string" && data.watchSource ? data.watchSource : null;
+        if (
+          bpm >= 30 &&
+          bpm <= 245 &&
+          data.sessionActive !== false &&
+          hb > 0 &&
+          Math.abs(Date.now() - hb) <= 5 * 60 * 1000
+        ) {
+          emitCloudWatchHrToWearBridge(bpm, avg, max, watchSource);
+        }
+      })
+      .catch(() => {});
+  }
+}
+
 function ensureGlobalNativeWatchDispatcher(): void {
   if (typeof window === "undefined") return;
   (window as any).__onNativeWatchMessage = dispatchWatchCommandInternal;
   (window as any).onArcheryWatchCommand = dispatchWatchCommandInternal;
+  (window as any).__requestCloudWatchHeartRate = requestCloudWatchHeartRateInternal;
   (window as any).__archeryWatchListenerReady = watchCommandListeners.size > 0;
 }
 
@@ -652,8 +746,9 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
       const incomingCmdId = typeof data.lastWatchCmdId === "string" ? data.lastWatchCmdId : "";
       const docUpdatedAt = Number(data.updatedAt) || 0;
       const watchHeartbeatAt = Number(data.watchHeartbeatAt) || 0;
+      const wasInitialSnapshot = isInitialSnapshot;
       const heartbeatChangedLive =
-        !isInitialSnapshot && watchHeartbeatAt > 0 && watchHeartbeatAt !== lastObservedWatchHeartbeatAt;
+        !wasInitialSnapshot && watchHeartbeatAt > 0 && watchHeartbeatAt !== lastObservedWatchHeartbeatAt;
       if (watchHeartbeatAt > 0) {
         lastObservedWatchHeartbeatAt = watchHeartbeatAt;
       }
@@ -668,7 +763,7 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
         });
       }
 
-      if (isInitialSnapshot) {
+      if (wasInitialSnapshot) {
         isInitialSnapshot = false;
         // Prevent replaying stale commands from older sessions on initial attach
         if (incomingCmdId && (docUpdatedAt === 0 || now - docUpdatedAt > 25000)) {
@@ -774,28 +869,16 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
       );
 
       const isFreshCloudWatchHr =
-        data.sessionActive !== false &&
         incomingHrBpm >= 30 &&
         incomingHrBpm <= 245 &&
         (heartbeatChangedLive ||
-          (watchHeartbeatAt > 0 && Math.abs(now - watchHeartbeatAt) <= 35_000) ||
-          (docUpdatedAt > 0 && Math.abs(now - docUpdatedAt) <= 35_000 && Boolean(watchSource)));
+          (wasInitialSnapshot && heartbeatRecent && data.sessionActive !== false) ||
+          (data.sessionActive !== false &&
+            ((watchHeartbeatAt > 0 && Math.abs(now - watchHeartbeatAt) <= 45_000) ||
+              (docUpdatedAt > 0 && Math.abs(now - docUpdatedAt) <= 45_000 && Boolean(watchSource)))));
 
-      if (isFreshCloudWatchHr && typeof window !== "undefined") {
-        const friendlyWatchName =
-          watchSource === "WATCHOS"
-            ? "Reloj Vinculado (Nube)"
-            : watchSource === "GARMIN"
-            ? "Reloj Deportivo (Nube)"
-            : "Reloj Inteligente";
-        try {
-          (window as any).__onNativeWearHrUpdate?.({
-            bpm: incomingHrBpm,
-            status: "ok",
-            deviceName: friendlyWatchName,
-            nodeId: `cloud:${watchSource || "watch"}`
-          });
-        } catch {}
+      if (isFreshCloudWatchHr) {
+        emitCloudWatchHrToWearBridge(incomingHrBpm, incomingAvgHr, incomingMaxHr, watchSource);
       }
 
       if (incomingSteps === 0 && incomingDistM === 0 && data.sessionActive === false) {
@@ -804,6 +887,7 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
         lastCloudTelemetryLiveHr = 0;
         lastCloudTelemetryAvgHr = 0;
         lastCloudTelemetryMaxHr = 0;
+        lastKnownCloudWatchHr = null;
         watchHrSum = 0;
         watchHrCount = 0;
         lastWatchHrSampleKey = "";
@@ -811,7 +895,7 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
       } else if (
         (incomingSteps > lastCloudTelemetrySteps && incomingSteps > 0) ||
         (incomingDistM > lastCloudTelemetryDistM && incomingDistM > 0) ||
-        (isFreshCloudWatchHr && incomingHrBpm !== lastCloudTelemetryLiveHr) ||
+        (isFreshCloudWatchHr && (heartbeatChangedLive || incomingHrBpm !== lastCloudTelemetryLiveHr)) ||
         (incomingAvgHr >= 30 &&
           incomingAvgHr <= 250 &&
           (incomingAvgHr !== lastCloudTelemetryAvgHr || incomingMaxHr > lastCloudTelemetryMaxHr))
@@ -825,12 +909,22 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
         if (incomingMaxHr >= 30 && incomingMaxHr <= 250 && incomingMaxHr > lastCloudTelemetryMaxHr) {
           lastCloudTelemetryMaxHr = incomingMaxHr;
         }
-        const hrPatch =
+        const effectiveAvgHr =
           lastCloudTelemetryAvgHr >= 30
+            ? lastCloudTelemetryAvgHr
+            : isFreshCloudWatchHr
+            ? incomingHrBpm
+            : 0;
+        const hrPatch =
+          effectiveAvgHr >= 30 || isFreshCloudWatchHr
             ? {
-                heartRateBpm: incomingHrBpm >= 30 ? incomingHrBpm : lastCloudTelemetryAvgHr,
-                avgHeartRateBpm: lastCloudTelemetryAvgHr,
-                maxHeartRateBpm: Math.max(lastCloudTelemetryAvgHr, lastCloudTelemetryMaxHr)
+                heartRateBpm: isFreshCloudWatchHr ? incomingHrBpm : effectiveAvgHr,
+                avgHeartRateBpm: effectiveAvgHr,
+                maxHeartRateBpm: Math.max(
+                  effectiveAvgHr,
+                  lastCloudTelemetryMaxHr,
+                  isFreshCloudWatchHr ? incomingHrBpm : 0
+                )
               }
             : {};
         dispatchWatchCommandInternal({
@@ -1044,6 +1138,8 @@ function flushPhoneSnapshotToCloudImmediate(snapshot: BiometricSessionSnapshot, 
 }
 
 let lastPushedAnalysisCalSig = "";
+let lastPushedSessionActive: boolean | null = null;
+let lastPushedSessionId = "";
 
 function schedulePhoneCloudWatchPush(snapshot: BiometricSessionSnapshot): void {
   if (typeof window === "undefined") return;
@@ -1064,6 +1160,13 @@ function schedulePhoneCloudWatchPush(snapshot: BiometricSessionSnapshot): void {
 
   if (!activePhonePairingCode) return;
 
+  const nextSessionActive = snapshot.sessionActive !== false;
+  const nextSessionId = String(snapshot.sessionId || "");
+  const sessionLifecycleChanged =
+    nextSessionActive !== lastPushedSessionActive || nextSessionId !== lastPushedSessionId;
+  lastPushedSessionActive = nextSessionActive;
+  lastPushedSessionId = nextSessionId;
+
   const nextCalSig = `${Boolean(snapshot.analysisMode)}|${snapshot.analysisCalibrationJson || ""}`;
   const calChanged = nextCalSig !== lastPushedAnalysisCalSig;
   if (calChanged) {
@@ -1071,6 +1174,7 @@ function schedulePhoneCloudWatchPush(snapshot: BiometricSessionSnapshot): void {
   }
 
   const isImmediateEvent =
+    sessionLifecycleChanged ||
     calChanged ||
     snapshot.sessionActive === false ||
     (snapshot.arrowsCount === 0 && lastPushedPhoneArrowsCount > 0);
