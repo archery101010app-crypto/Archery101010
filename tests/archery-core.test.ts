@@ -1487,4 +1487,34 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     assert.ok(wearSrc.includes("KEYCODE_STEM_PRIMARY"));
     assert.ok(wearSrc.includes("toggleManualAnalysisFromWatchHardware"));
   });
+
+  it("enforces AST Zero-Regression Guard across all src/ files so React Error #310 can never compile", async () => {
+    const { createRequire } = await import("node:module");
+    const req = createRequire(import.meta.url);
+    const { inspectSourceText, verifyWorkspaceSourceTree } = req(
+      "../scripts/verify-no-regressions.js"
+    );
+
+    const liveScan = verifyWorkspaceSourceTree(process.cwd());
+    assert.ok(liveScan.filesScanned >= 40, "Must scan the full src/ tree");
+    assert.deepEqual(
+      liveScan.violations,
+      [],
+      `Expected 0 hook violations across src/, found: ${liveScan.violations.join("; ")}`
+    );
+
+    // Prove the AST guard blocks a hook declared after an early return (exact React #310 pattern)
+    const brokenSample = `
+      import { useState, useRef } from "react";
+      export function SampleModal({ isOpen }: { isOpen: boolean }) {
+        const [count, setCount] = useState(0);
+        if (!isOpen) return null;
+        const dragRef = useRef(0);
+        return <div>{count + dragRef.current}</div>;
+      }
+    `;
+    const sampleViolations = inspectSourceText(brokenSample, "SampleModal.tsx");
+    assert.equal(sampleViolations.length, 1, "Must catch hook called after early return");
+    assert.ok(sampleViolations[0].includes("AFTER an early return"));
+  });
 });
