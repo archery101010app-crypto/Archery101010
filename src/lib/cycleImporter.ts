@@ -334,7 +334,7 @@ export function normalizeDateString(
   // Korean / Japanese date e.g. "2026년 11월 16일", "11월 16일", "2026年11月16日", "11月16日"
   const cjkMatch = trimmed.match(/(?:(\d{2,4})\s*[년年]\s*)?(\d{1,2})\s*[월月]\s*(\d{1,2})\s*[일日]?/);
   if (cjkMatch) {
-    let [, rawYear, mStr, dStr] = cjkMatch;
+    const [, rawYear, mStr, dStr] = cjkMatch;
     let y = rawYear || String(refY);
     if (y.length === 2) y = `20${y}`;
     const mNum = parseInt(mStr, 10);
@@ -354,10 +354,8 @@ export function normalizeDateString(
   // A/B/YYYY (handles both DD/MM/YYYY and US MM/DD/YYYY intelligently)
   const dmyMatch = trimmed.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
   if (dmyMatch) {
-    let [, aStr, bStr, y] = dmyMatch;
-    if (y.length === 2) {
-      y = `20${y}`;
-    }
+    const [, aStr, bStr, rawY] = dmyMatch;
+    const y = rawY.length === 2 ? `20${rawY}` : rawY;
     const aNum = parseInt(aStr, 10);
     const bNum = parseInt(bStr, 10);
     if (aNum <= 12 && bNum > 12) {
@@ -1243,8 +1241,8 @@ export function parseSpreadsheetData(
 
     let titleCol = headerClasses.indexOf("title");
     let arrowsCol = headerClasses.indexOf("arrows");
-    let focusCol = headerClasses.indexOf("focus");
-    let notesCol = headerClasses.indexOf("notes");
+    const focusCol = headerClasses.indexOf("focus");
+    const notesCol = headerClasses.indexOf("notes");
 
     const maxCols = Math.max(...dataRows.map((r) => r.length), headerRow.length, 1);
     if (arrowsCol === -1 && maxCols >= 3) {

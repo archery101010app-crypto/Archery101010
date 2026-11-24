@@ -10,6 +10,7 @@ import {
   joinClubByInviteCode,
   leaveCurrentClub,
   isLinkedToExternalCoach,
+  getExternalCoachUid,
   getCanonicalCoachClubId
 } from "@/lib/authService";
 import { saveLocalSetting, getLocalSetting } from "@/lib/db/indexedDB";
@@ -406,44 +407,47 @@ export default function ProfileView({
 
         if (!resolved && typeof navigator !== "undefined" && navigator.onLine) {
           try {
-            const { doc, getDoc, collection, query, where, limit, getDocs } = await import(
-              "firebase/firestore"
-            );
+            const { doc, getDoc } = await import("firebase/firestore");
             const { db } = await import("@/lib/firebase");
 
             const candidateCoachUid =
               user.coachId && user.coachId !== user.uid
                 ? user.coachId
-                : user.clubId?.startsWith("CLB-")
-                ? user.clubId.replace(/^CLB-/, "")
-                : "";
+                : getExternalCoachUid(user) || "";
 
             if (candidateCoachUid && candidateCoachUid !== user.uid) {
-              const directSnap = await getDoc(doc(db, "users", candidateCoachUid));
-              if (directSnap.exists()) {
+              const directSnap = await getDoc(doc(db, "users", candidateCoachUid)).catch(() => null);
+              if (directSnap && directSnap.exists()) {
                 const data = directSnap.data() as UserProfile;
                 if (data && (data.uid || directSnap.id) !== user.uid) {
                   resolved = { ...data, uid: data.uid || directSnap.id };
                 }
               }
-            }
-
-            if (!resolved && user.clubId) {
-              const qClub = query(
-                collection(db, "users"),
-                where("clubId", "==", user.clubId),
-                limit(100)
-              );
-              const snapClub = await getDocs(qClub);
-              const remoteList: UserProfile[] = [];
-              snapClub.forEach((d) => {
-                const data = d.data() as UserProfile;
-                const uid = data?.uid || d.id;
-                if (data && uid && uid !== user.uid) {
-                  remoteList.push({ ...data, uid });
+              if (!resolved) {
+                const publicSnap = await getDoc(doc(db, "users_public", candidateCoachUid)).catch(
+                  () => null
+                );
+                if (publicSnap && publicSnap.exists()) {
+                  const pubData = publicSnap.data() as Partial<UserProfile>;
+                  if (pubData && (pubData.uid || publicSnap.id) !== user.uid) {
+                    resolved = {
+                      uid: pubData.uid || publicSnap.id,
+                      fullName: pubData.fullName || user.coachName || tx("Entrenador", "Coach"),
+                      email: user.coachEmail || "",
+                      nickname: pubData.nickname || "",
+                      birthDate: "",
+                      country: pubData.country || user.country || "CR",
+                      city: "",
+                      gender: "",
+                      clubId: pubData.clubId || getCanonicalCoachClubId({ uid: candidateCoachUid }),
+                      clubName: pubData.clubName || null,
+                      role: (pubData.role as UserProfile["role"]) || "coach",
+                      plan: "FREE",
+                      isClubCreator: true
+                    };
+                  }
                 }
-              });
-              resolved = findCoachInList(remoteList);
+              }
             }
           } catch (cloudErr) {
             console.warn("Could not fetch coach profile from cloud:", cloudErr);
@@ -1057,7 +1061,7 @@ export default function ProfileView({
       {/* User Header Profile Card */}
       <div className="bg-[#0D1017] p-4 rounded-3xl border border-white/[0.08] flex items-center gap-4 relative overflow-hidden">
         <div className="w-15 h-15 rounded-2xl bg-cyan-neon/10 border border-cyan-neon/40 flex items-center justify-center text-cyan-neon font-black text-[20.7px] shrink-0">
-          {user.fullName.substring(0, 2).toUpperCase()}
+          {(user.fullName || user.email || "?").trim().slice(0, 2).toUpperCase() || "?"}
         </div>
         <div className="flex flex-col min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
@@ -1801,7 +1805,7 @@ export default function ProfileView({
                 disabled={!athleteInviteCode.trim() || isJoiningClub}
                 className="shrink-0 px-4 py-2.5 bg-cyan-neon text-black font-black text-[13.8px] uppercase tracking-wider rounded-2xl hover:bg-[#19c8ff] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                {isJoiningClub ? tx("Vinculando...", "Linking...") : tx("Vincular", "Link")}
+                {isJoiningClub ? tx("Vinculando", "Linking") : tx("Vincular", "Link")}
               </button>
             </div>
           </div>
@@ -1886,26 +1890,27 @@ export default function ProfileView({
                         )
                       )
                     ) {
-                      const { generateUniqueClubInviteCode, updateProfile } = await import(
-                        "@/lib/authService"
-                      );
-                      const freshCode = await generateUniqueClubInviteCode();
-                      const canonicalClubId = getCanonicalCoachClubId(user);
-                      const updated = await updateProfile(user.uid, {
-                        clubInviteCode: freshCode,
-                        clubId: canonicalClubId,
-                        isClubCreator: true
-                      });
-                      onProfileUpdated(updated);
-                      window.dispatchEvent(
-                        new CustomEvent("current-user-updated", { detail: { user: updated } })
-                      );
-                      await showOledAlert(
-                        tx(
-                          `Nuevo código de 6 dígitos generado: ${freshCode}`,
-                          `New 6-digit code generated: ${freshCode}`
-                        )
-                      );
+                      try {
+                        const { rotateCoachClubInviteCode } = await import("@/lib/authService");
+                        const { clubInviteCode: freshCode, updatedUser } =
+                          await rotateCoachClubInviteCode(user);
+                        onProfileUpdated(updatedUser);
+                        await showOledAlert(
+                          tx(
+                            `Nuevo código de 6 dígitos generado: ${freshCode}`,
+                            `New 6-digit code generated: ${freshCode}`
+                          )
+                        );
+                      } catch (rotateErr: unknown) {
+                        const msg =
+                          rotateErr instanceof Error && rotateErr.message
+                            ? rotateErr.message
+                            : tx(
+                                "No se pudo generar el nuevo código en este momento.",
+                                "Could not generate a new code right now."
+                              );
+                        await showOledAlert(msg);
+                      }
                     }
                   }}
                   className="shrink-0 px-3 py-2.5 bg-neutral-900 border border-white/10 rounded-xl text-cyan-neon hover:text-white text-[13.8px] font-bold transition cursor-pointer active:scale-95"
@@ -2162,7 +2167,7 @@ export default function ProfileView({
                   onClick={handleConfirmDeleteAccount}
                   className="flex-1 h-11 rounded-2xl bg-white hover:bg-neutral-200 border border-white text-black font-black text-[13.8px] uppercase tracking-wider cursor-pointer transition active:scale-95 disabled:opacity-50"
                 >
-                  {isDeletingAccount ? tx("Eliminando...", "Deleting...") : t("delete")}
+                  {isDeletingAccount ? tx("Eliminando", "Deleting") : t("delete")}
                 </button>
               </div>
             </motion.div>

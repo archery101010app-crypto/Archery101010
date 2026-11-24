@@ -1302,7 +1302,7 @@ export async function shareScorecardWhatsAppNative(params: TargetShotChartParams
 
   const encoded = encodeURIComponent(message);
   if (typeof window !== "undefined") {
-    window.location.href = `whatsapp://send?text=${encoded}`;
+    window.open(`https://wa.me/?text=${encoded}`, "_blank", "noopener,noreferrer");
   }
   return { sharedNatively: false, dataUrl, fileName, captionText: message, params: enrichedParams };
 }

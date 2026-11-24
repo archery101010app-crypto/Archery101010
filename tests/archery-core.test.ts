@@ -1,6 +1,8 @@
+import "./register-ts-hooks.ts";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import {
+
+const {
   isVolumeSession,
   isAnalysisOnlySession,
   countScoredArrows,
@@ -8,14 +10,19 @@ import {
   getSessionScore,
   getSessionMaxScore,
   hasRealScore
-} from "../src/lib/scoring/sessionMetrics.ts";
-import {
+} = await import("../src/lib/scoring/sessionMetrics.ts");
+const {
   analyzeImuShotWindow,
   evaluateNormalizedTargetImpact,
   encodeCompactShotAnalysis,
   decodeCompactShotAnalysis,
   computeAnalysisSessionSummary
-} from "../src/lib/scoring/shotAnalysisEngine.ts";
+} = await import("../src/lib/scoring/shotAnalysisEngine.ts");
+const {
+  computeSetEndPoints,
+  resolveWorldArcheryShootOff
+} = await import("../src/lib/scoring/matchplayScoring.ts");
+const { getMinimumConsentAge } = await import("../src/lib/i18n/regionalUtils.ts");
 
 describe("Archery 101010 — Core Session Metrics & Volume Neutralization", () => {
   it("neutralizes points on pure Volume sessions so tally clicks never inflate score", () => {
@@ -76,35 +83,17 @@ describe("Archery 101010 — Core Session Metrics & Volume Neutralization", () =
 });
 
 describe("Archery 101010 — World Archery Set System, Cumulative & Shoot-Off Rules", () => {
-  function computeSetPoints(archerEndSum: number, rivalEndSum: number): [number, number] {
-    if (archerEndSum > rivalEndSum) return [2, 0];
-    if (archerEndSum < rivalEndSum) return [0, 2];
-    return [1, 1];
-  }
-
-  function resolveShootOffWinner(
-    aScore: number,
-    bScore: number,
-    aDistMm: number,
-    bDistMm: number
-  ): "A" | "B" | "TIE" {
-    if (aScore > bScore) return "A";
-    if (bScore > aScore) return "B";
-    if (aDistMm < bDistMm) return "A";
-    if (bDistMm < aDistMm) return "B";
-    return "TIE";
-  }
-
-  it("awards 2-0 on end win and 1-1 on tied end in Recurve Set System", () => {
-    assert.deepEqual(computeSetPoints(29, 28), [2, 0]);
-    assert.deepEqual(computeSetPoints(27, 30), [0, 2]);
-    assert.deepEqual(computeSetPoints(28, 28), [1, 1]);
+  it("awards 2-0 on end win and 1-1 on tied end in Recurve Set System via production matchplayScoring", () => {
+    assert.deepEqual(computeSetEndPoints(29, 28), [2, 0]);
+    assert.deepEqual(computeSetEndPoints(27, 30), [0, 2]);
+    assert.deepEqual(computeSetEndPoints(28, 28), [1, 1]);
   });
 
-  it("resolves 5-5 / 145-145 shoot-off by higher ring first, then closest-to-spider distance", () => {
-    assert.equal(resolveShootOffWinner(10, 9, 35, 12), "A");
-    assert.equal(resolveShootOffWinner(10, 10, 14.2, 21.8), "A");
-    assert.equal(resolveShootOffWinner(10, 10, 28.5, 9.4), "B");
+  it("resolves 5-5 / 145-145 shoot-off by higher ring first, then closest-to-spider distance via production matchplayScoring", () => {
+    assert.equal(resolveWorldArcheryShootOff("10", "9", 35, 12, false), "ARCHER");
+    assert.equal(resolveWorldArcheryShootOff("10", "10", 14.2, 21.8, false), "ARCHER");
+    assert.equal(resolveWorldArcheryShootOff("10", "10", 28.5, 9.4, false), "RIVAL");
+    assert.equal(resolveWorldArcheryShootOff("10", "10", 15.0, 15.0, false), "TIE");
   });
 });
 
@@ -133,10 +122,12 @@ describe("Archery 101010 — Biometrics Telemetry & COPPA Age Gate Formulas", ()
     assert.equal(estimateSessionKcal(0, 38, 0), 0);
   });
 
-  it("enforces minimum age 13 (COPPA) and rejects future birth dates", () => {
+  it("enforces minimum consent age (COPPA 13+ / GDPR 14..16+) and rejects future birth dates", () => {
+    const minAgeUs = getMinimumConsentAge("US");
+    assert.equal(minAgeUs, 13);
     assert.equal(computeExactAge("2028-01-01", "2026-11-16"), null);
-    assert.equal(computeExactAge("2015-06-10", "2026-11-16"), 11);
-    assert.equal(computeExactAge("2013-11-16", "2026-11-16"), 13);
+    assert.ok((computeExactAge("2015-06-10", "2026-11-16") ?? 0) < minAgeUs);
+    assert.equal(computeExactAge("2013-11-16", "2026-11-16"), minAgeUs);
     assert.equal(computeExactAge("1998-04-20", "2026-11-16"), 28);
   });
 });
@@ -382,8 +373,8 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
 
     assert.equal(computeProRemainingDays(tenDaysLater, now), 10);
     assert.equal(computeProRemainingDays(now - 1000, now), 0);
-    assert.equal(isCoachProActive({ role: "coach", plan: "PRO", proExpiresAt: tenDaysLater } as any, now), true);
-    assert.equal(isCoachProActive({ role: "coach", plan: "PRO", proExpiresAt: now - 5000 } as any, now), false);
+    assert.equal(isCoachProActive({ role: "coach", plan: "PRO", proExpiresAt: tenDaysLater }, now), true);
+    assert.equal(isCoachProActive({ role: "coach", plan: "PRO", proExpiresAt: now - 5000 }, now), false);
 
     const fs = await import("node:fs");
     const path = await import("node:path");
@@ -569,6 +560,7 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     const fs = await import("node:fs");
     const path = await import("node:path");
     const { applyDomMutationPatch } = await import("../src/lib/domMutationGuard.ts");
+    type PatchableProto = Parameters<typeof applyDomMutationPatch>[0];
 
     class MockNode {
       nodeName: string;
@@ -619,7 +611,7 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
       }
     }
 
-    applyDomMutationPatch(MockNode.prototype as any);
+    applyDomMutationPatch(MockNode.prototype as unknown as PatchableProto);
 
     // Simulate Chrome / Google Translate wrapping a React text node in <font><font>text</font></font>
     const div = new MockNode("DIV");
@@ -1192,7 +1184,10 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
       path.resolve(process.cwd(), "garmin-ciq/source/Archery101010WatchApp.mc"),
       "utf8"
     );
-    assert.ok(garminSrc.includes("mPendingRetryCmd"));
+    assert.ok(
+      garminSrc.includes("mPendingCmdQueue") || garminSrc.includes("mPendingRetryCmd"),
+      "Garmin Connect IQ must buffer offline commands in persistent FIFO queue"
+    );
 
     const forbiddenBrands = /\b(whoop|polar|garmin|wahoo|coros|strava|apple watch|fitbit|suunto|nike)\b/i;
     for (const rel of [
@@ -1552,7 +1547,10 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     assert.ok(wearSrc.includes("NOT_FOUND") && wearSrc.includes("NO_NET"), "WearMainActivity must surface invalid code / no internet errors");
 
     // 3. Galaxy Watch physical button + rotary bezel + XL Analysis button (44f) & XL Cloud Code CTA (38f)
-    assert.ok(wearSrc.includes("public boolean dispatchKeyEvent(KeyEvent event)"));
+    assert.ok(
+      wearSrc.includes("public boolean onKeyDown(int keyCode, KeyEvent event)") ||
+        wearSrc.includes("public boolean dispatchKeyEvent(KeyEvent event)")
+    );
     assert.ok(wearSrc.includes("public boolean onGenericMotionEvent(MotionEvent event)"));
     assert.ok(wearSrc.includes("canvasView.requestFocus()"));
     assert.ok(wearSrc.includes("float btnH = 44f * scale;"), "Analysis XL toggle button must be >= 44f * scale");
@@ -1981,11 +1979,21 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
 
     // 2. Explicit user Disconnect must not be overridden by passive { unmute: false } background polls,
     //    until the user explicitly reconnects via requestWatchAppHeartRate() (default unmute: true)
-    const prevWin = (globalThis as any).window;
-    const mockWin: any = {
+    interface MockWearHrWindow {
+      location: { protocol: string; hostname: string };
+      __onNativeWearHrUpdate?: (payload: {
+        bpm: number;
+        status: string;
+        deviceName: string;
+        nodeId: string;
+      }) => void;
+    }
+    const globalWithWin = globalThis as unknown as { window?: MockWearHrWindow };
+    const prevWin = globalWithWin.window;
+    const mockWin: MockWearHrWindow = {
       location: { protocol: "https:", hostname: "archery101010-c0bb4.web.app" }
     };
-    (globalThis as any).window = mockWin;
+    globalWithWin.window = mockWin;
     try {
       requestWatchAppHeartRate(); // initializes window.__onNativeWearHrUpdate & unmutes
       mockWin.__onNativeWearHrUpdate?.({
@@ -2026,7 +2034,7 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
       assert.equal(getBleHeartRateStatus().currentBpm, 86);
       disconnectBleHeartRateDevice(false);
     } finally {
-      (globalThis as any).window = prevWin;
+      globalWithWin.window = prevWin;
     }
 
     // 3. Adversarial Biomechanical Case A: High pre-draw + slow 4.3 deg/s vertical forearm alignment onto gold

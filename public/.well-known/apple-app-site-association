@@ -1,0 +1,37 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID.com.archery101010.app",
+        "appIDs": [
+          "TEAMID.com.archery101010.app"
+        ],
+        "paths": [
+          "/__/auth/*",
+          "/watch",
+          "/watch/*",
+          "*"
+        ],
+        "components": [
+          {
+            "/": "/__/auth/*",
+            "comment": "OAuth and Firebase Authentication callbacks"
+          },
+          {
+            "/": "/watch*",
+            "comment": "Companion sports smartwatch deep links"
+          },
+          {
+            "/": "/*"
+          }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "TEAMID.com.archery101010.app"
+    ]
+  }
+}

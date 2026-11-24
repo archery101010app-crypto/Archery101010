@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
-import { formatRegionalDate } from "@/lib/i18n/regionalUtils";
+import { formatRegionalDate, formatShootingDistance, metersToYards } from "@/lib/i18n/regionalUtils";
 import { UserProfile } from "@/lib/authService";
-import { getLocalSessions, deleteLocalSession, saveLocalSetting } from "@/lib/db/indexedDB";
+import { getLocalSessions, deleteLocalSession } from "@/lib/db/indexedDB";
 import { showOledConfirm } from "@/lib/oledDialog";
 import { ArrowLeft, Trash2, RotateCcw } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import BleHeartRateModal from "@/components/watch/BleHeartRateModal";
 import { ensurePhoneWatchPairingReady } from "@/lib/scoring/biometricsEngine";
 import {
@@ -26,14 +26,11 @@ interface SessionConfigViewProps {
 const DISTANCES = [18, 30, 50, 60, 70];
 
 export default function SessionConfigView({ user, onBack, onStartSession }: SessionConfigViewProps) {
-  const { language, t, tx } = useLanguage();
+  const { language, unitSystem, t, tx } = useLanguage();
   const isEs = language === "es";
   const [draftSession, setDraftSession] = useState<any | null>(null);
 
   // Configuration States
-  const [showPracticeInfoModal, setShowPracticeInfoModal] = useState(false);
-  const [practiceInfoType, setPracticeInfoType] = useState<"Control" | "Práctica" | "Volumen">("Práctica");
-  const [dontShowAgainPractice, setDontShowAgainPractice] = useState(false);
   const [showBleHrModal, setShowBleHrModal] = useState(false);
   const [bleHrStatus, setBleHrStatus] = useState<BleHeartRateStatus>(() => getBleHeartRateStatus());
 
@@ -108,9 +105,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
     } else if (newFormat === "WA 720") {
       setEndsCount(12);
       setArrowsPerEnd(6);
-      if (distance === 18) {
-        setDistance(bowType === "Compound" ? 50 : 70);
-      }
+      setDistance(bowType === "Compound" ? 50 : 70);
     } else if (newFormat === "WA 300") {
       setEndsCount(10);
       setArrowsPerEnd(3);
@@ -130,14 +125,15 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
     const safeArrowsPerEnd = Math.min(12, Math.max(1, arrowsPerEnd));
     const safeMaxEnds = Math.min(60, Math.max(1, Math.floor(200 / safeArrowsPerEnd)));
     const safeEndsCount = Math.min(safeMaxEnds, Math.max(1, endsCount));
+    const useImperialDistance = format === "Libre" && unitSystem === "imperial";
     onStartSession({
       practiceType,
       format,
       targetType: format === "Vegas 300" || targetType === "Vegas 300" ? "Vegas 300" : "WA 300",
       bowType,
       distance,
-      distanceUnit: "m",
-      distanceValue: distance,
+      distanceUnit: useImperialDistance ? "yd" : "m",
+      distanceValue: useImperialDistance ? Math.round(metersToYards(distance)) : distance,
       autoScore: true,
       includeNotes: true,
       endsCount: safeEndsCount,
@@ -145,14 +141,6 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
       maxScore: Math.min(2000, safeEndsCount * safeArrowsPerEnd * 10),
       warmupArrows: 0
     });
-  };
-
-  const handleConfirmPracticeInfo = async () => {
-    setPracticeType(practiceInfoType);
-    if (dontShowAgainPractice) {
-      await saveLocalSetting(`hide_info_practice_${practiceInfoType}`, true);
-    }
-    setShowPracticeInfoModal(false);
   };
 
   const handleResumeDraft = () => {
@@ -301,8 +289,13 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                 </span>
                 <h4 className="text-white text-[18.4px] font-bold mt-1 break-words leading-tight tabular-nums">
                   {draftSession.format === "Libre" ? tx("Libre", "Custom") : draftSession.format} ·{" "}
-                  {`${Math.round(Number(draftSession.distance) || 18)}m`} ·{" "}
-                  {getLocalizedBowName(draftSession.bowType)}
+                  {formatShootingDistance(
+                    Number(draftSession.distance) || 18,
+                    draftSession.format === "Libre" ? unitSystem : "metric",
+                    draftSession.distanceUnit,
+                    draftSession.distanceValue
+                  )}{" "}
+                  · {getLocalizedBowName(draftSession.bowType)}
                 </h4>
                 <p className="text-[13.9px] text-white tabular-nums">
                   {tx("Pausado el", "Paused on")}{" "}
@@ -439,7 +432,12 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
               <button
                 key={type}
                 type="button"
-                onClick={() => setBowType(type)}
+                onClick={() => {
+                  setBowType(type);
+                  if (format === "WA 720") {
+                    setDistance(type === "Compound" ? 50 : 70);
+                  }
+                }}
                 className={`${
                   isEs
                     ? "h-12 px-1 sm:px-2 rounded-xl border text-[14.5px] min-[390px]:text-[16.5px] sm:text-[18.7px] leading-none tracking-tight font-bold flex items-center justify-center text-center leading-tight break-words transition-all duration-200 cursor-pointer"
@@ -492,7 +490,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
                       : "border-white/10 bg-[#0D0F12] text-white hover:text-white"
                   }`}
                 >
-                  {`${d}m`}
+                  {formatShootingDistance(d, format === "Libre" ? unitSystem : "metric")}
                 </button>
               );
             })}
@@ -578,65 +576,6 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
         userUid={user?.uid}
         onClose={() => setShowBleHrModal(false)}
       />
-
-      {/* MODAL: Practice Info Explanation */}
-      <AnimatePresence>
-        {showPracticeInfoModal && (
-          <div className="fixed inset-0 z-[100000] bg-black/85 backdrop-blur-sm flex items-center justify-center p-6">
-            <div className="bg-[#0A0B0E] border border-white/10 rounded-2xl p-6 w-full max-w-xs flex flex-col gap-4 text-start">
-              <div>
-                <span className="text-[11.6px] text-cyan-neon font-black tracking-widest uppercase">
-                  {tx("Metodología de Práctica", "Practice Methodology")}
-                </span>
-                <h3 className="text-white text-base font-black uppercase mt-1">
-                  {tx("Modo:", "Mode:")}{" "}
-                  {getLocalizedPracticeName(practiceInfoType)}
-                </h3>
-              </div>
-
-              <p className="text-xs text-white leading-relaxed">
-                {practiceInfoType === "Control" &&
-                  tx(
-                    "Simulación estricta de competencia. Con tiempos oficiales, planilla de puntuación reglamentaria, diana activa y sin interrupciones. Ideal para evaluar tu nivel en torneos.",
-                    "Strict competition simulation with official timing, regulatory scorecard, active target, and zero interruptions. Ideal for tournament readiness."
-                  )}
-                {practiceInfoType === "Práctica" &&
-                  tx(
-                    "Entrenamiento regular y libre. Registra tus tiros con flexibilidad para analizar agrupamientos y técnica. Las notas por end están habilitadas.",
-                    "Flexible open practice. Record shots to analyze groupings and form with per-end notes enabled."
-                  )}
-                {practiceInfoType === "Volumen" &&
-                  tx(
-                    "Registra la estadística correspondiente a la cantidad de flechas lanzadas en la sesión.",
-                    "Tracks total arrows shot during the session for physical volume statistics."
-                  )}
-              </p>
-
-              <div className="flex items-center gap-2 border-t border-white/5 pt-3">
-                <input
-                  type="checkbox"
-                  id="dontShowAgain"
-                  checked={dontShowAgainPractice}
-                  onChange={(e) => setDontShowAgainPractice(e.target.checked)}
-                  className="rounded border-neutral-700 bg-neutral-950 text-cyan-neon focus:ring-0 focus:ring-offset-0 w-4 h-4 cursor-pointer"
-                />
-                <label htmlFor="dontShowAgain" className="text-[11.6px] text-white font-bold cursor-pointer uppercase select-none">
-                  {tx("No volver a mostrar", "Don't show again")}
-                </label>
-              </div>
-
-              <div className="flex gap-2 mt-1">
-                <button
-                  onClick={handleConfirmPracticeInfo}
-                  className="flex-1 py-3 rounded-xl bg-cyan-neon hover:bg-[#19c8ff] text-black font-black text-xs uppercase tracking-wider cursor-pointer transition-colors"
-                >
-                  {tx("Entendido, Iniciar", "Got it, Start")}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

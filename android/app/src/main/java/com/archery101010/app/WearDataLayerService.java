@@ -75,10 +75,14 @@ public class WearDataLayerService extends WearableListenerService {
     }
 
     private int scorePointsFromLabel(final String label) {
-        if ("X".equalsIgnoreCase(label) || "10".equals(label)) return 10;
-        if ("M".equalsIgnoreCase(label) || label == null || label.isEmpty()) return 0;
+        if (label == null) return 0;
+        String trimmed = label.trim();
+        if (trimmed.isEmpty() || "-".equals(trimmed) || "—".equals(trimmed) || "M".equalsIgnoreCase(trimmed)) {
+            return 0;
+        }
+        if ("X".equalsIgnoreCase(trimmed) || "10".equals(trimmed)) return 10;
         try {
-            int val = Integer.parseInt(label.trim());
+            int val = Integer.parseInt(trimmed);
             return Math.max(0, Math.min(10, val));
         } catch (Exception e) {
             return 0;

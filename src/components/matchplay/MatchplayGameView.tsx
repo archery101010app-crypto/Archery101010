@@ -38,7 +38,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   const { language, tx, isRtl } = useLanguage();
   const isEs = language === "es";
   const languageRef = useRef(language);
-  languageRef.current = language;
+  useEffect(() => {
+    languageRef.current = language;
+  }, [language]);
   const txCurrent = (esText: string, enText: string) =>
     languageRef.current === "es" ? esText : enText;
   const isCompound = config.system === "cumulative" || config.bowType === "Compound";
@@ -49,6 +51,39 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     config.targetType
   );
   const presetRings = DIANA_PRESETS[dianaPresetKey] || DIANA_PRESETS.WA_10_122;
+
+  const getSafeInitials = (rawName?: string | null): string =>
+    (rawName || "?").trim().slice(0, 2).toUpperCase() || "?";
+
+  const getValNumeric = (val: string | number): number => {
+    if (val === "X" || val === 10) return 10;
+    if (val === "M" || val === 0 || val === "") return 0;
+    return Number(val) || 0;
+  };
+
+  const getCumulativeTotal = (tiros: (string | number)[][]): number => {
+    return tiros.reduce(
+      (sum: number, end) => sum + end.reduce((endSum: number, b) => endSum + getValNumeric(b), 0),
+      0
+    );
+  };
+
+  const triggerConfetti = () => {
+    confetti({
+      particleCount: 120,
+      spread: 70,
+      origin: { y: 0.6 }
+    });
+  };
+
+  const getRingScoreFromSvgCoords = (svgX: number, svgY: number): string => {
+    const clampedX = Math.max(0, Math.min(100, Number(svgX) || 50));
+    const clampedY = Math.max(0, Math.min(100, Number(svgY) || 50));
+    const dist = Math.hypot(clampedX - 50, clampedY - 50);
+    const sortedRings = [...presetRings].sort((a, b) => a.r - b.r);
+    const matchingRing = sortedRings.find((ring) => dist <= ring.r);
+    return matchingRing ? matchingRing.v : "M";
+  };
   
   // Game states (initialized from config in case of resuming a draft)
   const [currentEnd, setCurrentEnd] = useState<number>(config.currentEnd ?? 0);
@@ -83,6 +118,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   // General overlays
   const [showRules, setShowRules] = useState(!config.currentEnd);
   const [endSummary, setEndSummary] = useState<string | null>(null);
+  const endSummaryRef = useRef<string | null>(null);
+  const pendingRemoteNextEndRef = useRef<number | null>(null);
+  useEffect(() => {
+    endSummaryRef.current = endSummary;
+  }, [endSummary]);
 
   // Ready Check States
   const [isReadyCheckActive, setIsReadyCheckActive] = useState<boolean>(true);
@@ -257,9 +297,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     if (!hasShots) return;
 
     const draftSession = {
+      id: config.id,
       uid: config.id,
+      userId: user.uid,
       userUid: user.uid,
-      userName: user.fullName,
+      userName: user.fullName || user.nickname || "Arquero",
       timestamp: Date.now(),
       practiceType: "Control",
       bowConfig: { 
@@ -276,10 +318,10 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       warmupArrows: 0,
       isDuel: true,
       isDraft: true,
-      opponent: config.rival.fullName,
-      opponentCountry: config.rival.country,
-      opponentClubName: config.rival.clubName,
-      opponentClubLogo: config.rival.clubLogo,
+      opponent: config.rival?.fullName || "Rival",
+      opponentCountry: config.rival?.country,
+      opponentClubName: config.rival?.clubName,
+      opponentClubLogo: config.rival?.clubLogo,
       
       // Full game states for rehydration
       config: config,
@@ -703,8 +745,21 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           }
           break;
         case "next-end": {
+          if (duelFinishedRef.current) break;
           const targetNextEnd =
             typeof msg.nextEnd === "number" ? msg.nextEnd : currentEndRef.current + 1;
+          // Preserve active end validation / summary review for the local archer (`AUD-WEB-03`)
+          if (
+            gameStateRef.current.validationPhase !== "IDLE" ||
+            endSummaryRef.current !== null
+          ) {
+            pendingRemoteNextEndRef.current = Math.max(
+              pendingRemoteNextEndRef.current ?? 0,
+              targetNextEnd
+            );
+            break;
+          }
+          pendingRemoteNextEndRef.current = null;
           setEndSummary(null);
           setEndSummaryMsg(null);
           setValidationPhase("IDLE");
@@ -920,23 +975,17 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                 urls: process.env.NEXT_PUBLIC_TURN_URL.split(",")
                   .map((u) => u.trim())
                   .filter(Boolean),
-                username: process.env.NEXT_PUBLIC_TURN_USERNAME || "",
-                credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL || ""
+                ...(process.env.NEXT_PUBLIC_TURN_USERNAME
+                  ? { username: process.env.NEXT_PUBLIC_TURN_USERNAME }
+                  : {}),
+                ...(process.env.NEXT_PUBLIC_TURN_CREDENTIAL
+                  ? { credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL }
+                  : {})
               }
             ]
           : []),
         { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-        { urls: "stun:openrelay.metered.ca:80" },
-        {
-          urls: [
-            "turn:openrelay.metered.ca:80?transport=udp",
-            "turn:openrelay.metered.ca:80?transport=tcp",
-            "turn:openrelay.metered.ca:443?transport=tcp"
-          ],
-          username: "openrelayproject",
-          credential: "openrelayproject"
-        }
+        { urls: "stun:stun1.l.google.com:19302" }
       ];
 
       const pc = new RTCPeerConnection({ iceServers });
@@ -1196,83 +1245,24 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     }
   }, [isRivalConnected, isFriendDuel, duelFinished]);
 
-  // Auto-reconnect sequence (glare-free: only isCreator resets signaling; !isCreator waits for incoming offer unless disconnected >20s)
-  const triggerAutoReconnect = async () => {
-    if (isReconnectingRef.current) return;
-    isReconnectingRef.current = true;
-    logger.debug("[WebRTC Auto-Reconnect] Starting auto-reconnect cycle...");
-    try {
-      const docRef = doc(db, "active_duels", config.id);
-      const isCreator = isCreatorRoleRef.current;
-      if (isCreator) {
-        closeWebRTC();
-        await updateDoc(docRef, {
-          creatorConnected: true,
-          creatorConnectedAt: Date.now(),
-          webrtcOffer: null,
-          webrtcAnswer: null,
-          creatorCandidates: [],
-          playerCandidates: [],
-          updatedAt: Date.now()
-        });
-        logger.debug("[WebRTC Auto-Reconnect] Creator reset signaling fields. Renegotiating...");
-      } else if (disconnectSecondsRef.current > 20) {
-        closeWebRTC();
-        await updateDoc(docRef, {
-          playerConnected: true,
-          playerConnectedAt: Date.now(),
-          webrtcOffer: null,
-          webrtcAnswer: null,
-          creatorCandidates: [],
-          playerCandidates: [],
-          updatedAt: Date.now()
-        });
-        logger.debug("[WebRTC Auto-Reconnect] Player (>20s disconnected) reset signaling fields.");
-      } else {
-        closeWebRTC();
-        await updateDoc(docRef, {
-          playerConnected: true,
-          playerConnectedAt: Date.now(),
-          updatedAt: Date.now()
-        });
-        logger.debug("[WebRTC Auto-Reconnect] Player waiting for incoming creator webrtcOffer...");
-      }
-    } catch (err) {
-      logger.error("[WebRTC Auto-Reconnect] Error during auto-reconnect:", err);
-    } finally {
-      isReconnectingRef.current = false;
-    }
-  };
-
-  useEffect(() => {
-    if (!isFriendDuel || duelFinished || !hasConnectedOnceRef.current) return;
-
-    let interval: NodeJS.Timeout;
-    if (!isRivalConnected) {
-      triggerAutoReconnect();
-      interval = setInterval(() => {
-        logger.debug("[WebRTC Reconnect loop] Still disconnected. Retrying...");
-        triggerAutoReconnect();
-      }, 8000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isRivalConnected, isFriendDuel, duelFinished]);
   const closeWebRTC = () => {
     logger.debug("[WebRTC] Closing peer connection.");
     if (peerConnectionRef.current) {
       // Clean up any silent audio track context to prevent memory leaks or audio node issues
       try {
-        peerConnectionRef.current.getSenders().forEach(sender => {
+        peerConnectionRef.current.getSenders().forEach((sender) => {
           const track = sender.track;
           if (track && (track as any)._dummySource) {
             logger.debug("[WebRTC] Cleaning up dummy silent audio track source");
-            try { (track as any)._dummySource.stop(); } catch (e) {}
-            try { (track as any)._dummyCtx.close(); } catch (e) {}
+            try {
+              (track as any)._dummySource.stop();
+            } catch {}
+            try {
+              (track as any)._dummyCtx.close();
+            } catch {}
           }
         });
-      } catch (e) {}
+      } catch {}
 
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
@@ -1291,6 +1281,67 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     candidatesHandledRef.current = 0;
     setIsP2PActive(false);
   };
+
+  // Auto-reconnect sequence (side-isolated: each player only resets their OWN signaling fields)
+  const triggerAutoReconnect = async () => {
+    if (isReconnectingRef.current) return;
+    isReconnectingRef.current = true;
+    logger.debug("[WebRTC Auto-Reconnect] Starting auto-reconnect cycle");
+    try {
+      const docRef = doc(db, "active_duels", config.id);
+      const isCreator = isCreatorRoleRef.current;
+      if (isCreator) {
+        closeWebRTC();
+        await updateDoc(docRef, {
+          creatorConnected: true,
+          creatorConnectedAt: Date.now(),
+          webrtcOffer: null,
+          webrtcAnswer: null,
+          creatorCandidates: [],
+          updatedAt: Date.now()
+        });
+        logger.debug("[WebRTC Auto-Reconnect] Creator reset own signaling fields.");
+      } else if (disconnectSecondsRef.current > 20) {
+        closeWebRTC();
+        await updateDoc(docRef, {
+          playerConnected: true,
+          playerConnectedAt: Date.now(),
+          webrtcAnswer: null,
+          playerCandidates: [],
+          updatedAt: Date.now()
+        });
+        logger.debug("[WebRTC Auto-Reconnect] Player (>20s disconnected) reset own signaling fields.");
+      } else {
+        closeWebRTC();
+        await updateDoc(docRef, {
+          playerConnected: true,
+          playerConnectedAt: Date.now(),
+          updatedAt: Date.now()
+        });
+        logger.debug("[WebRTC Auto-Reconnect] Player waiting for incoming creator webrtcOffer");
+      }
+    } catch (err) {
+      logger.error("[WebRTC Auto-Reconnect] Error during auto-reconnect:", err);
+    } finally {
+      isReconnectingRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    if (!isFriendDuel || duelFinished || !hasConnectedOnceRef.current) return;
+
+    let interval: NodeJS.Timeout;
+    if (!isRivalConnected) {
+      triggerAutoReconnect();
+      interval = setInterval(() => {
+        logger.debug("[WebRTC Reconnect loop] Still disconnected. Retrying");
+        triggerAutoReconnect();
+      }, 8000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRivalConnected, isFriendDuel, duelFinished]);
 
   // VoIP call controls
   const dialCall = () => {
@@ -1416,6 +1467,213 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     sendDataMessage({ type: "walkie", active: nextActive });
   };
 
+  // Helper to update our own ready state in Firestore
+  const updateOurReadyState = async (ready: boolean) => {
+    if (!isFriendDuel || !config.id) return;
+    try {
+      const docRef = doc(db, "active_duels", config.id);
+      if (isCreatorRoleRef.current) {
+        await updateDoc(docRef, {
+          creatorReady: ready,
+          updatedAt: Date.now()
+        });
+      } else {
+        await updateDoc(docRef, {
+          playerReady: ready,
+          updatedAt: Date.now()
+        });
+      }
+    } catch (err) {
+      logger.warn("Error updating ready state in Firestore:", err);
+    }
+  };
+
+  const stopMicrophoneAnalysis = () => {
+    if (micAnimFrameId.current !== null) {
+      cancelAnimationFrame(micAnimFrameId.current);
+      micAnimFrameId.current = null;
+    }
+    if (walkieMicStreamRef.current) {
+      walkieMicStreamRef.current.getTracks().forEach((t) => t.stop());
+      walkieMicStreamRef.current = null;
+    }
+    if (callStateRef.current !== "ACTIVE" && microphoneStreamRef.current) {
+      microphoneStreamRef.current.getTracks().forEach((t) => t.stop());
+      microphoneStreamRef.current = null;
+      setMicrophoneAllowed(false);
+    }
+    if (walkieAudioCtxRef.current) {
+      walkieAudioCtxRef.current.close().catch(() => {});
+      walkieAudioCtxRef.current = null;
+    }
+    audioAnalyserRef.current = null;
+    setWalkieWaveAnim([10, 10, 10, 10]);
+  };
+
+  const RIVAL_PHRASE_EN_MAP: Record<string, string> = {
+    "¡Venga! A ver qué tal tiras esta flecha.": "Let's go! Let's see how you shoot this arrow.",
+    "Mucha concentración en esta línea.": "Full focus on the shooting line.",
+    "El viento está un poco inestable hoy, ¿eh?": "Wind feels a bit tricky today, right?",
+    "¡Buen tiro! Mantén el ritmo.": "Nice shooting! Keep up the rhythm.",
+    "Siento un poco de presión en la línea de tiro.": "Feeling the pressure on the shooting line.",
+    "Tu turno. ¡Apunta bien!": "Your turn. Aim steady!",
+    "¡Impresionante! ¡Qué centro!": "Impressive! Dead center!",
+    "¡Un diez perfecto! Qué gran tiro.": "A perfect ten! Great shot.",
+    "Vaya tiro en el amarillo. Me pones presión.": "Right in the gold. Putting the pressure on me!",
+    "¡Bien hecho! Excelente ejecución.": "Well done! Clean execution.",
+    "Una flecha difícil, el viento debió moverla.": "Tough arrow, the wind must have caught it.",
+    "No te preocupes, el próximo tiro será mejor.": "No worries, the next shot will be better.",
+    "Tranquilo, sacúdete ese tiro y concéntrate.": "Shake that one off and stay focused.",
+    "Eso dolió, ¡recuperemos en la siguiente!": "Tough break, let's bounce back on the next arrow!",
+    "¡Excelente duelo! Has tirado de maravilla. ¡Felicitaciones por la victoria!": "Great match! You shot brilliantly. Congratulations on the win!",
+    "¡Qué buen enfrentamiento! Estuvo muy reñido de principio a fin. Buen juego.": "What a great match! Close from start to finish. Good game!",
+    "¡Un empate increíble! Vaya nivel de competencia.": "Incredible tie! Amazing level of competition."
+  };
+
+  const resolveActiveBotLang = (): string => {
+    const stored =
+      typeof window !== "undefined" ? localStorage.getItem("preferred_language") : null;
+    return stored || languageRef.current || language || "es";
+  };
+
+  const speakRivalPhrase = (text: string) => {
+    if (isFriendDuel || !isMountedRef.current) return;
+    const activeLang = resolveActiveBotLang();
+    const isSpanish = activeLang.toLowerCase().startsWith("es");
+    const spokenText = isSpanish ? text : RIVAL_PHRASE_EN_MAP[text] || text;
+
+    playRadioStatic();
+    setWalkieText(spokenText);
+    setIsRivalSpeaking(true);
+
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(spokenText);
+      utterance.lang = getSpeechLocale(activeLang);
+
+      const voices = window.speechSynthesis.getVoices();
+      const isFemale = ["Daniela", "Laura", "Sofia", "Emma", "Yuna", "Sakura"].some((n) =>
+        (config?.rival?.fullName || "").includes(n)
+      );
+      const selectedVoice =
+        pickVoiceForLanguage(voices, activeLang, isFemale) ||
+        (!isSpanish ? pickVoiceForLanguage(voices, "en", isFemale) : undefined);
+
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+
+      utterance.rate = 1.05;
+      utterance.pitch = isFemale ? 1.15 : 0.95;
+
+      utterance.onend = () => {
+        setIsRivalSpeaking(false);
+        playRadioStatic();
+        setTimeout(() => setWalkieText(null), 2500);
+      };
+
+      utterance.onerror = () => {
+        setIsRivalSpeaking(false);
+        setTimeout(() => setWalkieText(null), 2500);
+      };
+
+      window.speechSynthesis.speak(utterance);
+    } else {
+      setTimeout(() => {
+        setIsRivalSpeaking(false);
+        playRadioStatic();
+        setTimeout(() => setWalkieText(null), 2500);
+      }, 3000);
+    }
+  };
+
+  const speakRivalPhraseOnTurnStart = () => {
+    if (isFriendDuel || !isWalkieTalkieActive || Math.random() > 0.3) return;
+    const isSpanish = resolveActiveBotLang().toLowerCase().startsWith("es");
+    const phrases = isSpanish
+      ? [
+          "¡Venga! A ver qué tal tiras esta flecha.",
+          "Mucha concentración en esta línea.",
+          "El viento está un poco inestable hoy, ¿eh?",
+          "¡Buen tiro! Mantén el ritmo.",
+          "Siento un poco de presión en la línea de tiro.",
+          "Tu turno. ¡Apunta bien!"
+        ]
+      : [
+          "Let's go! Let's see how you shoot this arrow.",
+          "Full focus on the shooting line.",
+          "Wind feels a bit tricky today, right?",
+          "Nice shooting! Keep up the rhythm.",
+          "Feeling the pressure on the shooting line.",
+          "Your turn. Aim steady!"
+        ];
+    speakRivalPhrase(phrases[Math.floor(Math.random() * phrases.length)]);
+  };
+
+  const speakRivalPhraseOnShot = (score: number) => {
+    if (isFriendDuel || !isWalkieTalkieActive) return;
+    setTimeout(() => {
+      const isSpanish = resolveActiveBotLang().toLowerCase().startsWith("es");
+      if (score === 10) {
+        const phrases = isSpanish
+          ? [
+              "¡Impresionante! ¡Qué centro!",
+              "¡Un diez perfecto! Qué gran tiro.",
+              "Vaya tiro en el amarillo. Me pones presión.",
+              "¡Bien hecho! Excelente ejecución."
+            ]
+          : [
+              "Impressive! Dead center!",
+              "A perfect ten! Great shot.",
+              "Right in the gold. Putting the pressure on me!",
+              "Well done! Clean execution."
+            ];
+        speakRivalPhrase(phrases[Math.floor(Math.random() * phrases.length)]);
+      } else if (score <= 6) {
+        const phrases = isSpanish
+          ? [
+              "Una flecha difícil, el viento debió moverla.",
+              "No te preocupes, el próximo tiro será mejor.",
+              "Tranquilo, sacúdete ese tiro y concéntrate.",
+              "Eso dolió, ¡recuperemos en la siguiente!"
+            ]
+          : [
+              "Tough arrow, the wind must have caught it.",
+              "No worries, the next shot will be better.",
+              "Shake that one off and stay focused.",
+              "Tough break, let's bounce back on the next arrow!"
+            ];
+        speakRivalPhrase(phrases[Math.floor(Math.random() * phrases.length)]);
+      }
+    }, 1000);
+  };
+
+  const speakRivalPhraseOnMatchEnd = (userWon: boolean | null) => {
+    if (isFriendDuel || !isWalkieTalkieActive) return;
+    setTimeout(() => {
+      const isSpanish = resolveActiveBotLang().toLowerCase().startsWith("es");
+      if (userWon === true) {
+        speakRivalPhrase(
+          isSpanish
+            ? "¡Excelente duelo! Has tirado de maravilla. ¡Felicitaciones por la victoria!"
+            : "Great match! You shot brilliantly. Congratulations on the win!"
+        );
+      } else if (userWon === false) {
+        speakRivalPhrase(
+          isSpanish
+            ? "¡Qué buen enfrentamiento! Estuvo muy reñido de principio a fin. Buen juego."
+            : "What a great match! Close from start to finish. Good game!"
+        );
+      } else {
+        speakRivalPhrase(
+          isSpanish
+            ? "¡Un empate increíble! Vaya nivel de competencia."
+            : "Incredible tie! Amazing level of competition."
+        );
+      }
+    }, 1500);
+  };
+
   // Subscribe to real-time duel doc in Firestore for friend duels
   useEffect(() => {
     if (!isFriendDuel || !config.id) return;
@@ -1430,14 +1688,14 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           // We are creator
           await updateDoc(docRef, {
             creatorConnected: connected,
-            creatorConnectedAt: connected ? Date.now() : Date.now(),
+            creatorConnectedAt: Date.now(),
             updatedAt: Date.now()
           });
         } else {
           // We are player
           await updateDoc(docRef, {
             playerConnected: connected,
-            playerConnectedAt: connected ? Date.now() : Date.now(),
+            playerConnectedAt: Date.now(),
             updatedAt: Date.now()
           });
         }
@@ -1453,19 +1711,25 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     setIsRivalReady(false);
     updateOurReadyState(false).catch(() => {});
 
-    // Bind beforeunload to handle abrupt page closes
+    // Bind beforeunload to handle abrupt page closes (side-isolated signaling cleanup)
     const handleBeforeUnload = () => {
       updateOurStatus(false).catch(() => {});
-      // Clean walkie on close
       try {
         const isCreator = isCreatorRoleRef.current;
-        updateDoc(docRef, {
-          [isCreator ? "walkieActiveCreator" : "walkieActivePlayer"]: false,
-          webrtcOffer: null,
-          webrtcAnswer: null,
-          creatorCandidates: [],
-          playerCandidates: []
-        }).catch(() => {});
+        const ownSignalingCleanup = isCreator
+          ? {
+              walkieActiveCreator: false,
+              webrtcOffer: null,
+              creatorCandidates: [],
+              updatedAt: Date.now()
+            }
+          : {
+              walkieActivePlayer: false,
+              webrtcAnswer: null,
+              playerCandidates: [],
+              updatedAt: Date.now()
+            };
+        updateDoc(docRef, ownSignalingCleanup).catch(() => {});
       } catch {}
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -1661,45 +1925,29 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       sendDataMessage({ type: "exit", finished: duelFinishedRef.current });
       // Mark ourselves as offline when unmounting (guarded against unhandledrejection)
       updateOurStatus(false).catch(() => {});
-      // Clean up walkie status
+      // Clean up ONLY our own walkie & WebRTC signaling fields (`AUD-FB-13` side isolation)
       try {
         const isCreator = isCreatorRoleRef.current;
-        updateDoc(docRef, {
-          [isCreator ? "walkieActiveCreator" : "walkieActivePlayer"]: false,
-          webrtcOffer: null,
-          webrtcAnswer: null,
-          creatorCandidates: [],
-          playerCandidates: []
-        }).catch(() => {});
+        const ownSignalingCleanup = isCreator
+          ? {
+              walkieActiveCreator: false,
+              webrtcOffer: null,
+              creatorCandidates: [],
+              updatedAt: Date.now()
+            }
+          : {
+              walkieActivePlayer: false,
+              webrtcAnswer: null,
+              playerCandidates: [],
+              updatedAt: Date.now()
+            };
+        updateDoc(docRef, ownSignalingCleanup).catch(() => {});
       } catch {}
       stopMicrophoneAnalysis();
       closeWebRTC();
       stopRingingSound();
     };
   }, [isFriendDuel, config.id]);
-
-  // Helper to update our own ready state in Firestore
-  const updateOurReadyState = async (ready: boolean) => {
-    if (!isFriendDuel || !config.id) return;
-    try {
-      const docRef = doc(db, "active_duels", config.id);
-      if (isCreatorRoleRef.current) {
-        // We are creator
-        await updateDoc(docRef, {
-          creatorReady: ready,
-          updatedAt: Date.now()
-        });
-      } else {
-        // We are player
-        await updateDoc(docRef, {
-          playerReady: ready,
-          updatedAt: Date.now()
-        });
-      }
-    } catch (err) {
-      logger.warn("Error updating ready state in Firestore:", err);
-    }
-  };
 
   // Rival Ready Simulation (Only for Bots)
   useEffect(() => {
@@ -1843,28 +2091,6 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     update();
   };
 
-  const stopMicrophoneAnalysis = () => {
-    if (micAnimFrameId.current !== null) {
-      cancelAnimationFrame(micAnimFrameId.current);
-      micAnimFrameId.current = null;
-    }
-    if (walkieMicStreamRef.current) {
-      walkieMicStreamRef.current.getTracks().forEach((t) => t.stop());
-      walkieMicStreamRef.current = null;
-    }
-    if (callStateRef.current !== "ACTIVE" && microphoneStreamRef.current) {
-      microphoneStreamRef.current.getTracks().forEach((t) => t.stop());
-      microphoneStreamRef.current = null;
-      setMicrophoneAllowed(false);
-    }
-    if (walkieAudioCtxRef.current) {
-      walkieAudioCtxRef.current.close().catch(() => {});
-      walkieAudioCtxRef.current = null;
-    }
-    audioAnalyserRef.current = null;
-    setWalkieWaveAnim([10, 10, 10, 10]);
-  };
-
   useEffect(() => {
     if (isWalkieTalkieActive) {
       startMicrophoneAnalysis();
@@ -1904,185 +2130,6 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       stopRingingSound();
     };
   }, []);
-
-  const RIVAL_PHRASE_EN_MAP: Record<string, string> = {
-    "¡Venga! A ver qué tal tiras esta flecha.": "Let's go! Let's see how you shoot this arrow.",
-    "Mucha concentración en esta línea.": "Full focus on the shooting line.",
-    "El viento está un poco inestable hoy, ¿eh?": "Wind feels a bit tricky today, right?",
-    "¡Buen tiro! Mantén el ritmo.": "Nice shooting! Keep up the rhythm.",
-    "Siento un poco de presión en la línea de tiro.": "Feeling the pressure on the shooting line.",
-    "Tu turno. ¡Apunta bien!": "Your turn. Aim steady!",
-    "¡Impresionante! ¡Qué centro!": "Impressive! Dead center!",
-    "¡Un diez perfecto! Qué gran tiro.": "A perfect ten! Great shot.",
-    "Vaya tiro en el amarillo. Me pones presión.": "Right in the gold. Putting the pressure on me!",
-    "¡Bien hecho! Excelente ejecución.": "Well done! Clean execution.",
-    "Una flecha difícil, el viento debió moverla.": "Tough arrow, the wind must have caught it.",
-    "No te preocupes, el próximo tiro será mejor.": "No worries, the next shot will be better.",
-    "Tranquilo, sacúdete ese tiro y concéntrate.": "Shake that one off and stay focused.",
-    "Eso dolió, ¡recuperemos en la siguiente!": "Tough break, let's bounce back on the next arrow!",
-    "¡Excelente duelo! Has tirado de maravilla. ¡Felicitaciones por la victoria!": "Great match! You shot brilliantly. Congratulations on the win!",
-    "¡Qué buen enfrentamiento! Estuvo muy reñido de principio a fin. Buen juego.": "What a great match! Close from start to finish. Good game!",
-    "¡Un empate increíble! Vaya nivel de competencia.": "Incredible tie! Amazing level of competition."
-  };
-
-  const resolveActiveBotLang = (): string => {
-    const stored =
-      typeof window !== "undefined" ? localStorage.getItem("preferred_language") : null;
-    return stored || languageRef.current || language || "es";
-  };
-
-  // Voice synthesis (Text-to-Speech — simulated bot duels ONLY; muted in live human duels)
-  const speakRivalPhrase = (text: string) => {
-    if (isFriendDuel || !isMountedRef.current) return;
-    const activeLang = resolveActiveBotLang();
-    const isSpanish = activeLang.toLowerCase().startsWith("es");
-    const spokenText = isSpanish ? text : RIVAL_PHRASE_EN_MAP[text] || text;
-
-    playRadioStatic();
-    setWalkieText(spokenText);
-    setIsRivalSpeaking(true);
-
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(spokenText);
-      utterance.lang = getSpeechLocale(activeLang);
-
-      const voices = window.speechSynthesis.getVoices();
-      const isFemale = ["Daniela", "Laura", "Sofia", "Emma", "Yuna", "Sakura"].some((n) =>
-        (config?.rival?.fullName || "").includes(n)
-      );
-      const selectedVoice =
-        pickVoiceForLanguage(voices, activeLang, isFemale) ||
-        (!isSpanish ? pickVoiceForLanguage(voices, "en", isFemale) : undefined);
-
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-      }
-
-      utterance.rate = 1.05;
-      utterance.pitch = isFemale ? 1.15 : 0.95;
-
-      utterance.onend = () => {
-        setIsRivalSpeaking(false);
-        playRadioStatic();
-        setTimeout(() => setWalkieText(null), 2500);
-      };
-
-      utterance.onerror = () => {
-        setIsRivalSpeaking(false);
-        setTimeout(() => setWalkieText(null), 2500);
-      };
-
-      window.speechSynthesis.speak(utterance);
-    } else {
-      setTimeout(() => {
-        setIsRivalSpeaking(false);
-        playRadioStatic();
-        setTimeout(() => setWalkieText(null), 2500);
-      }, 3000);
-    }
-  };
-
-  const speakRivalPhraseOnTurnStart = () => {
-    if (isFriendDuel) return;
-    if (!isWalkieTalkieActive) return;
-    if (Math.random() > 0.3) return; // 30% chance
-
-    const isSpanish = resolveActiveBotLang().toLowerCase().startsWith("es");
-    const phrases = isSpanish
-      ? [
-          "¡Venga! A ver qué tal tiras esta flecha.",
-          "Mucha concentración en esta línea.",
-          "El viento está un poco inestable hoy, ¿eh?",
-          "¡Buen tiro! Mantén el ritmo.",
-          "Siento un poco de presión en la línea de tiro.",
-          "Tu turno. ¡Apunta bien!"
-        ]
-      : [
-          "Let's go! Let's see how you shoot this arrow.",
-          "Full focus on the shooting line.",
-          "Wind feels a bit tricky today, right?",
-          "Nice shooting! Keep up the rhythm.",
-          "Feeling the pressure on the shooting line.",
-          "Your turn. Aim steady!"
-        ];
-    speakRivalPhrase(phrases[Math.floor(Math.random() * phrases.length)]);
-  };
-
-  const speakRivalPhraseOnShot = (score: number) => {
-    if (isFriendDuel) return;
-    if (!isWalkieTalkieActive) return;
-
-    setTimeout(() => {
-      const isSpanish = resolveActiveBotLang().toLowerCase().startsWith("es");
-      if (score === 10) {
-        const phrases = isSpanish
-          ? [
-              "¡Impresionante! ¡Qué centro!",
-              "¡Un diez perfecto! Qué gran tiro.",
-              "Vaya tiro en el amarillo. Me pones presión.",
-              "¡Bien hecho! Excelente ejecución."
-            ]
-          : [
-              "Impressive! Dead center!",
-              "A perfect ten! Great shot.",
-              "Right in the gold. Putting the pressure on me!",
-              "Well done! Clean execution."
-            ];
-        speakRivalPhrase(phrases[Math.floor(Math.random() * phrases.length)]);
-      } else if (score <= 6) {
-        const phrases = isSpanish
-          ? [
-              "Una flecha difícil, el viento debió moverla.",
-              "No te preocupes, el próximo tiro será mejor.",
-              "Tranquilo, sacúdete ese tiro y concéntrate.",
-              "Eso dolió, ¡recuperemos en la siguiente!"
-            ]
-          : [
-              "Tough arrow, the wind must have caught it.",
-              "No worries, the next shot will be better.",
-              "Shake that one off and stay focused.",
-              "Tough break, let's bounce back on the next arrow!"
-            ];
-        speakRivalPhrase(phrases[Math.floor(Math.random() * phrases.length)]);
-      }
-    }, 1000);
-  };
-
-  const speakRivalPhraseOnMatchEnd = (userWon: boolean | null) => {
-    if (isFriendDuel) return;
-    if (!isWalkieTalkieActive) return;
-
-    setTimeout(() => {
-      const isSpanish = resolveActiveBotLang().toLowerCase().startsWith("es");
-      if (userWon === true) {
-        speakRivalPhrase(
-          isSpanish
-            ? "¡Excelente duelo! Has tirado de maravilla. ¡Felicitaciones por la victoria!"
-            : "Great match! You shot brilliantly. Congratulations on the win!"
-        );
-      } else if (userWon === false) {
-        speakRivalPhrase(
-          isSpanish
-            ? "¡Qué buen enfrentamiento! Estuvo muy reñido de principio a fin. Buen juego."
-            : "What a great match! Close from start to finish. Good game!"
-        );
-      } else {
-        speakRivalPhrase(
-          isSpanish
-            ? "¡Un empate increíble! Vaya nivel de competencia."
-            : "Incredible tie! Amazing level of competition."
-        );
-      }
-    }, 1500);
-  };
-
-  // Helper values to parse string scores into numeric values
-  const getValNumeric = (val: string | number): number => {
-    if (val === "X" || val === 10) return 10;
-    if (val === "M" || val === 0 || val === "") return 0;
-    return Number(val);
-  };
 
   // Convert coordinate on SVG target grid to score value
   const getCoordsFromClient = (clientX: number, clientY: number) => {
@@ -2150,6 +2197,193 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       };
     }
     return { x: 50, y: 99 }; // Miss (M)
+  };
+
+  // Evaluate points after end completion
+  const evaluateEndCompletion = (userEndShots: (string | number)[], rivalEndShots: (string | number)[]) => {
+    const userSum = userEndShots.reduce((sum: number, b) => sum + getValNumeric(b), 0);
+    const rivalSum = rivalEndShots.reduce((sum: number, b) => sum + getValNumeric(b), 0);
+
+    let summaryMsg = "";
+
+    if (isCompound) {
+      if (userSum > rivalSum) {
+        summaryMsg = tx(
+          `¡Ganaste la ronda! +${userSum} a +${rivalSum}`,
+          `You won the end! +${userSum} to +${rivalSum}`
+        );
+      } else if (rivalSum > userSum) {
+        summaryMsg = tx(
+          `El rival ganó la ronda. +${rivalSum} a +${userSum}`,
+          `Opponent won the end. +${rivalSum} to +${userSum}`
+        );
+      } else {
+        summaryMsg = tx(
+          `Ronda empatada a ${userSum} puntos`,
+          `End tied at ${userSum} points`
+        );
+      }
+    } else {
+      if (userSum > rivalSum) {
+        setUserSetPoints((prev) => prev + 2);
+        summaryMsg = tx(
+          `¡Ganaste el Set! +2 Pts (Tus tiros: ${userSum} vs ${rivalSum})`,
+          `You won the Set! +2 Pts (Your end: ${userSum} vs ${rivalSum})`
+        );
+      } else if (rivalSum > userSum) {
+        setRivalSetPoints((prev) => prev + 2);
+        summaryMsg = tx(
+          `Set para el rival. +2 Pts (Tus tiros: ${userSum} vs ${rivalSum})`,
+          `Set goes to opponent. +2 Pts (Your end: ${userSum} vs ${rivalSum})`
+        );
+      } else {
+        setUserSetPoints((prev) => prev + 1);
+        setRivalSetPoints((prev) => prev + 1);
+        summaryMsg = tx(
+          `Set empatado. +1 Pt cada uno (${userSum} vs ${rivalSum})`,
+          `Set tied. +1 Pt each (${userSum} vs ${rivalSum})`
+        );
+      }
+    }
+
+    setEndSummaryMsg(summaryMsg);
+    setUserPhoto(null);
+    setRivalPhoto(null);
+    setValidationPhase("UPLOAD");
+  };
+
+  // Simulate rival shoot-off arrow
+  const simulateRivalShootOff = () => {
+    setRivalThinking(true);
+    setTimeout(() => {
+      const rand = Math.random();
+      const ratingVal = config.rival.rating;
+      let score = 9;
+
+      if (ratingVal >= 9.5) {
+        score = rand > 0.35 ? 10 : rand > 0.05 ? 9 : 8;
+      } else if (ratingVal >= 9.0) {
+        score = rand > 0.6 ? 10 : rand > 0.15 ? 9 : rand > 0.03 ? 8 : 7;
+      } else if (ratingVal >= 8.0) {
+        score = rand > 0.8 ? 10 : rand > 0.35 ? 9 : rand > 0.1 ? 8 : 7;
+      } else {
+        score = rand > 0.9 ? 10 : rand > 0.6 ? 9 : rand > 0.25 ? 8 : rand > 0.1 ? 7 : 6;
+      }
+      const targetSpec = getExactTargetDimensions(
+        Number(config.distance) || (isCompound ? 50 : 70),
+        config.bowType || (isCompound ? "Compound" : "Recurve"),
+        dianaPresetKey
+      );
+      const ringW = targetSpec.ringWidthCm;
+      const ringIdxFromCenter = Math.max(0, 10 - score);
+      const simulatedDistCm = Number(((ringIdxFromCenter + 0.12 + Math.random() * 0.76) * ringW).toFixed(4));
+      setRivalShootOffShot(score);
+      setRivalShootOffDistCm(simulatedDistCm);
+      setRivalThinking(false);
+    }, 1800);
+  };
+
+  // Simulate rival shot
+  const simulateRivalShot = (nextArrow: number, userEndShots: (string | number)[]) => {
+    setRivalThinking(true);
+    const delay = 1200 + Math.random() * 1200;
+    setTimeout(() => {
+      const updatedRival = [...rivalTiros];
+      const ratingVal = config.rival.rating;
+      const rand = Math.random();
+
+      let rivalScore = "9";
+      if (ratingVal >= 9.5) {
+        rivalScore = rand > 0.35 ? "10" : rand > 0.05 ? "9" : "8";
+      } else if (ratingVal >= 9.0) {
+        rivalScore = rand > 0.6 ? "10" : rand > 0.15 ? "9" : rand > 0.03 ? "8" : "7";
+      } else if (ratingVal >= 8.0) {
+        rivalScore = rand > 0.8 ? "10" : rand > 0.35 ? "9" : rand > 0.1 ? "8" : rand > 0.02 ? "7" : "6";
+      } else {
+        rivalScore = rand > 0.9 ? "10" : rand > 0.6 ? "9" : rand > 0.25 ? "8" : rand > 0.1 ? "7" : rand > 0.02 ? "6" : "5";
+      }
+
+      updatedRival[currentEnd] = [...(updatedRival[currentEnd] || []), rivalScore];
+      setRivalTiros(updatedRival);
+      setRivalThinking(false);
+
+      if (nextArrow === 3) {
+        evaluateEndCompletion(userEndShots, updatedRival[currentEnd]);
+      }
+    }, delay);
+  };
+
+  const registerShot = (x: number, y: number, value: string) => {
+    const numericValue = getValNumeric(value);
+
+    setAnimatingValue({ value, id: Date.now() });
+
+    const arrowIndexForShot = isShootOff ? 99 : userTiros[currentEnd].length;
+    const newImpact: ShotImpact = {
+      endIdx: currentEnd,
+      arrowIdx: arrowIndexForShot,
+      x,
+      y,
+      value
+    };
+    const nextImpacts = [...impacts, newImpact];
+    setImpacts(nextImpacts);
+
+    speakRivalPhraseOnShot(numericValue);
+
+    if (isShootOff) {
+      const targetSpec = getExactTargetDimensions(
+        Number(config.distance) || (isCompound ? 50 : 70),
+        config.bowType || (isCompound ? "Compound" : "Recurve"),
+        dianaPresetKey
+      );
+      const svgDist = Math.hypot(x - 50, y - 50);
+      const distCm = Number(((svgDist / 48) * targetSpec.visibleRadiusCm).toFixed(4));
+      setUserShootOffShot(numericValue);
+      setUserShootOffDistCm(distCm);
+      if (isFriendDuel) {
+        sendDataMessage({ type: "shootoff", value: numericValue, distCm });
+        void syncLocalShootOffToFirestore({
+          score: numericValue,
+          ...(Number.isFinite(distCm) ? { distanceToCenter: distCm } : {})
+        });
+      } else {
+        simulateRivalShootOff();
+      }
+      return;
+    }
+
+    const updatedTiros = [...userTiros];
+    const currentEndShots = [...updatedTiros[currentEnd], value];
+    updatedTiros[currentEnd] = currentEndShots;
+    setUserTiros(updatedTiros);
+
+    const nextArrow = currentArrow + 1;
+    setCurrentArrow(nextArrow);
+
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      if (value === "10" || value === "X") {
+        navigator.vibrate([25, 40, 35]);
+      } else if (value === "M") {
+        navigator.vibrate([45, 30, 45]);
+      } else {
+        navigator.vibrate(20);
+      }
+    }
+
+    if (isFriendDuel) {
+      sendDataMessage({
+        type: "shot",
+        value,
+        x,
+        y,
+        arrowIdx: arrowIndexForShot,
+        mode
+      });
+      void syncLocalShotsToFirestore(updatedTiros, nextImpacts);
+    } else {
+      simulateRivalShot(nextArrow, currentEndShots);
+    }
   };
 
   // Attaches touch events for sliding magnifier zoom on target SVG
@@ -2293,85 +2527,6 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     };
   }, [mode, currentEnd, currentArrow, isShootOff, userShootOffShot, userTiros, rivalThinking, duelFinished, validationPhase, isReadyCheckActive]);
 
-  const registerShot = (x: number, y: number, value: string) => {
-    const numericValue = getValNumeric(value);
-
-    // Trigger floating score animation
-    setAnimatingValue({ value, id: Date.now() });
-
-    // Save impact coordinates
-    const arrowIndexForShot = isShootOff ? 99 : userTiros[currentEnd].length;
-    const newImpact: ShotImpact = {
-      endIdx: currentEnd,
-      arrowIdx: arrowIndexForShot,
-      x,
-      y,
-      value
-    };
-    const nextImpacts = [...impacts, newImpact];
-    setImpacts(nextImpacts);
-
-    // Speak on user shot (bots only)
-    speakRivalPhraseOnShot(numericValue);
-
-    if (isShootOff) {
-      const targetSpec = getExactTargetDimensions(
-        Number(config.distance) || (isCompound ? 50 : 70),
-        config.bowType || (isCompound ? "Compound" : "Recurve"),
-        dianaPresetKey
-      );
-      const svgDist = Math.hypot(x - 50, y - 50);
-      const distCm = Number(((svgDist / 48) * targetSpec.visibleRadiusCm).toFixed(4));
-      setUserShootOffShot(numericValue);
-      setUserShootOffDistCm(distCm);
-      if (isFriendDuel) {
-        sendDataMessage({ type: "shootoff", value: numericValue, distCm });
-        void syncLocalShootOffToFirestore({
-          score: numericValue,
-          ...(Number.isFinite(distCm) ? { distanceToCenter: distCm } : {})
-        });
-      } else {
-        simulateRivalShootOff();
-      }
-      return;
-    }
-
-    const updatedTiros = [...userTiros];
-    const currentEndShots = [...updatedTiros[currentEnd], value];
-    updatedTiros[currentEnd] = currentEndShots;
-    setUserTiros(updatedTiros);
-
-    // Advance user arrow
-    const nextArrow = currentArrow + 1;
-    setCurrentArrow(nextArrow);
-
-    // Haptic vibration feedback
-    if (typeof navigator !== "undefined" && navigator.vibrate) {
-      if (value === "10" || value === "X") {
-        navigator.vibrate([25, 40, 35]); // Celebratory double pulse
-      } else if (value === "M") {
-        navigator.vibrate([45, 30, 45]);
-      } else {
-        navigator.vibrate(20);
-      }
-    }
-
-    // Trigger simulated rival shot or send via WebRTC + Firestore 4G/5G Relay
-    if (isFriendDuel) {
-      sendDataMessage({
-        type: "shot",
-        value,
-        x,
-        y,
-        arrowIdx: arrowIndexForShot,
-        mode
-      });
-      void syncLocalShotsToFirestore(updatedTiros, nextImpacts);
-    } else {
-      simulateRivalShot(nextArrow, currentEndShots);
-    }
-  };
-
   // Keyboard button click handler
   const handleScoreInput = (value: string) => {
     if (rivalThinking || duelFinished || validationPhase !== "IDLE") return;
@@ -2484,7 +2639,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     }
 
     const encoded = encodeURIComponent(message);
-    window.location.href = `whatsapp://send?text=${encoded}`;
+    window.open(`https://wa.me/?text=${encoded}`, "_blank", "noopener,noreferrer");
   };
 
   const handleBackspace = () => {
@@ -2514,37 +2669,6 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     const dispersion = sumDist / imps.length;
 
     return { cx, cy, dispersion };
-  };
-
-  // Simulate rival shoot-off arrow
-  const simulateRivalShootOff = () => {
-    setRivalThinking(true);
-    setTimeout(() => {
-      const rand = Math.random();
-      const ratingVal = config.rival.rating;
-      let score = 9;
-      
-      if (ratingVal >= 9.5) { // Olympic
-        score = rand > 0.35 ? 10 : rand > 0.05 ? 9 : 8;
-      } else if (ratingVal >= 9.0) { // High
-        score = rand > 0.6 ? 10 : rand > 0.15 ? 9 : rand > 0.03 ? 8 : 7;
-      } else if (ratingVal >= 8.0) { // Medium
-        score = rand > 0.8 ? 10 : rand > 0.35 ? 9 : rand > 0.1 ? 8 : 7;
-      } else { // Rookie
-        score = rand > 0.9 ? 10 : rand > 0.6 ? 9 : rand > 0.25 ? 8 : rand > 0.1 ? 7 : 6;
-      }
-      const targetSpec = getExactTargetDimensions(
-        Number(config.distance) || (isCompound ? 50 : 70),
-        config.bowType || (isCompound ? "Compound" : "Recurve"),
-        dianaPresetKey
-      );
-      const ringW = targetSpec.ringWidthCm;
-      const ringIdxFromCenter = Math.max(0, 10 - score);
-      const simulatedDistCm = Number(((ringIdxFromCenter + 0.12 + Math.random() * 0.76) * ringW).toFixed(4));
-      setRivalShootOffShot(score);
-      setRivalShootOffDistCm(simulatedDistCm);
-      setRivalThinking(false);
-    }, 1800);
   };
 
   // Check shoot-off winner (Reglamento WA: Mayor puntaje o flecha más cercana al centro en cm/mm)
@@ -2607,97 +2731,11 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
     }
   }, [userTiros, rivalTiros, currentEnd, isFriendDuel, validationPhase, endSummary, duelFinished]);
 
-  // Simulate rival shot
-  const simulateRivalShot = (nextArrow: number, userEndShots: (string | number)[]) => {
-    setRivalThinking(true);
-    const delay = 1200 + Math.random() * 1200;
-    setTimeout(() => {
-      const updatedRival = [...rivalTiros];
-      const ratingVal = config.rival.rating;
-      const rand = Math.random();
-      
-      let rivalScore = "9";
-      if (ratingVal >= 9.5) { // Olympic
-        rivalScore = rand > 0.35 ? "10" : rand > 0.05 ? "9" : "8";
-      } else if (ratingVal >= 9.0) { // High
-        rivalScore = rand > 0.6 ? "10" : rand > 0.15 ? "9" : rand > 0.03 ? "8" : "7";
-      } else if (ratingVal >= 8.0) { // Medium
-        rivalScore = rand > 0.8 ? "10" : rand > 0.35 ? "9" : rand > 0.1 ? "8" : rand > 0.02 ? "7" : "6";
-      } else { // Rookie
-        rivalScore = rand > 0.9 ? "10" : rand > 0.6 ? "9" : rand > 0.25 ? "8" : rand > 0.1 ? "7" : rand > 0.02 ? "6" : "5";
-      }
-
-      updatedRival[currentEnd] = [...(updatedRival[currentEnd] || []), rivalScore];
-      setRivalTiros(updatedRival);
-      setRivalThinking(false);
-
-      // Check if end is complete (3 arrows each)
-      if (nextArrow === 3) {
-        evaluateEndCompletion(userEndShots, updatedRival[currentEnd]);
-      }
-    }, delay);
-  };
-
   // Simulate rival upload delay
   const simulateRivalUpload = () => {
     setTimeout(() => {
       setRivalPhoto("rival_done");
     }, 1500);
-  };
-
-  // Evaluate points after end completion
-  const evaluateEndCompletion = (userEndShots: (string | number)[], rivalEndShots: (string | number)[]) => {
-    const userSum = userEndShots.reduce((sum: number, b) => sum + getValNumeric(b), 0);
-    const rivalSum = rivalEndShots.reduce((sum: number, b) => sum + getValNumeric(b), 0);
-
-    let summaryMsg = "";
-    
-    if (isCompound) {
-      // Cumulative compound logic
-      if (userSum > rivalSum) {
-        summaryMsg = tx(
-          `¡Ganaste la ronda! +${userSum} a +${rivalSum}`,
-          `You won the end! +${userSum} to +${rivalSum}`
-        );
-      } else if (rivalSum > userSum) {
-        summaryMsg = tx(
-          `El rival ganó la ronda. +${rivalSum} a +${userSum}`,
-          `Opponent won the end. +${rivalSum} to +${userSum}`
-        );
-      } else {
-        summaryMsg = tx(
-          `Ronda empatada a ${userSum} puntos`,
-          `End tied at ${userSum} points`
-        );
-      }
-    } else {
-      // Set recurve set system logic
-      if (userSum > rivalSum) {
-        setUserSetPoints((prev) => prev + 2);
-        summaryMsg = tx(
-          `¡Ganaste el Set! +2 Pts (Tus tiros: ${userSum} vs ${rivalSum})`,
-          `You won the Set! +2 Pts (Your end: ${userSum} vs ${rivalSum})`
-        );
-      } else if (rivalSum > userSum) {
-        setRivalSetPoints((prev) => prev + 2);
-        summaryMsg = tx(
-          `Set para el rival. +2 Pts (Tus tiros: ${userSum} vs ${rivalSum})`,
-          `Set goes to opponent. +2 Pts (Your end: ${userSum} vs ${rivalSum})`
-        );
-      } else {
-        setUserSetPoints((prev) => prev + 1);
-        setRivalSetPoints((prev) => prev + 1);
-        summaryMsg = tx(
-          `Set empatado. +1 Pt cada uno (${userSum} vs ${rivalSum})`,
-          `Set tied. +1 Pt each (${userSum} vs ${rivalSum})`
-        );
-      }
-    }
-
-    setEndSummaryMsg(summaryMsg);
-    setUserPhoto(null);
-    setRivalPhoto(null);
-    setValidationPhase("UPLOAD"); // Start photo validation flow!
   };
 
   // Evaluate set/match winner after points update
@@ -2761,7 +2799,9 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
   }, [userSetPoints, rivalSetPoints, endSummary]);
 
   const handleNextEnd = () => {
-    const targetNextEnd = currentEnd + 1;
+    const queuedRemote = pendingRemoteNextEndRef.current;
+    pendingRemoteNextEndRef.current = null;
+    const targetNextEnd = Math.max(currentEnd + 1, queuedRemote ?? 0);
     setEndSummary(null);
     setEndSummaryMsg(null);
     setValidationPhase("IDLE");
@@ -2785,7 +2825,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       updateDoc(docRef, {
         [isCreator ? "creatorPhoto" : "playerPhoto"]: null,
         updatedAt: Date.now()
-      }).catch(err => logger.warn("Error clearing photo on next end:", err));
+      }).catch((err) => logger.warn("Error clearing photo on next end:", err));
     }
   };
 
@@ -2795,18 +2835,6 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
       void cleanupFinishedDuelInFirestore();
     }
   }, [duelFinished, isFriendDuel]);
-
-  const getCumulativeTotal = (tiros: (string | number)[][]): number => {
-    return tiros.reduce((sum: number, end) => sum + end.reduce((endSum: number, b) => endSum + getValNumeric(b), 0), 0);
-  };
-
-  const triggerConfetti = () => {
-    confetti({
-      particleCount: 120,
-      spread: 70,
-      origin: { y: 0.6 }
-    });
-  };
 
   // Save completed duel session to IndexedDB
   const handleSaveAndExit = async () => {
@@ -2992,7 +3020,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   ? tx("Conexión Directa P2P Activa", "Direct P2P Connection Active")
                   : isRivalConnected
                   ? tx("Modo Relay 4G/5G Activo", "4G/5G Relay Mode Active")
-                  : tx("Buscando conexión...", "Searching for connection...")
+                  : tx("Buscando conexión", "Searching for connection")
               }
             />
           )}
@@ -3020,7 +3048,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           <div className="min-w-0 flex flex-col items-center gap-1 text-center">
             <div className="relative shrink-0">
               <div className="w-12 h-12 rounded-xl bg-cyan-neon/10 border border-cyan-neon/35 flex items-center justify-center text-cyan-neon font-black text-sm relative">
-                {user.fullName.substring(0, 2).toUpperCase()}
+                {getSafeInitials(user.fullName)}
               </div>
               <span className="absolute -bottom-1 -end-2 text-[9.3px] font-black uppercase tracking-wider bg-neutral-950/95 border border-white/15 text-cyan-neon px-1 py-0.5 rounded leading-none whitespace-nowrap">{userFlag}</span>
             </div>
@@ -3065,7 +3093,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           <div className="min-w-0 flex flex-col items-center gap-1 text-center">
             <div className="relative shrink-0">
               <div className="w-12 h-12 rounded-xl bg-red-rival/10 border border-red-rival/35 flex items-center justify-center text-red-rival font-black text-sm relative">
-                {currentRivalName.substring(0, 2).toUpperCase()}
+                {getSafeInitials(currentRivalName)}
               </div>
               <span className="absolute -bottom-1 -end-2 text-[9.3px] font-black uppercase tracking-wider bg-neutral-950/95 border border-white/15 text-red-rival px-1 py-0.5 rounded leading-none whitespace-nowrap">{currentRivalFlag}</span>
             </div>
@@ -3105,7 +3133,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               <span className="text-xl font-black text-red-rival tabular-nums">
                 {rivalThinking ? (
                   <span className="inline-block animate-pulse text-[11.6px] text-red-rival">
-                    {tx("Apuntando...", "Aiming...")}
+                    {tx("Apuntando", "Aiming")}
                   </span>
                 ) : rivalShootOffShot !== null ? (
                   rivalShootOffShot
@@ -3217,7 +3245,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                   : "bg-[#0D1017] border-white/[0.08] text-white"
               }`}>
                 <div className="w-10 h-10 rounded-full bg-neutral-950 border border-white/10 flex items-center justify-center text-xs font-black relative">
-                  {user.fullName.substring(0, 2).toUpperCase()}
+                  {getSafeInitials(user.fullName)}
                   <span
                     className={`absolute -bottom-0.5 -end-0.5 w-3 h-3 rounded-full border-2 border-neutral-950 ${
                       isUserReady ? "bg-cyan-neon" : isUserPresent ? "bg-emerald-400" : "bg-neutral-600"
@@ -3238,7 +3266,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               {isFriendDuel && !isRivalConnected ? (
                 <div className="p-3 rounded-2xl border bg-[#0D1017] border-white/15 text-white flex flex-col items-center gap-2 transition-all duration-200">
                   <div className="w-10 h-10 rounded-full bg-neutral-950 border border-white/15 flex items-center justify-center text-xs font-black relative">
-                    {config.rival.fullName.substring(0, 2).toUpperCase()}
+                    {getSafeInitials(config.rival?.fullName)}
                     <span className="absolute -bottom-0.5 -end-0.5 w-3 h-3 rounded-full bg-white border-2 border-neutral-950" />
                   </div>
                   <span className="text-[11.6px] font-bold break-words leading-tight max-w-full">{config.rival.fullName}</span>
@@ -3297,7 +3325,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
                     : "bg-[#0D1017] border-white/[0.08] text-white"
                 }`}>
                   <div className="w-10 h-10 rounded-full bg-neutral-950 border border-white/10 flex items-center justify-center text-xs font-black relative">
-                    {config.rival.fullName.substring(0, 2).toUpperCase()}
+                    {getSafeInitials(config.rival?.fullName)}
                     <span
                       className={`absolute -bottom-0.5 -end-0.5 w-3 h-3 rounded-full border-2 border-neutral-950 ${
                         isRivalReady ? "bg-red-rival" : isRivalPresent ? "bg-emerald-400" : "bg-neutral-600"
@@ -3380,7 +3408,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
               </div>
             ) : (
               <div className="w-full h-11 rounded-xl font-black text-xs uppercase tracking-widest bg-[#0D1017] border border-white/5 text-white flex items-center justify-center whitespace-nowrap">
-                {tx("Esperando al Rival...", "Waiting for Opponent...")}
+                {tx("Esperando al Rival", "Waiting for Opponent")}
               </div>
             )}
           </div>
@@ -3483,7 +3511,7 @@ export default function MatchplayGameView({ user, config, onBack, onDuelSaved }:
           <div className="flex gap-3 items-center justify-center bg-[#0D1017] px-4 py-1.5 rounded-full border border-white/[0.08] text-[11.6px] font-bold z-10">
             <span className="text-white">{tx("Puntuación Estimada:", "Estimated Score:")}</span>
             <span className="text-yellow-gold font-extrabold text-xs tabular-nums">
-              {getCoordsFromClient(cursorPos.x, cursorPos.y)?.value || "M"} Pts
+              {getRingScoreFromSvgCoords(cursorPos.x, cursorPos.y)} Pts
             </span>
           </div>
 

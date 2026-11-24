@@ -60,9 +60,11 @@ export function AnalysisHistoryListSection({
     .filter((s) => s && s.deletedByArcher !== true && !s.isDraft && isAnalysisSession(s))
     .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
-  const [expandedId, setExpandedId] = useState<string | null>(
-    () => analysisSessions[0]?.id || null
+  const [expandedId, setExpandedId] = useState<string | null | undefined>(
+    () => analysisSessions[0]?.id
   );
+  const activeExpandedId =
+    expandedId === undefined ? (analysisSessions[0]?.id ?? null) : expandedId;
   const [selectedShotBySess, setSelectedShotBySess] = useState<Record<string, number>>({});
   const [replayBySess, setReplayBySess] = useState<Record<string, number>>({});
 
@@ -158,7 +160,7 @@ export function AnalysisHistoryListSection({
       {analysisSessions.map((sess) => {
         const shots = extractAnalysisShots(sess);
         const sessSummary = computeAnalysisSessionSummary(shots);
-        const isOpen = expandedId === sess.id;
+        const isOpen = activeExpandedId === sess.id;
         const activeShotIdx = Math.min(
           Math.max(0, selectedShotBySess[sess.id] ?? 0),
           Math.max(0, shots.length - 1)

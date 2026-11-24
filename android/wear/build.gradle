@@ -15,18 +15,19 @@ android {
         minSdkVersion 26
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Wear OS form-factor versionCode offset (+100000 over mobile versionCode)
-        versionCode 155900
-        versionName "2.159"
+        versionCode 156000
+        versionName "2.160"
     }
 
     signingConfigs {
         release {
-            def ksPath = keystoreProps.getProperty("storeFile") ?: System.getenv("ARCHERY_KEYSTORE_PATH")
-            def ksPass = keystoreProps.getProperty("storePassword") ?: System.getenv("ARCHERY_KEYSTORE_PASSWORD")
-            def ksAlias = keystoreProps.getProperty("keyAlias") ?: System.getenv("ARCHERY_KEY_ALIAS")
-            def ksKeyPass = keystoreProps.getProperty("keyPassword") ?: System.getenv("ARCHERY_KEY_PASSWORD")
+            def ksPath = System.getenv("ARCHERY_KEYSTORE_FILE") ?: System.getenv("ARCHERY_KEYSTORE_PATH") ?: keystoreProps.getProperty("storeFile")
+            def ksPass = System.getenv("ARCHERY_KEYSTORE_PASSWORD") ?: keystoreProps.getProperty("storePassword")
+            def ksAlias = System.getenv("ARCHERY_KEY_ALIAS") ?: keystoreProps.getProperty("keyAlias")
+            def ksKeyPass = System.getenv("ARCHERY_KEY_PASSWORD") ?: keystoreProps.getProperty("keyPassword")
             if (ksPath) {
-                def resolvedKsFile = file(ksPath).exists() ? file(ksPath) : rootProject.file(ksPath)
+                def directKsFile = new File(ksPath)
+                def resolvedKsFile = directKsFile.isAbsolute() ? directKsFile : (file(ksPath).exists() ? file(ksPath) : rootProject.file(ksPath))
                 if (resolvedKsFile.exists() && ksPass && ksAlias && ksKeyPass) {
                     storeFile resolvedKsFile
                     storePassword ksPass
@@ -48,6 +49,7 @@ android {
 }
 
 dependencies {
+    implementation "androidx.activity:activity:$androidxActivityVersion"
     implementation "androidx.core:core:$androidxCoreVersion"
     implementation "com.google.android.gms:play-services-wearable:19.0.0"
 }

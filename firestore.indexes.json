@@ -31,6 +31,30 @@
         { "fieldPath": "userId", "order": "ASCENDING" },
         { "fieldPath": "timestamp", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "duel_invitations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "senderUid", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "active_duels",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "clubId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "coach_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "athleteUid", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

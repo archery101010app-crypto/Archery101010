@@ -304,7 +304,7 @@ export default function AthleteDetailSheet({
         <div className="px-5 pb-3.5 pt-1 flex flex-col gap-3 shrink-0 border-b border-white/[0.06]">
           <div className="flex items-center gap-3.5 pe-9">
             <div className="w-12 h-12 rounded-full bg-cyan-brand/20 border border-cyan-neon/40 flex items-center justify-center font-black text-sm text-cyan-neon uppercase shrink-0">
-              {athlete.fullName.substring(0, 2)}
+              {(athlete.fullName || athlete.email || "?").trim().slice(0, 2).toUpperCase() || "?"}
             </div>
             <div className="flex flex-col flex-1 min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
@@ -462,13 +462,15 @@ export default function AthleteDetailSheet({
                         );
                       }
 
-                      const nextStar = tiers[currentLevel];
-                      const prevMin = tiers[currentLevel - 1].minScore;
+                      const nextStar = tiers[Math.max(0, currentLevel)] || tiers[0];
+                      const safePrevIdx = Math.max(0, currentLevel - 1);
+                      const prevMin = currentLevel <= 0 ? 0 : (tiers[safePrevIdx]?.minScore ?? 0);
                       const highestScore = maxStar.highestScore;
                       const targetMin = nextStar.minScore;
+                      const spanDenom = Math.max(1, targetMin - prevMin);
                       const percent = Math.min(
                         100,
-                        Math.max(0, ((highestScore - prevMin) / (targetMin - prevMin)) * 100)
+                        Math.max(0, ((highestScore - prevMin) / spanDenom) * 100)
                       );
 
                       return (

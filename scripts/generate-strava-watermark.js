@@ -171,7 +171,10 @@ async function generateWatermarkAssets() {
   const sqBlack = new Jimp({ width: sqSize, height: sqSize, color: 0x000000ff });
   sqBlack.composite(sqTransparent, 0, 0);
 
-  const artifactDir = 'C:/Users/Archery 101010/.gemini/antigravity/brain/6a327e3e-d87f-4993-ab10-ae63666eaeeb';
+  const artifactDir =
+    process.env.ARCHERY_ARTIFACTS_DIR ||
+    process.argv[2] ||
+    path.resolve(__dirname, '../artifacts');
 
   const wmPaths = [
     path.join(artifactDir, '101010-the-app-watermark-transparente.png'),
@@ -187,8 +190,14 @@ async function generateWatermarkAssets() {
     path.join(rootDir, 'releases', '101010-the-app-preview-negro.png')
   ];
 
-  for (const p of wmPaths) await wmCanvas.write(p);
-  for (const p of blackPaths) await sqBlack.write(p);
+  for (const p of wmPaths) {
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    await wmCanvas.write(p);
+  }
+  for (const p of blackPaths) {
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    await sqBlack.write(p);
+  }
 
   console.log('✅ Generated 101010 THE APP transparent Strava watermark and black preview');
 }

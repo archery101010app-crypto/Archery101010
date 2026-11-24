@@ -728,7 +728,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       return localeParsed;
     }
     return parseBowPoundageLbs(user, config?.bowPoundageLbs);
-  }, [user, config?.bowPoundageLbs]);
+  }, [user, config]);
 
   const athleteWeightKg = useMemo(() => {
     const localeParsed = parseLocaleDecimal(user?.physicalData?.weight, NaN);
@@ -753,20 +753,22 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     });
   }, [totalShotArrows, config.warmupArrows, distanceWalkedM, bowPoundageLbs, athleteWeightKg]);
 
-  // Stable active session ID per session + separate physical watch arrow counter for scored rounds
-  const activeSessionIdRef = useRef<string>(
-    config.draftId || config.id || generateResilientId("SES")
+  // Canonical live draft ID per session + separate physical watch arrow counter for scored rounds
+  const canonicalDraftId = useMemo(
+    () => config.draftId || (config.isDraft && config.id ? config.id : "") || `SES-DRAFT-${user.uid}`,
+    [config.draftId, config.isDraft, config.id, user.uid]
   );
+  const activeSessionIdRef = useRef<string>(canonicalDraftId);
   const [watchPhysicalArrows, setWatchPhysicalArrows] = useState<number>(0);
   const watchPhysicalArrowsRef = useRef<number>(0);
   const endNoteRef = useRef<string>(endNote);
-  endNoteRef.current = endNote;
+  useEffect(() => {
+    endNoteRef.current = endNote;
+  }, [endNote]);
 
   useEffect(() => {
-    if (config.draftId || config.id) {
-      activeSessionIdRef.current = config.draftId || config.id;
-    }
-  }, [config.draftId, config.id]);
+    activeSessionIdRef.current = canonicalDraftId;
+  }, [canonicalDraftId]);
 
   const latestHrForWatchRef = useRef({
     bleState: bleHrStatus.state,
@@ -926,7 +928,11 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     publishWatchState(liveWatchSnapshot);
   }, [liveWatchSnapshot]);
 
-  // Autoguardado en caliente instantáneo (0ms Local-First + Real-Time Turbo Sync) tras cada tiro o cambio de notas
+  // Debounced hot autosave (`600ms` + immediate flush on visibilitychange / unmount)
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasPendingAutoSaveRef = useRef(false);
+  const flushDraftSaveRef = useRef<(() => Promise<void>) | null>(null);
+
   useEffect(() => {
     if (isClosingSessionRef.current) return;
     if (ends.length === 0) return;
@@ -935,9 +941,13 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     const hasAnyShot = ends.some((e) => e.arrows.some((a) => a !== ""));
     if (!hasAnyShot && impacts.length === 0 && tallyCount === 0) return;
 
-    const autoSave = async () => {
+    const sessionId = canonicalDraftId;
+    const totalScoreSnapshot =
+      config.practiceType === "Volumen" ? 0 : Math.min(2000, calculateTotalScore());
+
+    const persistDraftNow = async () => {
       if (isClosingSessionRef.current) return;
-      const sessionId = config.draftId || config.id || `SES-DRAFT-${user.uid}`;
+      hasPendingAutoSaveRef.current = false;
       const nowTs = Date.now();
       const draftObj = sanitizeForFirestore({
         id: sessionId,
@@ -956,7 +966,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         endsCount: Math.min(100, Number(config.endsCount) || 10),
         arrowsPerEnd: Math.min(20, Number(config.arrowsPerEnd) || 3),
         maxScore: Math.min(2000, Number(config.maxScore) || 300),
-        score: config.practiceType === "Volumen" ? 0 : Math.min(2000, calculateTotalScore()),
+        score: totalScoreSnapshot,
         isVolumeOnly: config.practiceType === "Volumen",
         totalArrowsVolume: config.practiceType === "Volumen" ? tallyCount : totalShotArrows,
         distanceWalkedM,
@@ -981,11 +991,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
       try {
         if (isClosingSessionRef.current) return;
-        // 1. Instant 0ms local IndexedDB write (Offline-First safety shield)
         await saveLocalSession(sessionId, draftObj);
 
         if (isClosingSessionRef.current) return;
-        // 2. Real-Time Turbo Sync: push live arrow telemetry immediately to Firestore (coalesced)
         await addToSyncQueue({
           id: generateResilientId("TXN"),
           collection: "sessions",
@@ -999,8 +1007,59 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       }
     };
 
-    autoSave();
-  }, [ends, impacts, sessionNote, tallyCount, distanceWalkedM, activeKcal, normalizedSightMark]);
+    flushDraftSaveRef.current = persistDraftNow;
+    hasPendingAutoSaveRef.current = true;
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      void persistDraftNow();
+    }, 600);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+    };
+  }, [
+    ends,
+    impacts,
+    sessionNote,
+    tallyCount,
+    distanceWalkedM,
+    activeKcal,
+    normalizedSightMark,
+    canonicalDraftId
+  ]);
+
+  useEffect(() => {
+    const handleVisibilityFlush = () => {
+      if (
+        document.visibilityState === "hidden" &&
+        hasPendingAutoSaveRef.current &&
+        !isClosingSessionRef.current
+      ) {
+        if (autoSaveTimerRef.current) {
+          clearTimeout(autoSaveTimerRef.current);
+          autoSaveTimerRef.current = null;
+        }
+        void flushDraftSaveRef.current?.();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityFlush);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityFlush);
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+      if (hasPendingAutoSaveRef.current && !isClosingSessionRef.current) {
+        void flushDraftSaveRef.current?.();
+      }
+    };
+  }, []);
 
   // Scroll active row into view in keyboard table
   useEffect(() => {
@@ -1319,21 +1378,24 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   };
 
   const registerShot = (x: number, y: number, value: string) => {
-    if (currentEndIdx >= config.endsCount) return;
+    const activeEndIdx = currentEndIdxRef.current;
+    const activeArrowIdx = currentArrowIdxRef.current;
+    const activeEditSlot = editingArrowSlotRef.current;
+    if (activeEndIdx >= config.endsCount) return;
 
     // Si el end actual ya está completo y el usuario NO seleccionó una casilla específica para corregir, bloquear
-    const currentEnd = ends[currentEndIdx];
+    const currentEnd = endsRef.current[activeEndIdx];
     const isEndFull =
       currentEnd &&
       currentEnd.arrows.length === config.arrowsPerEnd &&
       currentEnd.arrows.every((a) => a !== "" && a !== undefined);
-    if (isEndFull && editingArrowSlot === null) {
+    if (isEndFull && activeEditSlot === null) {
       return;
     }
 
     const newImpact: ShotImpact = {
-      endIdx: currentEndIdx,
-      arrowIdx: currentArrowIdx,
+      endIdx: activeEndIdx,
+      arrowIdx: activeArrowIdx,
       x,
       y,
       value
@@ -1341,7 +1403,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
     // Replace any existing impact for the same (endIdx, arrowIdx) so correcting an arrow never duplicates dots
     setImpacts((prev) => [
-      ...prev.filter((imp) => !(imp.endIdx === currentEndIdx && imp.arrowIdx === currentArrowIdx)),
+      ...prev.filter((imp) => !(imp.endIdx === activeEndIdx && imp.arrowIdx === activeArrowIdx)),
       newImpact
     ]);
     handleScoreInput(value, true);
@@ -1356,18 +1418,40 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   };
 
   const lupaStateRef = useRef(lupaState);
+  const getCoordsFromClientRef = useRef(getCoordsFromClient);
+  const registerShotRef = useRef(registerShot);
+  const scoringConfigRef = useRef(config);
   useEffect(() => {
     lupaStateRef.current = lupaState;
-  }, [lupaState]);
+    getCoordsFromClientRef.current = getCoordsFromClient;
+    registerShotRef.current = registerShot;
+    scoringConfigRef.current = config;
+  });
 
   useEffect(() => {
     const diana = dianaRef.current;
     if (!diana) return;
 
-    const onStart = (clientX: number, clientY: number, isTouch: boolean) => {
-      const currentArrows = ends[currentEndIdx]?.arrows || [];
-      const actualShots = currentArrows.filter(a => a !== "").length;
-      if (currentEndIdx >= config.endsCount || (actualShots >= config.arrowsPerEnd && editingArrowSlot === null)) {
+    const cancelActiveLupa = () => {
+      if (lupaTimer.current) {
+        clearTimeout(lupaTimer.current);
+        lupaTimer.current = null;
+      }
+      estaScrolleandoRef.current = true;
+      setLupaState((prev) =>
+        prev.active ? { active: false, x: 50, y: 50, clientX: 0, clientY: 0, value: "" } : prev
+      );
+    };
+
+    const onStart = (clientX: number, clientY: number) => {
+      const liveEndIdx = currentEndIdxRef.current;
+      const liveCfg = scoringConfigRef.current;
+      const currentArrows = endsRef.current[liveEndIdx]?.arrows || [];
+      const actualShots = currentArrows.filter((a) => a !== "").length;
+      if (
+        liveEndIdx >= liveCfg.endsCount ||
+        (actualShots >= liveCfg.arrowsPerEnd && editingArrowSlotRef.current === null)
+      ) {
         return;
       }
 
@@ -1375,7 +1459,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       touchStartY.current = clientY;
       estaScrolleandoRef.current = false;
 
-      const coords = getCoordsFromClient(clientX, clientY);
+      const coords = getCoordsFromClientRef.current(clientX, clientY);
       if (!coords) return;
 
       if (lupaTimer.current) clearTimeout(lupaTimer.current);
@@ -1414,9 +1498,9 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
           e.preventDefault();
         }
 
-        const coords = getCoordsFromClient(clientX, clientY);
+        const coords = getCoordsFromClientRef.current(clientX, clientY);
         if (coords) {
-          setLupaState(prev => {
+          setLupaState((prev) => {
             if (!prev.active) return prev;
             return {
               ...prev,
@@ -1443,38 +1527,48 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       const value = lupaStateRef.current.value;
 
       if (active) {
-        registerShot(x, y, value);
+        registerShotRef.current(x, y, value);
         setLupaState({ active: false, x: 50, y: 50, clientX: 0, clientY: 0, value: "" });
         if (e.cancelable) e.preventDefault();
       } else if (!estaScrolleandoRef.current) {
-        const coords = getCoordsFromClient(clientX, clientY);
+        const coords = getCoordsFromClientRef.current(clientX, clientY);
         if (coords) {
-          registerShot(coords.x, coords.y, coords.value);
+          registerShotRef.current(coords.x, coords.y, coords.value);
         }
         if (e.cancelable) e.preventDefault();
       }
     };
 
-    // Touch Event Handlers
+    // Single-finger Touch Event Handlers (multi-touch / pinch-zoom safely cancelled)
     const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) {
+        cancelActiveLupa();
+        return;
+      }
       const touch = e.touches[0];
-      onStart(touch.clientX, touch.clientY, true);
+      onStart(touch.clientX, touch.clientY);
     };
 
     const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) {
+        cancelActiveLupa();
+        return;
+      }
       const touch = e.touches[0];
       onMove(touch.clientX, touch.clientY, e);
     };
 
     const handleTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length > 0) return;
       const touch = e.changedTouches[0];
+      if (!touch) return;
       onEnd(touch.clientX, touch.clientY, e);
     };
 
     // Mouse Event Handlers
     const handleMouseDown = (e: MouseEvent) => {
-      onStart(e.clientX, e.clientY, false);
-      
+      onStart(e.clientX, e.clientY);
+
       const handleMouseMove = (mvEvent: MouseEvent) => {
         onMove(mvEvent.clientX, mvEvent.clientY, mvEvent);
       };
@@ -1492,15 +1586,17 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     diana.addEventListener("touchstart", handleTouchStart, { passive: false });
     diana.addEventListener("touchmove", handleTouchMove, { passive: false });
     diana.addEventListener("touchend", handleTouchEnd, { passive: false });
+    diana.addEventListener("touchcancel", cancelActiveLupa);
     diana.addEventListener("mousedown", handleMouseDown);
 
     return () => {
       diana.removeEventListener("touchstart", handleTouchStart);
       diana.removeEventListener("touchmove", handleTouchMove);
       diana.removeEventListener("touchend", handleTouchEnd);
+      diana.removeEventListener("touchcancel", cancelActiveLupa);
       diana.removeEventListener("mousedown", handleMouseDown);
     };
-  }, [mode, currentEndIdx, currentArrowIdx, editingArrowSlot, ends, config, presetRings]);
+  }, [mode, config.practiceType]);
 
   // Keep confirmedVolume synced whenever the Finish modal opens
   useEffect(() => {
@@ -1516,13 +1612,21 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
   }, [isFinishing, ends, tallyCount, config.practiceType, config.warmupArrows]);
 
   const handleSaveDraft = async () => {
-    const sessionId = config.draftId || config.id || `SES-DRAFT-${user.uid}`;
+    isClosingSessionRef.current = true;
+    hasPendingAutoSaveRef.current = false;
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    const sessionId = canonicalDraftId;
+    const nowTs = Date.now();
     const draftObj = sanitizeForFirestore({
       id: sessionId,
       userId: user.uid,
       userName: user.fullName || user.nickname || "Arquero",
       clubId: user.clubId || null,
-      timestamp: Date.now(),
+      timestamp: config.timestamp || nowTs,
+      updatedAt: nowTs,
       practiceType: config.practiceType || "Práctica",
       bowType: config.bowType || "Recurve",
       distance: parseLocaleDecimal(config.distance, 18) || 18,
@@ -1564,11 +1668,12 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         operation: "UPDATE",
         payloadId: sessionId,
         payload: draftObj,
-        timestamp: Date.now()
+        timestamp: nowTs
       });
       runSync().catch(() => {});
       onBack(); // returns to Home
     } catch (err) {
+      isClosingSessionRef.current = false;
       console.error("Failed to save session draft", err);
     }
   };
@@ -1724,7 +1829,6 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
     try {
       await saveLocalSession(sessionId, sessionObj);
-      await cleanupLiveDrafts(sessionId);
       await addToSyncQueue({
         id: generateResilientId("TXN"),
         collection: "sessions",
@@ -1733,13 +1837,6 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         payload: sessionObj,
         timestamp: nowTs
       });
-
-      // Also write directly to Firestore immediately if online
-      try {
-        const { doc, setDoc } = await import("firebase/firestore");
-        const { db } = await import("@/lib/firebase");
-        setDoc(doc(db, "sessions", sessionId), sessionObj, { merge: true }).catch(() => {});
-      } catch (_) {}
 
       confetti({
         particleCount: 120,
@@ -1887,7 +1984,6 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
 
     try {
       await saveLocalSession(sessionId, sessionObj);
-      await cleanupLiveDrafts(sessionId);
 
       await addToSyncQueue({
         id: generateResilientId("TXN"),
@@ -1897,13 +1993,6 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         payload: sessionObj,
         timestamp: nowTs
       });
-
-      // Also write directly to Firestore immediately if online
-      try {
-        const { doc, setDoc } = await import("firebase/firestore");
-        const { db } = await import("@/lib/firebase");
-        setDoc(doc(db, "sessions", sessionId), sessionObj, { merge: true }).catch(() => {});
-      } catch (_) {}
 
       confetti({
         particleCount: 120,
@@ -1998,7 +2087,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       config.targetType,
       language
     );
-  }, [currentEndImpacts, config.distance, config.bowType, presetType, config.format, config.targetType, language]);
+  }, [currentEndImpacts, config, presetType, language]);
 
   const globalDispersion = useMemo(() => {
     return calculateDispersionAnalysis(
@@ -2010,7 +2099,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       config.targetType,
       language
     );
-  }, [impacts, config.distance, config.bowType, presetType, config.format, config.targetType, language]);
+  }, [impacts, config, presetType, language]);
 
   const activeAnalysis = dispersionScope === "END" ? currentEndAnalysis : globalDispersion;
 
@@ -2873,7 +2962,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
                 )}
               >
                 <Camera size={13} />
-                <span>{isGeneratingImage ? tx("Generando...", "Generating...") : tx("Foto Diana", "Target Photo")}</span>
+                <span>{isGeneratingImage ? tx("Generando", "Generating") : tx("Foto Diana", "Target Photo")}</span>
               </button>
             </div>
             
@@ -3880,13 +3969,22 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         )}
       </AnimatePresence>
 
-      {/* Touch Magnifier Circle Overlay (20% más grande) */}
-      {lupaState.active && (
+      {/* Touch Magnifier Circle Overlay (20% más grande, clamped inside narrow 360px viewports) */}
+      {lupaState.active && (() => {
+        const vw = typeof window !== "undefined" ? window.innerWidth : 360;
+        const vh = typeof window !== "undefined" ? window.innerHeight : 640;
+        const clampedLeft = Math.max(8, Math.min(Math.max(8, vw - 180), lupaState.clientX - 86));
+        const preferredTop = lupaState.clientY - 185;
+        const clampedTop =
+          preferredTop < 8
+            ? Math.min(Math.max(8, vh - 180), lupaState.clientY + 24)
+            : Math.max(8, Math.min(Math.max(8, vh - 180), preferredTop));
+        return (
         <div
           style={{
             position: "fixed",
-            left: lupaState.clientX - 86,
-            top: lupaState.clientY - 185,
+            left: clampedLeft,
+            top: clampedTop,
             width: 172,
             height: 172,
             pointerEvents: "none",
@@ -3983,7 +4081,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
             {lupaState.value}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Open Smartwatch Companion Mini-App Modal */}
       <SmartwatchMiniApp

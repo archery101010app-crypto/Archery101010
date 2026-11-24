@@ -314,7 +314,7 @@ export default function AdminDashboardTab() {
     users.map((u) => (u.clubName || "").trim().toLowerCase()).filter(Boolean)
   ).size;
 
-  const totalGlobalArrows = sessions.reduce((sum, s) => {
+  const totalLocalArrows = sessions.reduce((sum, s) => {
     if (s.totalArrowsVolume && typeof s.totalArrowsVolume === "number") {
       return sum + s.totalArrowsVolume;
     }
@@ -324,9 +324,6 @@ export default function AdminDashboardTab() {
     return sum + endsCount * arrowsPerEnd + (s.warmupArrows || 0);
   }, 0);
 
-  const avgArrowsPerArcher =
-    users.length > 0 ? Math.round(totalGlobalArrows / users.length) : 0;
-
   const proUsers = users.filter((u) => u.plan === "PRO");
   const displayTotalUsers = globalCounts ? Math.max(globalCounts.totalUsers, users.length) : users.length;
   const displayProUsers = globalCounts ? Math.max(globalCounts.proUsers, proUsers.length) : proUsers.length;
@@ -335,23 +332,25 @@ export default function AdminDashboardTab() {
 
   const kpis = [
     {
-      title: "Arqueros Registrados",
+      title: globalCounts ? "Arqueros en Nube" : "Arqueros en Caché",
       value: displayTotalUsers.toLocaleString(),
-      subtitle: `${displayCoaches} Coaches • ${uniqueClubsCount} Clubes activos`,
+      subtitle: globalCounts
+        ? `${displayCoaches} Coaches nube • ${uniqueClubsCount} Clubes (muestra ${users.length})`
+        : `${displayCoaches} Coaches • ${uniqueClubsCount} Clubes (caché local)`,
       icon: Users,
       colorClass: "text-cyan-neon bg-cyan-neon/10 border-cyan-neon/20",
       textColor: "text-cyan-neon"
     },
     {
-      title: "Activos y Retención",
+      title: "Muestra Activa",
       value: `${recentActiveUsers.length} (${weeklyRetentionPct}%)`,
-      subtitle: `Activos 48h • Retención 7d: ${weeklyRetentionPct}%`,
+      subtitle: `Muestra (${users.length}) • 48h / Retención 7d: ${weeklyRetentionPct}%`,
       icon: UserCheck,
       colorClass: "text-green-500 bg-green-500/10 border-green-500/20",
       textColor: "text-green-400"
     },
     {
-      title: "Cuentas PRO",
+      title: globalCounts ? "Cuentas PRO (Nube)" : "Cuentas PRO (Local)",
       value: displayProUsers.toLocaleString(),
       subtitle: `${displayProUsers} de ${displayTotalUsers} usuarios con plan PRO`,
       icon: CreditCard,
@@ -359,9 +358,11 @@ export default function AdminDashboardTab() {
       textColor: "text-yellow-400"
     },
     {
-      title: "Flechas Globales",
-      value: totalGlobalArrows.toLocaleString(),
-      subtitle: `${displaySessions} sesiones • ~${avgArrowsPerArcher.toLocaleString()} fl./arquero`,
+      title: "Sesiones Nube y Local",
+      value: displaySessions.toLocaleString(),
+      subtitle: globalCounts
+        ? `Nube: ${globalCounts.totalSessions.toLocaleString()} ses. • Local: ${sessions.length} ses. (${totalLocalArrows.toLocaleString()} fl.)`
+        : `Local: ${sessions.length} sesiones (${totalLocalArrows.toLocaleString()} flechas)`,
       icon: Target,
       colorClass: "text-cyan-neon bg-cyan-neon/10 border-cyan-neon/20",
       textColor: "text-cyan-neon"
@@ -399,7 +400,7 @@ export default function AdminDashboardTab() {
           className="self-start sm:self-auto flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white hover:text-white hover:bg-white/10 text-xs font-bold transition disabled:opacity-50 cursor-pointer"
         >
           <RefreshCw size={14} className={isLoading ? "animate-spin text-cyan-neon" : ""} />
-          <span>{isLoading ? "Actualizando..." : "Actualizar Datos"}</span>
+          <span>{isLoading ? "Actualizando" : "Actualizar Datos"}</span>
         </button>
       </div>
 
@@ -441,7 +442,7 @@ export default function AdminDashboardTab() {
             <span>Estadística Demográfica e Inteligencia Comercial</span>
           </h3>
           <span className="text-[11px] font-bold text-white tabular-nums">
-            Datos en vivo ({users.length} suscriptores)
+            Muestra analizada ({users.length} de {displayTotalUsers} cuentas)
           </span>
         </div>
 

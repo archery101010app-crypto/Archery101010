@@ -16,7 +16,22 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
+		A41010102B00000200101010 /* ArcheryWatchSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A41010102B00000100101010 /* ArcheryWatchSessionManager.swift */; };
+		A41010102B00000400101010 /* ArcheryIosNativeAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A41010102B00000300101010 /* ArcheryIosNativeAuthManager.swift */; };
+		A41010102B00000700101010 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A41010102B00000600101010 /* PrivacyInfo.xcprivacy */; };
+		A41010102B00001200101010 /* Archery101010WatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A41010102B00001100101010 /* Archery101010WatchApp.swift */; };
+		A41010102B00001400101010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A41010102B00001300101010 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A41010102B00001E00101010 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A41010102B00001D00101010;
+			remoteInfo = ArcheryWatchApp;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
@@ -30,6 +45,14 @@
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		A41010102B00000100101010 /* ArcheryWatchSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArcheryWatchSessionManager.swift; sourceTree = "<group>"; };
+		A41010102B00000300101010 /* ArcheryIosNativeAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArcheryIosNativeAuthManager.swift; sourceTree = "<group>"; };
+		A41010102B00000500101010 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
+		A41010102B00000600101010 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		A41010102B00001100101010 /* Archery101010WatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Archery101010WatchApp.swift; path = "../../ios-watchos/WatchApp/Archery101010WatchApp.swift"; sourceTree = SOURCE_ROOT; };
+		A41010102B00001300101010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = "../../ios-watchos/WatchApp/Assets.xcassets"; sourceTree = SOURCE_ROOT; };
+		A41010102B00001500101010 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = "../../ios-watchos/WatchApp/Info.plist"; sourceTree = SOURCE_ROOT; };
+		A41010102B00001600101010 /* ArcheryWatchApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ArcheryWatchApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -41,6 +64,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A41010102B00001800101010 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -49,6 +79,7 @@
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
+				A41010102B00001000101010 /* ArcheryWatchApp */,
 				504EC3051FED79650016851F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -57,6 +88,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
+				A41010102B00001600101010 /* ArcheryWatchApp.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -65,6 +97,10 @@
 			isa = PBXGroup;
 			children = (
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
+				A41010102B00000100101010 /* ArcheryWatchSessionManager.swift */,
+				A41010102B00000300101010 /* ArcheryIosNativeAuthManager.swift */,
+				A41010102B00000500101010 /* App.entitlements */,
+				A41010102B00000600101010 /* PrivacyInfo.xcprivacy */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -75,6 +111,16 @@
 				50B271D01FEDC1A000F3C39B /* public */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		A41010102B00001000101010 /* ArcheryWatchApp */ = {
+			isa = PBXGroup;
+			children = (
+				A41010102B00001100101010 /* Archery101010WatchApp.swift */,
+				A41010102B00001300101010 /* Assets.xcassets */,
+				A41010102B00001500101010 /* Info.plist */,
+			);
+			name = ArcheryWatchApp;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -91,6 +137,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				A41010102B00001F00101010 /* PBXTargetDependency */,
 			);
 			name = App;
 			packageProductDependencies = (
@@ -100,18 +147,39 @@
 			productReference = 504EC3041FED79650016851F /* App.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A41010102B00001D00101010 /* ArcheryWatchApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A41010102B00001C00101010 /* Build configuration list for PBXNativeTarget "ArcheryWatchApp" */;
+			buildPhases = (
+				A41010102B00001700101010 /* Sources */,
+				A41010102B00001800101010 /* Frameworks */,
+				A41010102B00001900101010 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ArcheryWatchApp;
+			productName = ArcheryWatchApp;
+			productReference = A41010102B00001600101010 /* ArcheryWatchApp.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
 		504EC2FC1FED79650016851F /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastSwiftUpdateCheck = 0920;
-				LastUpgradeCheck = 0920;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
 				TargetAttributes = {
 					504EC3031FED79650016851F = {
 						CreatedOnToolsVersion = 9.2;
 						LastSwiftMigration = 1100;
+						ProvisioningStyle = Automatic;
+					};
+					A41010102B00001D00101010 = {
+						CreatedOnToolsVersion = 15.0;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -122,6 +190,7 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				es,
 				Base,
 			);
 			mainGroup = 504EC2FB1FED79650016851F;
@@ -133,6 +202,7 @@
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
+				A41010102B00001D00101010 /* ArcheryWatchApp */,
 			);
 		};
 /* End PBXProject section */
@@ -148,6 +218,15 @@
 				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
 				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
 				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
+				A41010102B00000700101010 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A41010102B00001900101010 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A41010102B00001400101010 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -160,10 +239,28 @@
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
+				A41010102B00000200101010 /* ArcheryWatchSessionManager.swift in Sources */,
+				A41010102B00000400101010 /* ArcheryIosNativeAuthManager.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A41010102B00001700101010 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A41010102B00001200101010 /* Archery101010WatchApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A41010102B00001F00101010 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A41010102B00001D00101010 /* ArcheryWatchApp */;
+			targetProxy = A41010102B00001E00101010 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		504EC30B1FED79650016851F /* Main.storyboard */ = {
@@ -299,16 +396,17 @@
 			baseConfigurationReference = 958DCC722DB07C7200EA8C5F /* debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 56000;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
-				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
+				MARKETING_VERSION = 2.160;
+				OTHER_SWIFT_FLAGS = "$(inherited) \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = com.archery101010.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
@@ -321,20 +419,72 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 56000;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 2.160;
 				PRODUCT_BUNDLE_IDENTIFIER = com.archery101010.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A41010102B00001A00101010 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 56000;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "../../ios-watchos/WatchApp/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.160;
+				PRODUCT_BUNDLE_IDENTIFIER = com.archery101010.app.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
+			};
+			name = Debug;
+		};
+		A41010102B00001B00101010 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 56000;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "../../ios-watchos/WatchApp/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.160;
+				PRODUCT_BUNDLE_IDENTIFIER = com.archery101010.app.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
 			};
 			name = Release;
 		};
@@ -355,6 +505,15 @@
 			buildConfigurations = (
 				504EC3171FED79650016851F /* Debug */,
 				504EC3181FED79650016851F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A41010102B00001C00101010 /* Build configuration list for PBXNativeTarget "ArcheryWatchApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A41010102B00001A00101010 /* Debug */,
+				A41010102B00001B00101010 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

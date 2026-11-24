@@ -5,7 +5,13 @@ import { UserProfile, updateProfile } from "@/lib/authService";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Trophy, Search, Plus, Play, ShieldAlert, Users, Trash2, Edit3, Check, Target } from "lucide-react";
 import ClubLogoIcon from "../ui/ClubLogoIcon";
-import { getLocalSessions, deleteLocalSession, getLocalSetting } from "@/lib/db/indexedDB";
+import {
+  getLocalSessions,
+  deleteLocalSession,
+  getLocalSetting,
+  addToSyncQueue,
+  generateResilientId
+} from "@/lib/db/indexedDB";
 import { showOledAlert, showOledConfirm } from "@/lib/oledDialog";
 import { db } from "@/lib/firebase";
 import {
@@ -161,8 +167,12 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
 
   // Custom configuration for custom created room
-  const [customBow, setCustomBow] = useState<"Recurve" | "Compound" | "Barebow">(user?.bowConfig?.type || "Barebow");
-  const [customDistance, setCustomDistance] = useState<number>(user?.bowConfig?.defaultDistance || 70);
+  const initialCustomBow: "Recurve" | "Compound" | "Barebow" = user?.bowConfig?.type || "Barebow";
+  const [customBow, setCustomBow] = useState<"Recurve" | "Compound" | "Barebow">(initialCustomBow);
+  const [customDistance, setCustomDistance] = useState<number>(
+    user?.bowConfig?.defaultDistance ||
+      (initialCustomBow === "Recurve" ? 70 : initialCustomBow === "Compound" ? 50 : 18)
+  );
   const [botLevel, setBotLevel] = useState<"Rookie" | "Medium" | "High" | "Olympic">("Medium");
   const [duelMode, setDuelMode] = useState<"BOT" | "FRIEND">("FRIEND");
   const [generatedInvite, setGeneratedInvite] = useState<{ code: string; bowType: string; distance: number; system?: string; text: string } | null>(null);
@@ -175,9 +185,11 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
 
   const transitioningRoomRef = useRef<string | null>(null);
   const generatedInviteRef = useRef<typeof generatedInvite>(null);
-  generatedInviteRef.current = generatedInvite;
   const sentInviteRef = useRef<any | null>(null);
-  sentInviteRef.current = sentInvite;
+  useEffect(() => {
+    generatedInviteRef.current = generatedInvite;
+    sentInviteRef.current = sentInvite;
+  }, [generatedInvite, sentInvite]);
 
   const cancelWaitingRoomAndInvites = async (roomCode?: string, explicitInviteId?: string) => {
     const nowTs = Date.now();
@@ -557,6 +569,19 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     }
     try {
       await deleteLocalSession(id);
+      if (typeof navigator === "undefined" || navigator.onLine) {
+        await deleteDoc(doc(db, "sessions", id)).catch(() => {});
+      }
+      if (user?.uid && user.uid !== "USR-GUEST-OFFLINE") {
+        await addToSyncQueue({
+          id: generateResilientId("TXN"),
+          collection: "sessions",
+          operation: "DELETE",
+          payloadId: id,
+          payload: null,
+          timestamp: Date.now()
+        }).catch(() => {});
+      }
       // Reload list
       const localSess = await getLocalSessions();
       const duelSessions = localSess.filter(
@@ -783,59 +808,77 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
   }, [sentInvite?.id]);
 
   const handleChallengeRealUser = async (rival: any) => {
-    setInviteStatusMessage(tx("Enviando reto...", "Sending challenge..."));
-    
+    if (!rival?.uid || !user?.uid || rival.uid === user.uid) {
+      void showOledAlert(
+        tx(
+          "No puedes enviarte un reto a tu propia cuenta.",
+          "You cannot send a challenge to your own account."
+        )
+      );
+      return;
+    }
+
+    setInviteStatusMessage(tx("Enviando reto", "Sending challenge"));
+
     // Generate matchplay code
-    const code = "MAT-" + Math.random().toString(36).substring(2, 5).toUpperCase() + "-" + Math.random().toString(36).substring(2, 5).toUpperCase();
-    
+    const code =
+      "MAT-" +
+      Math.random().toString(36).substring(2, 5).toUpperCase() +
+      "-" +
+      Math.random().toString(36).substring(2, 5).toUpperCase();
+
     try {
       const inviteId = `INV-${Date.now()}`;
-      const resolvedSystem = rival.bowConfig.type === "Compound" ? "cumulative" : "set";
-      
-      const inviteData = {
-        senderUid: user.uid,
-        senderName: user.fullName,
-        receiverUid: rival.uid,
-        bowType: rival.bowConfig.type,
-        distance: rival.bowConfig.defaultDistance,
-        system: resolvedSystem,
-        status: "pending",
-        roomCode: code,
-        createdAt: Date.now()
-      };
+      const rivalBowType = rival?.bowConfig?.type || user?.bowConfig?.type || "Recurve";
+      const rivalDistance =
+        Number(rival?.bowConfig?.defaultDistance) ||
+        (rivalBowType === "Compound" ? 50 : rivalBowType === "Recurve" ? 70 : 18);
+      const resolvedSystem = rivalBowType === "Compound" ? "cumulative" : "set";
+      const nowTs = Date.now();
 
-      // Write invite to Firestore
-      await setDoc(doc(db, "duel_invitations", inviteId), inviteData);
-
-      // Write duel room to Firestore
+      // Write duel room to Firestore FIRST so it exists before recipient receives invitation
       await setDoc(doc(db, "active_duels", code), {
         id: code,
-        bowType: rival.bowConfig.type,
-        distance: rival.bowConfig.defaultDistance,
+        bowType: rivalBowType,
+        distance: rivalDistance,
         system: resolvedSystem,
         ...(user.clubId ? { clubId: user.clubId } : {}),
         creatorUid: user.uid,
-        creatorName: user.fullName,
+        creatorName: user.fullName || user.nickname || "Arquero",
         creatorConnected: true,
-        creatorConnectedAt: Date.now(),
+        creatorConnectedAt: nowTs,
         playerUid: rival.uid,
-        playerName: rival.fullName,
+        playerName: rival.fullName || "Rival",
         playerConnected: false,
         playerConnectedAt: 0,
         creatorReady: false,
         playerReady: false,
         status: "waiting",
-        updatedAt: Date.now()
+        updatedAt: nowTs
       });
+
+      const inviteData = {
+        senderUid: user.uid,
+        senderName: user.fullName || user.nickname || "Arquero",
+        receiverUid: rival.uid,
+        bowType: rivalBowType,
+        distance: rivalDistance,
+        system: resolvedSystem,
+        status: "pending",
+        roomCode: code,
+        createdAt: nowTs,
+        updatedAt: nowTs
+      };
+
+      await setDoc(doc(db, "duel_invitations", inviteId), inviteData);
 
       setSentInvite({ id: inviteId, ...inviteData });
       setInviteStatusMessage(
         tx(
-          `Esperando a que ${rival.fullName} acepte el reto...`,
-          `Waiting for ${rival.fullName} to accept the challenge...`
+          `Esperando confirmación de ${rival.fullName || "tu oponente"}`,
+          `Waiting for ${rival.fullName || "your opponent"} to accept`
         )
       );
-
     } catch (err) {
       logger.error("Error creating real-time challenge:", err);
       await showOledAlert(
@@ -964,15 +1007,15 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
     onStartDuel(matchConfig);
   };
 
-  const handleCreateRoomSubmit = (e: React.FormEvent) => {
+  const handleCreateRoomSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (duelMode === "FRIEND") {
       const codeSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
       const bowCode = customBow === "Compound" ? "C" : customBow === "Recurve" ? "R" : "B";
       const generatedCode = `INV-${bowCode}${customDistance}-${codeSuffix}`;
       const resolvedSystem = customBow === "Compound" ? "cumulative" : "set";
-      
+
       const isLocalDev =
         typeof window === "undefined" ||
         window.location.origin.includes("localhost") ||
@@ -997,18 +1040,19 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
         return;
       }
 
-      // Write duel room to Firestore immediately so that guest join attempts don't fail as invalid
-      if (user?.uid && user.uid !== "USR-GUEST-OFFLINE") {
-        setDoc(doc(db, "active_duels", generatedCode), {
+      // Await duel room creation in Firestore BEFORE displaying the room code so guests never hit NOT_FOUND (`AUD-WEB-13`)
+      const nowTs = Date.now();
+      try {
+        await setDoc(doc(db, "active_duels", generatedCode), {
           id: generatedCode,
           bowType: customBow,
           distance: customDistance,
           system: resolvedSystem,
           ...(user.clubId ? { clubId: user.clubId } : {}),
           creatorUid: user.uid,
-          creatorName: user.fullName,
+          creatorName: user.fullName || user.nickname || "Arquero",
           creatorConnected: true,
-          creatorConnectedAt: Date.now(),
+          creatorConnectedAt: nowTs,
           playerUid: "",
           playerName: "",
           playerConnected: false,
@@ -1016,10 +1060,17 @@ export default function MatchplayLobbyView({ user, onBack, onStartDuel }: Matchp
           creatorReady: false,
           playerReady: false,
           status: "waiting",
-          updatedAt: Date.now()
-        }).catch((err) => {
-          logger.error("Error creating active duel in Firestore immediately:", err);
+          updatedAt: nowTs
         });
+      } catch (err) {
+        logger.error("Error creating active duel in Firestore:", err);
+        void showOledAlert(
+          tx(
+            "No se pudo crear la sala en la nube. Verifica tu conexión a internet e inténtalo de nuevo.",
+            "Could not create the online room in the cloud. Check your internet connection and try again."
+          )
+        );
+        return;
       }
 
       setGeneratedInvite({

@@ -1,19 +1,19 @@
 {
   "name": "archery-app",
-  "version": "2.159.0",
+  "version": "2.160.0",
   "private": true,
   "engines": {
     "node": ">=22.6.0"
   },
   "scripts": {
     "dev": "next dev",
-    "prebuild": "node scripts/verify-no-regressions.js && node --test tests/archery-core.test.ts",
+    "prebuild": "node scripts/verify-no-regressions.js && node --test tests/archery-core.test.ts tests/audit-remediations.test.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "check:hooks": "node scripts/verify-no-regressions.js",
-    "test": "node scripts/verify-no-regressions.js && node --test tests/archery-core.test.ts",
-    "verify:ci": "node scripts/verify-no-regressions.js && tsc --noEmit && node --test tests/archery-core.test.ts && next build",
+    "test": "node scripts/verify-no-regressions.js && node --test tests/archery-core.test.ts tests/audit-remediations.test.ts",
+    "verify:ci": "node scripts/verify-no-regressions.js && tsc --noEmit && npm run lint && node --test tests/archery-core.test.ts tests/audit-remediations.test.ts && npm --prefix functions test && next build",
     "deploy:test": "next build && firebase deploy -P test",
     "deploy:prod": "next build && firebase deploy -P prod",
     "bump-version": "node scripts/increment-version.js",
@@ -52,6 +52,7 @@
     "eslint-config-next": "16.2.6",
     "jimp": "^1.6.1",
     "pdf-lib": "^1.17.1",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

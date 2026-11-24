@@ -7,6 +7,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   onSnapshot,
   Timestamp,
   type Unsubscribe
@@ -135,8 +136,150 @@ const WATCH_CHANNEL_NAME = "archery_101010_watch_bridge_v1";
 const WATCH_STORAGE_KEY = "archery_101010_watch_state_v1";
 const WATCH_CMD_STORAGE_KEY = "archery_101010_watch_cmd_v1";
 const WATCH_CLIENT_CODE_KEY = "archery_watch_client_pairing_code";
+const WATCH_CLIENT_SESSION_KEY = "archery_watch_client_session_v2";
+const WATCH_CLIENT_DEVICE_ID_KEY = "archery_watch_client_device_id";
 const PENDING_WATCH_CMDS_SESSION_KEY = "archery_pending_watch_cmds";
 const PENDING_WATCH_CMD_TTL_MS = 60_000;
+const WATCH_PAIRING_OPEN_MS = 115_000;
+const SESSION_TOKEN_RE = /^[A-Za-z0-9_-]{32,64}$/;
+const PAIRING_CODE_RE = /^[0-9]{6}$/;
+
+const SHA256_K = new Uint32Array([
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+]);
+
+function sha256PureJsBytes(bytes: Uint8Array): string {
+  const rotr = (x: number, n: number) => (x >>> n) | (x << (32 - n));
+  const bitLen = bytes.length * 8;
+  const padLen = (((bytes.length + 9 + 63) >> 6) << 6);
+  const padded = new Uint8Array(padLen);
+  padded.set(bytes);
+  padded[bytes.length] = 0x80;
+  const view = new DataView(padded.buffer);
+  view.setUint32(padLen - 8, Math.floor(bitLen / 0x100000000), false);
+  view.setUint32(padLen - 4, bitLen >>> 0, false);
+
+  let h0 = 0x6a09e667;
+  let h1 = 0xbb67ae85;
+  let h2 = 0x3c6ef372;
+  let h3 = 0xa54ff53a;
+  let h4 = 0x510e527f;
+  let h5 = 0x9b05688c;
+  let h6 = 0x1f83d9ab;
+  let h7 = 0x5be0cd19;
+  const w = new Uint32Array(64);
+
+  for (let offset = 0; offset < padLen; offset += 64) {
+    for (let i = 0; i < 16; i++) {
+      w[i] = view.getUint32(offset + i * 4, false);
+    }
+    for (let i = 16; i < 64; i++) {
+      const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+      const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+    }
+
+    let a = h0;
+    let b = h1;
+    let c = h2;
+    let d = h3;
+    let e = h4;
+    let f = h5;
+    let g = h6;
+    let h = h7;
+
+    for (let i = 0; i < 64; i++) {
+      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const ch = (e & f) ^ (~e & g);
+      const temp1 = (h + S1 + ch + SHA256_K[i] + w[i]) >>> 0;
+      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (S0 + maj) >>> 0;
+
+      h = g;
+      g = f;
+      f = e;
+      e = (d + temp1) >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = (temp1 + temp2) >>> 0;
+    }
+
+    h0 = (h0 + a) >>> 0;
+    h1 = (h1 + b) >>> 0;
+    h2 = (h2 + c) >>> 0;
+    h3 = (h3 + d) >>> 0;
+    h4 = (h4 + e) >>> 0;
+    h5 = (h5 + f) >>> 0;
+    h6 = (h6 + g) >>> 0;
+    h7 = (h7 + h) >>> 0;
+  }
+
+  return [h0, h1, h2, h3, h4, h5, h6, h7]
+    .map((v) => v.toString(16).padStart(8, "0"))
+    .join("")
+    .toLowerCase();
+}
+
+export async function computeWatchOwnerHash(uid: string): Promise<string> {
+  const bytes = new TextEncoder().encode(String(uid || ""));
+  if (typeof crypto !== "undefined" && crypto.subtle && typeof crypto.subtle.digest === "function") {
+    try {
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0"))
+        .join("")
+        .toLowerCase();
+    } catch {
+      return sha256PureJsBytes(bytes);
+    }
+  }
+  return sha256PureJsBytes(bytes);
+}
+
+export function generateWatchSessionToken(): string {
+  const bytes = new Uint8Array(32);
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const b64 =
+    typeof btoa === "function"
+      ? btoa(binary)
+      : Buffer.from(bytes).toString("base64");
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function getOrCreateWatchClientDeviceId(): string {
+  if (typeof window === "undefined") {
+    return `webw-${generateWatchSessionToken().slice(0, 24)}`;
+  }
+  try {
+    const existing = (localStorage.getItem(WATCH_CLIENT_DEVICE_ID_KEY) || "").trim();
+    if (/^[A-Za-z0-9_:-]{6,80}$/.test(existing)) {
+      return existing;
+    }
+  } catch {}
+  const generated = `webw-${generateWatchSessionToken().slice(0, 24)}`;
+  try {
+    localStorage.setItem(WATCH_CLIENT_DEVICE_ID_KEY, generated);
+  } catch {}
+  return generated;
+}
 
 /**
  * Parses bow poundage from user profile (e.g., "38", "38 lbs", "42#")
@@ -346,6 +489,9 @@ let lastIosWatchStatus: WatchConnectionStatus | null = null;
 
 // Phone-side Cloud Watch Sync state
 let activePhonePairingCode = "";
+let activePhoneSessionToken = "";
+let activePhoneOwnerHash = "";
+let activePhonePairingCreatedAt = 0;
 let activePhonePairingUid = "";
 let phoneCloudUnsubscribe: Unsubscribe | null = null;
 let phoneCloudThrottleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -374,10 +520,13 @@ let lastKnownCloudWatchHr: {
 
 // Standalone /watch client Cloud Sync state
 let activeWatchClientCode = "";
+let activeWatchClientSessionToken = "";
+let activeWatchClientDeviceId = "";
 let watchClientUnsubscribe: Unsubscribe | null = null;
 let watchClientCmdSeq = 0;
 let latestWatchClientSteps = 0;
 let latestWatchClientDistM = 0;
+let latestWatchClientKcal = 0;
 
 let cloudPairingStatusState: CloudWatchPairingStatus = {
   pairingCode: "",
@@ -615,9 +764,10 @@ function emitCloudWatchHrToWearBridge(
   } catch {}
 }
 
-function fetchCloudWatchHrOnce(code: string): void {
-  if (!code || !/^[1-9]\d{5}$/.test(code)) return;
-  getDoc(doc(db, "watch_sessions", code))
+function fetchCloudWatchHrOnce(code: string, sessionToken?: string): void {
+  const token = sessionToken || activePhoneSessionToken;
+  if (!code || !PAIRING_CODE_RE.test(code) || !token || !SESSION_TOKEN_RE.test(token)) return;
+  getDoc(doc(db, "watch_sessions", token))
     .then((snap) => {
       if (!snap.exists()) return;
       const data = snap.data() || {};
@@ -658,9 +808,14 @@ export function ensurePhoneWatchPairingReady(explicitUid?: string): void {
   if (typeof window === "undefined" || activeWatchClientCode) return;
   const runForUid = (resolvedUid: string) => {
     if (!resolvedUid || resolvedUid === "USR-GUEST-OFFLINE") return;
-    if (activePhonePairingCode && activePhonePairingUid === resolvedUid && phoneCloudUnsubscribe) {
-      pushPairingCodeToNativeWatchBridge(activePhonePairingCode);
-      fetchCloudWatchHrOnce(activePhonePairingCode);
+    if (
+      activePhonePairingCode &&
+      activePhoneSessionToken &&
+      activePhonePairingUid === resolvedUid &&
+      phoneCloudUnsubscribe
+    ) {
+      pushPairingCodeToNativeWatchBridge(activePhonePairingCode, activePhoneSessionToken);
+      fetchCloudWatchHrOnce(activePhonePairingCode, activePhoneSessionToken);
       return;
     }
     if (inFlightPairingInitPromise && inFlightPairingInitUid === resolvedUid) {
@@ -670,8 +825,8 @@ export function ensurePhoneWatchPairingReady(explicitUid?: string): void {
     inFlightPairingInitPromise = getOrCreatePhoneWatchPairingCode(resolvedUid)
       .then((code) => {
         if (code) {
-          pushPairingCodeToNativeWatchBridge(code);
-          fetchCloudWatchHrOnce(code);
+          pushPairingCodeToNativeWatchBridge(code, activePhoneSessionToken);
+          fetchCloudWatchHrOnce(code, activePhoneSessionToken);
         }
         return code;
       })
@@ -690,15 +845,16 @@ export function ensurePhoneWatchPairingReady(explicitUid?: string): void {
     return;
   }
   if (explicitUid && explicitUid !== "USR-GUEST-OFFLINE") {
-    // Also immediately listen on any cached localStorage pairing code while Firebase Auth hydrates
+    // Also immediately listen on any cached localStorage pairing code + 256-bit sessionToken while Firebase Auth hydrates
     try {
-      const cached = localStorage.getItem(`archery_watch_pairing_code_${explicitUid}`) || "";
-      if (/^[1-9]\d{5}$/.test(cached)) {
-        pushPairingCodeToNativeWatchBridge(cached);
-        if (!activePhonePairingCode || !phoneCloudUnsubscribe) {
-          startPhonePairingSnapshotListener(cached, explicitUid);
+      const cachedCode = localStorage.getItem(`archery_watch_pairing_code_${explicitUid}`) || "";
+      const cachedToken = localStorage.getItem(`archery_watch_session_token_${explicitUid}`) || "";
+      if (PAIRING_CODE_RE.test(cachedCode) && SESSION_TOKEN_RE.test(cachedToken)) {
+        pushPairingCodeToNativeWatchBridge(cachedCode, cachedToken);
+        if (!activePhonePairingCode || !activePhoneSessionToken || !phoneCloudUnsubscribe) {
+          startPhonePairingSnapshotListener(cachedCode, cachedToken, explicitUid);
         }
-        fetchCloudWatchHrOnce(cached);
+        fetchCloudWatchHrOnce(cachedCode, cachedToken);
       }
     } catch {}
   }
@@ -735,8 +891,8 @@ function requestCloudWatchHeartRateInternal(): void {
   }
 
   ensurePhoneWatchPairingReady();
-  if (activePhonePairingCode) {
-    fetchCloudWatchHrOnce(activePhonePairingCode);
+  if (activePhonePairingCode && activePhoneSessionToken) {
+    fetchCloudWatchHrOnce(activePhonePairingCode, activePhoneSessionToken);
   }
 }
 
@@ -764,7 +920,9 @@ function clampNum(val: unknown, fallback: number, min: number, max: number): num
 
 function buildPhoneCloudSessionFields(
   snapshot: BiometricSessionSnapshot | null,
-  uid: string
+  uid: string,
+  sessionToken: string,
+  pairingCode: string
 ): Record<string, any> {
   const s = snapshot || readStoredWatchState();
   const endsCount = Math.round(clampNum(s?.endsCount, 12, 1, 1000));
@@ -781,6 +939,8 @@ function buildPhoneCloudSessionFields(
   const expiresAtMs = now + WATCH_SESSION_TTL_MS;
 
   return {
+    sessionToken,
+    ...(PAIRING_CODE_RE.test(pairingCode) ? { pairingCode } : {}),
     userId: String(uid).slice(0, 128),
     sessionId: String(s?.sessionId || "LIVE").slice(0, 128),
     sessionActive: s ? s.sessionActive !== false : true,
@@ -810,8 +970,17 @@ function buildPhoneCloudSessionFields(
   };
 }
 
-function startPhonePairingSnapshotListener(code: string, uid: string): void {
-  if (phoneCloudUnsubscribe && activePhonePairingCode === code && activePhonePairingUid === uid) {
+function startPhonePairingSnapshotListener(
+  code: string,
+  sessionToken: string,
+  uid: string
+): void {
+  if (
+    phoneCloudUnsubscribe &&
+    activePhonePairingCode === code &&
+    activePhoneSessionToken === sessionToken &&
+    activePhonePairingUid === uid
+  ) {
     return;
   }
   if (phoneCloudUnsubscribe) {
@@ -821,6 +990,7 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
     phoneCloudUnsubscribe = null;
   }
   activePhonePairingCode = code;
+  activePhoneSessionToken = sessionToken;
   activePhonePairingUid = uid;
   lastObservedWatchHeartbeatAt = 0;
   let isInitialSnapshot = true;
@@ -829,7 +999,7 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
     pairingCode: code
   });
 
-  const sessionRef = doc(db, "watch_sessions", code);
+  const sessionRef = doc(db, "watch_sessions", sessionToken);
   phoneCloudUnsubscribe = onSnapshot(
     sessionRef,
     (snap) => {
@@ -1093,28 +1263,85 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
   );
 }
 
-async function allocateFreshPairingCode(effectiveUid: string): Promise<string> {
-  for (let attempt = 0; attempt < 4; attempt++) {
+async function allocateFreshPairingCode(ownerHash: string): Promise<string> {
+  for (let attempt = 0; attempt < 6; attempt++) {
     const candidate = String(Math.floor(100000 + Math.random() * 900000));
     try {
-      const existing = await getDoc(doc(db, "watch_sessions", candidate));
-      if (!existing.exists() || existing.data()?.userId === effectiveUid) {
+      const existing = await getDoc(doc(db, "watch_pairings", candidate));
+      if (!existing.exists() || existing.data()?.ownerHash === ownerHash) {
         return candidate;
       }
-    } catch {
+    } catch (err: any) {
+      const errCode = String(err?.code || "");
+      const isPermDenied =
+        errCode === "permission-denied" ||
+        String(err?.message || "").toLowerCase().includes("missing or insufficient permissions");
+      if (isPermDenied) {
+        // Another user owns a claimed/expired watch_pairings doc at this 6-digit code; retry!
+        continue;
+      }
       return candidate;
     }
   }
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-function pushPairingCodeToNativeWatchBridge(code: string): void {
-  if (typeof window === "undefined" || !/^[1-9]\d{5}$/.test(code)) return;
+async function writeOrRefreshWatchPairingDoc(
+  code: string,
+  sessionToken: string,
+  ownerHash: string,
+  reopenIfClaimed: boolean = true
+): Promise<boolean> {
+  if (
+    !PAIRING_CODE_RE.test(code) ||
+    !SESSION_TOKEN_RE.test(sessionToken) ||
+    !/^[a-f0-9]{64}$/.test(ownerHash)
+  ) {
+    return false;
+  }
+  const pairingRef = doc(db, "watch_pairings", code);
+  const now = Date.now();
+
+  if (!reopenIfClaimed) {
+    try {
+      const existing = await getDoc(pairingRef);
+      if (existing.exists()) {
+        const d = existing.data() || {};
+        if (d.ownerHash === ownerHash && d.sessionToken === sessionToken && d.claimed === true) {
+          return true;
+        }
+        if (typeof d.createdAt === "number" && d.createdAt > 0) {
+          activePhonePairingCreatedAt = d.createdAt;
+        }
+      }
+    } catch {}
+  }
+
+  const createdAt = activePhonePairingCreatedAt > 0 ? activePhonePairingCreatedAt : now;
+  activePhonePairingCreatedAt = createdAt;
+
+  await setDoc(pairingRef, {
+    pairingCode: code,
+    sessionToken,
+    ownerHash,
+    pairingOpenUntil: now + WATCH_PAIRING_OPEN_MS,
+    claimed: false,
+    watchDeviceId: "",
+    createdAt,
+    updatedAt: now
+  });
+  return true;
+}
+
+function pushPairingCodeToNativeWatchBridge(code: string, sessionToken?: string): void {
+  if (typeof window === "undefined" || !PAIRING_CODE_RE.test(code)) return;
   try {
     const stored = readStoredWatchState();
+    const resolvedToken = sessionToken || activePhoneSessionToken;
     const payload = JSON.stringify({
       ...(stored || { sessionActive: true }),
       pairingCode: code,
+      ...(SESSION_TOKEN_RE.test(resolvedToken) ? { sessionToken: resolvedToken } : {}),
       updatedAt: Date.now()
     });
     const bridge = (window as any).ArcheryWatchNativeBridge;
@@ -1123,13 +1350,17 @@ function pushPairingCodeToNativeWatchBridge(code: string): void {
     } else if (bridge?.syncTelemetryToWatch) {
       bridge.syncTelemetryToWatch(payload);
     }
+    const iosHandler = (window as any).webkit?.messageHandlers?.ArcheryWatchNativeBridge;
+    if (iosHandler?.postMessage) {
+      iosHandler.postMessage({ action: "onSessionTelemetryUpdate", payload });
+    }
   } catch {}
 }
 
 /**
- * Generates or restores the archer's 6-digit Cloud Watch Pairing Code (`100000`–`999999`),
- * persists `watch_sessions/{code}` in Firestore (auto-rotating if an old cached code is rejected
- * or expired), and listens in real time for Wear OS / Connect IQ / Web Watch commands.
+ * Generates or restores the archer's 6-digit Cloud Watch Pairing Code (`100000`–`999999`)
+ * paired with a 256-bit URL-safe `sessionToken` (`watch_sessions/{sessionToken}` + ephemeral
+ * `watch_pairings/{pairingCode}` <= 120s window), and listens in real time for watch commands.
  */
 export async function getOrCreatePhoneWatchPairingCode(
   uid?: string,
@@ -1146,51 +1377,87 @@ export async function getOrCreatePhoneWatchPairingCode(
     return "";
   }
 
-  const storageKey = `archery_watch_pairing_code_${effectiveUid}`;
-  let code = "";
-  let isFreshAllocation = false;
-  if (!forceRegenerate) {
-    try {
-      const saved = localStorage.getItem(storageKey) || "";
-      if (/^[1-9]\d{5}$/.test(saved)) {
-        code = saved;
-      }
-    } catch {}
-  }
+  const codeStorageKey = `archery_watch_pairing_code_${effectiveUid}`;
+  const tokenStorageKey = `archery_watch_session_token_${effectiveUid}`;
+  const ownerHash = await computeWatchOwnerHash(effectiveUid);
+  activePhoneOwnerHash = ownerHash;
 
-  if (!code) {
-    code = await allocateFreshPairingCode(effectiveUid);
+  let prevSavedCode = "";
+  let prevSavedToken = "";
+  try {
+    prevSavedCode = (localStorage.getItem(codeStorageKey) || "").trim();
+    prevSavedToken = (localStorage.getItem(tokenStorageKey) || "").trim();
+  } catch {}
+
+  let code = "";
+  let sessionToken = "";
+  let isFreshAllocation = false;
+
+  if (!forceRegenerate && PAIRING_CODE_RE.test(prevSavedCode) && SESSION_TOKEN_RE.test(prevSavedToken)) {
+    code = prevSavedCode;
+    sessionToken = prevSavedToken;
+  } else {
+    code = await allocateFreshPairingCode(ownerHash);
+    sessionToken = generateWatchSessionToken();
+    activePhonePairingCreatedAt = Date.now();
     isFreshAllocation = true;
     try {
-      localStorage.setItem(storageKey, code);
+      localStorage.setItem(codeStorageKey, code);
+      localStorage.setItem(tokenStorageKey, sessionToken);
     } catch {}
+    if (forceRegenerate) {
+      if (PAIRING_CODE_RE.test(prevSavedCode) && prevSavedCode !== code) {
+        deleteDoc(doc(db, "watch_pairings", prevSavedCode)).catch(() => {});
+      }
+      if (SESSION_TOKEN_RE.test(prevSavedToken) && prevSavedToken !== sessionToken) {
+        deleteDoc(doc(db, "watch_sessions", prevSavedToken)).catch(() => {});
+      }
+    }
   }
 
-  const payload = buildPhoneCloudSessionFields(readStoredWatchState(), effectiveUid);
   let persisted = false;
   let lastErrorCode = "";
 
   try {
-    if (isFreshAllocation || forceRegenerate) {
-      await setDoc(doc(db, "watch_sessions", code), payload);
-    } else {
-      await setDoc(doc(db, "watch_sessions", code), payload, { merge: true });
-    }
+    const payload = buildPhoneCloudSessionFields(
+      readStoredWatchState(),
+      effectiveUid,
+      sessionToken,
+      code
+    );
+    // Always use { merge: true } without watchDeviceId so claimed watch bindings are preserved!
+    await setDoc(doc(db, "watch_sessions", sessionToken), payload, { merge: true });
+    await writeOrRefreshWatchPairingDoc(
+      code,
+      sessionToken,
+      ownerHash,
+      isFreshAllocation || forceRegenerate
+    );
     persisted = true;
   } catch (err: any) {
     lastErrorCode = String(err?.code || err?.message || "SYNC_FAILED");
-    // Self-heal: if an old localStorage code expired, collided, or had legacy fields rejected by
-    // Firestore Rules, automatically rotate to a clean brand-new 6-digit code!
+    // Self-heal: if an old localStorage code/token collided, expired, or had legacy fields rejected
+    // by Firestore Rules, automatically rotate to a clean 6-digit code + fresh 256-bit sessionToken!
     for (let retry = 0; retry < 2 && !persisted; retry++) {
       try {
-        const rotated = await allocateFreshPairingCode(effectiveUid);
-        const cleanPayload = buildPhoneCloudSessionFields(readStoredWatchState(), effectiveUid);
-        await setDoc(doc(db, "watch_sessions", rotated), cleanPayload);
-        code = rotated;
+        const rotatedCode = await allocateFreshPairingCode(ownerHash);
+        const rotatedToken = generateWatchSessionToken();
+        activePhonePairingCreatedAt = Date.now();
+        const cleanPayload = buildPhoneCloudSessionFields(
+          readStoredWatchState(),
+          effectiveUid,
+          rotatedToken,
+          rotatedCode
+        );
+        await setDoc(doc(db, "watch_sessions", rotatedToken), cleanPayload, { merge: true });
+        await writeOrRefreshWatchPairingDoc(rotatedCode, rotatedToken, ownerHash, true);
+        code = rotatedCode;
+        sessionToken = rotatedToken;
         persisted = true;
         lastErrorCode = "";
         try {
-          localStorage.setItem(storageKey, code);
+          localStorage.setItem(codeStorageKey, code);
+          localStorage.setItem(tokenStorageKey, sessionToken);
         } catch {}
       } catch (retryErr: any) {
         lastErrorCode = String(retryErr?.code || retryErr?.message || "SYNC_FAILED");
@@ -1206,7 +1473,7 @@ export async function getOrCreatePhoneWatchPairingCode(
       watchLinked: forceRegenerate ? false : cloudPairingStatusState.watchLinked,
       lastCloudSyncAt: Date.now()
     });
-    pushPairingCodeToNativeWatchBridge(code);
+    pushPairingCodeToNativeWatchBridge(code, sessionToken);
   } else {
     notifyCloudPairingStatus({
       pairingCode: code,
@@ -1215,11 +1482,62 @@ export async function getOrCreatePhoneWatchPairingCode(
     });
   }
 
-  startPhonePairingSnapshotListener(code, effectiveUid);
+  startPhonePairingSnapshotListener(code, sessionToken, effectiveUid);
   return code;
 }
 
-function flushPhoneSnapshotToCloudImmediate(snapshot: BiometricSessionSnapshot, uid: string, code: string): void {
+/**
+ * Refreshes `watch_pairings/{pairingCode}.pairingOpenUntil` (`Date.now() + 115000`) so watches
+ * can claim the 256-bit `sessionToken` within the 120s window while pairing UI is open.
+ * When `reopenIfClaimed` is false (periodic background refresh), preserves `claimed: true` if
+ * a watch already claimed the current `sessionToken`.
+ */
+export async function refreshPhoneWatchPairingWindow(
+  uid?: string,
+  reopenIfClaimed: boolean = false
+): Promise<string> {
+  if (typeof window === "undefined" || activeWatchClientCode) return "";
+  const authUid = auth.currentUser?.uid || "";
+  const effectiveUid = authUid || (uid && uid !== "USR-GUEST-OFFLINE" ? uid : "");
+  if (!effectiveUid || !authUid) return "";
+
+  if (
+    !activePhonePairingCode ||
+    !activePhoneSessionToken ||
+    activePhonePairingUid !== effectiveUid ||
+    !PAIRING_CODE_RE.test(activePhonePairingCode) ||
+    !SESSION_TOKEN_RE.test(activePhoneSessionToken)
+  ) {
+    return getOrCreatePhoneWatchPairingCode(effectiveUid, false);
+  }
+
+  const ownerHash = activePhoneOwnerHash || (await computeWatchOwnerHash(effectiveUid));
+  activePhoneOwnerHash = ownerHash;
+
+  try {
+    await writeOrRefreshWatchPairingDoc(
+      activePhonePairingCode,
+      activePhoneSessionToken,
+      ownerHash,
+      reopenIfClaimed
+    );
+    return activePhonePairingCode;
+  } catch (err: any) {
+    const errCode = String(err?.code || "");
+    if (errCode === "permission-denied" || errCode === "not-found") {
+      return getOrCreatePhoneWatchPairingCode(effectiveUid, true);
+    }
+    return activePhonePairingCode;
+  }
+}
+
+function flushPhoneSnapshotToCloudImmediate(
+  snapshot: BiometricSessionSnapshot,
+  uid: string,
+  code: string,
+  sessionToken: string
+): void {
+  if (!SESSION_TOKEN_RE.test(sessionToken)) return;
   if (phoneCloudThrottleTimer) {
     clearTimeout(phoneCloudThrottleTimer);
     phoneCloudThrottleTimer = null;
@@ -1228,7 +1546,7 @@ function flushPhoneSnapshotToCloudImmediate(snapshot: BiometricSessionSnapshot, 
   lastPhoneCloudPushMs = Date.now();
   lastPushedPhoneArrowsCount = Math.max(0, Number(snapshot.arrowsCount) || 0);
 
-  const fields = buildPhoneCloudSessionFields(snapshot, uid);
+  const fields = buildPhoneCloudSessionFields(snapshot, uid, sessionToken, code);
   if (snapshot.sessionActive === false) {
     // Reset cumulative session counters, but NEVER wipe instantaneous wrist watchHeartRateBpm
     // so SessionConfigView and BleHeartRateModal continue showing live pulse between rounds!
@@ -1246,9 +1564,13 @@ function flushPhoneSnapshotToCloudImmediate(snapshot: BiometricSessionSnapshot, 
     activeWatchHrSessionId = "";
   }
 
-  setDoc(doc(db, "watch_sessions", code), fields, { merge: true })
+  setDoc(doc(db, "watch_sessions", sessionToken), fields, { merge: true })
     .then(() => {
-      notifyCloudPairingStatus({ lastCloudSyncAt: Date.now(), cloudConnected: true, cloudSyncError: "" });
+      notifyCloudPairingStatus({
+        lastCloudSyncAt: Date.now(),
+        cloudConnected: true,
+        cloudSyncError: ""
+      });
     })
     .catch((err: any) => {
       const errCode = String(err?.code || "");
@@ -1270,16 +1592,20 @@ function schedulePhoneCloudWatchPush(snapshot: BiometricSessionSnapshot): void {
   const uid = auth.currentUser?.uid || "";
   if (!uid) return;
 
-  if (!activePhonePairingCode || activePhonePairingUid !== uid) {
+  if (!activePhonePairingCode || !activePhoneSessionToken || activePhonePairingUid !== uid) {
     try {
-      const saved = localStorage.getItem(`archery_watch_pairing_code_${uid}`) || "";
-      if (/^[1-9]\d{5}$/.test(saved)) {
-        startPhonePairingSnapshotListener(saved, uid);
+      const savedCode = localStorage.getItem(`archery_watch_pairing_code_${uid}`) || "";
+      const savedToken = localStorage.getItem(`archery_watch_session_token_${uid}`) || "";
+      if (PAIRING_CODE_RE.test(savedCode) && SESSION_TOKEN_RE.test(savedToken)) {
+        startPhonePairingSnapshotListener(savedCode, savedToken, uid);
+      } else {
+        ensurePhoneWatchPairingReady(uid);
+        return;
       }
     } catch {}
   }
 
-  if (!activePhonePairingCode) return;
+  if (!activePhonePairingCode || !activePhoneSessionToken) return;
 
   const nextSessionActive = snapshot.sessionActive !== false;
   const nextSessionId = String(snapshot.sessionId || "");
@@ -1302,7 +1628,12 @@ function schedulePhoneCloudWatchPush(snapshot: BiometricSessionSnapshot): void {
   const elapsed = Date.now() - lastPhoneCloudPushMs;
 
   if (isImmediateEvent || elapsed >= 800) {
-    flushPhoneSnapshotToCloudImmediate(snapshot, uid, activePhonePairingCode);
+    flushPhoneSnapshotToCloudImmediate(
+      snapshot,
+      uid,
+      activePhonePairingCode,
+      activePhoneSessionToken
+    );
     return;
   }
 
@@ -1314,39 +1645,100 @@ function schedulePhoneCloudWatchPush(snapshot: BiometricSessionSnapshot): void {
       const latest = pendingPhoneCloudSnapshot;
       pendingPhoneCloudSnapshot = null;
       const currentUid = auth.currentUser?.uid || "";
-      if (latest && currentUid && activePhonePairingCode) {
-        flushPhoneSnapshotToCloudImmediate(latest, currentUid, activePhonePairingCode);
+      if (latest && currentUid && activePhonePairingCode && activePhoneSessionToken) {
+        flushPhoneSnapshotToCloudImmediate(
+          latest,
+          currentUid,
+          activePhonePairingCode,
+          activePhoneSessionToken
+        );
       }
     }, waitMs);
   }
 }
 
+interface CachedWatchClientSession {
+  pairingCode: string;
+  sessionToken: string;
+  watchDeviceId: string;
+}
+
+function readCachedWatchClientSession(): CachedWatchClientSession | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(WATCH_CLIENT_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      PAIRING_CODE_RE.test(String(parsed.pairingCode || "")) &&
+      SESSION_TOKEN_RE.test(String(parsed.sessionToken || "")) &&
+      typeof parsed.watchDeviceId === "string" &&
+      parsed.watchDeviceId.length >= 1 &&
+      parsed.watchDeviceId.length <= 80
+    ) {
+      return {
+        pairingCode: String(parsed.pairingCode),
+        sessionToken: String(parsed.sessionToken),
+        watchDeviceId: String(parsed.watchDeviceId)
+      };
+    }
+  } catch {}
+  return null;
+}
+
+function writeCachedWatchClientSession(entry: CachedWatchClientSession): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(WATCH_CLIENT_SESSION_KEY, JSON.stringify(entry));
+    localStorage.setItem(WATCH_CLIENT_CODE_KEY, entry.pairingCode);
+  } catch {}
+}
+
+function clearCachedWatchClientSessionTokenOnly(): void {
+  activeWatchClientSessionToken = "";
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(WATCH_CLIENT_SESSION_KEY);
+  } catch {}
+}
+
 export function getActiveWatchClientPairingCode(): string {
   if (activeWatchClientCode) return activeWatchClientCode;
   if (typeof window === "undefined") return "";
+  const cached = readCachedWatchClientSession();
+  if (cached?.pairingCode) return cached.pairingCode;
   try {
     const saved = localStorage.getItem(WATCH_CLIENT_CODE_KEY) || "";
-    if (/^[1-9]\d{5}$/.test(saved)) return saved;
+    if (PAIRING_CODE_RE.test(saved)) return saved;
   } catch {}
   return "";
 }
 
-export function disconnectWatchClientPairingCode(): void {
+export function pauseWatchClientSubscription(): void {
   if (watchClientUnsubscribe) {
     try {
       watchClientUnsubscribe();
     } catch {}
     watchClientUnsubscribe = null;
   }
+}
+
+export function disconnectWatchClientPairingCode(): void {
+  pauseWatchClientSubscription();
   activeWatchClientCode = "";
+  activeWatchClientSessionToken = "";
   try {
     if (typeof window !== "undefined") {
       localStorage.removeItem(WATCH_CLIENT_CODE_KEY);
+      localStorage.removeItem(WATCH_CLIENT_SESSION_KEY);
     }
   } catch {}
   notifyCloudPairingStatus({
     pairingCode: "",
     cloudConnected: false,
+    cloudSyncError: "",
     watchLinked: false,
     watchSource: null
   });
@@ -1401,51 +1793,152 @@ function mapCloudDocToSnapshot(data: Record<string, any>): BiometricSessionSnaps
 }
 
 /**
- * Connects a standalone `/watch` browser companion to `watch_sessions/{code}` in real time.
+ * Connects a standalone `/watch` browser companion via the Spark-safe 256-bit handshake:
+ * 1) Reuses cached `{ pairingCode, sessionToken, watchDeviceId }` when valid;
+ * 2) Otherwise claims `watch_pairings/{pairingCode}` atomically (`claimed: true`, `watchDeviceId`, `watchSource: "WEB_WATCH"`);
+ * 3) Subscribes & sends whitelisted watch telemetry to `watch_sessions/{sessionToken}`.
  */
 export async function connectWatchClientToPairingCode(
   code: string
 ): Promise<{ ok: boolean; snapshot?: BiometricSessionSnapshot; error?: string }> {
   const cleanCode = String(code || "").replace(/\D/g, "").slice(0, 6);
-  if (!/^[1-9]\d{5}$/.test(cleanCode)) {
+  if (!PAIRING_CODE_RE.test(cleanCode)) {
     return { ok: false, error: "Ingresa un código válido de 6 dígitos" };
   }
 
-  const sessionRef = doc(db, "watch_sessions", cleanCode);
+  const cached = readCachedWatchClientSession();
+  const watchDeviceId =
+    cached && cached.pairingCode === cleanCode && cached.watchDeviceId
+      ? cached.watchDeviceId
+      : getOrCreateWatchClientDeviceId();
+  let resolvedToken =
+    cached && cached.pairingCode === cleanCode && SESSION_TOKEN_RE.test(cached.sessionToken)
+      ? cached.sessionToken
+      : "";
+
   let initialSnapshot: BiometricSessionSnapshot | undefined;
 
-  try {
-    const snap = await getDoc(sessionRef);
-    if (!snap.exists()) {
-      return { ok: false, error: "Código no encontrado. Abre el panel Reloj en tu teléfono." };
+  if (resolvedToken) {
+    try {
+      const existingSnap = await getDoc(doc(db, "watch_sessions", resolvedToken));
+      if (existingSnap.exists()) {
+        const sData = existingSnap.data() || {};
+        const lockedDevice = typeof sData.watchDeviceId === "string" ? sData.watchDeviceId : "";
+        if (!lockedDevice || lockedDevice === watchDeviceId) {
+          initialSnapshot = mapCloudDocToSnapshot(sData);
+        } else {
+          clearCachedWatchClientSessionTokenOnly();
+          resolvedToken = "";
+        }
+      } else {
+        clearCachedWatchClientSessionTokenOnly();
+        resolvedToken = "";
+      }
+    } catch (err: any) {
+      const isPermDenied =
+        err?.code === "permission-denied" ||
+        String(err?.message || "").toLowerCase().includes("missing or insufficient permissions");
+      if (isPermDenied && (typeof navigator === "undefined" || navigator.onLine)) {
+        clearCachedWatchClientSessionTokenOnly();
+        resolvedToken = "";
+      } else {
+        return { ok: false, error: "Sin conexión para verificar el código." };
+      }
     }
-    initialSnapshot = mapCloudDocToSnapshot(snap.data() || {});
-  } catch (err: any) {
-    const isPermDenied =
-      err?.code === "permission-denied" ||
-      String(err?.message || "").toLowerCase().includes("missing or insufficient permissions");
-    if (isPermDenied && (typeof navigator === "undefined" || navigator.onLine)) {
-      return {
-        ok: false,
-        error: "Código no encontrado o expirado. Abre Vincular Reloj en tu teléfono."
-      };
-    }
-    return { ok: false, error: "Sin conexión para verificar el código." };
   }
 
-  if (watchClientUnsubscribe) {
+  if (!resolvedToken) {
     try {
-      watchClientUnsubscribe();
-    } catch {}
-    watchClientUnsubscribe = null;
+      const pairingRef = doc(db, "watch_pairings", cleanCode);
+      const pairingSnap = await getDoc(pairingRef);
+      if (!pairingSnap.exists()) {
+        return {
+          ok: false,
+          error: "Código no encontrado o ventana cerrada. Abre el panel Reloj en tu teléfono."
+        };
+      }
+      const pData = pairingSnap.data() || {};
+      const candidateToken = String(pData.sessionToken || "").trim();
+      if (!SESSION_TOKEN_RE.test(candidateToken)) {
+        return {
+          ok: false,
+          error: "Código expirado o inválido. Genera un código nuevo en tu teléfono."
+        };
+      }
+
+      // Single-use atomic claim with ONLY the exact keys allowed by Firestore Rules
+      await updateDoc(pairingRef, {
+        claimed: true,
+        watchDeviceId,
+        watchSource: "WEB_WATCH",
+        updatedAt: Date.now()
+      });
+
+      resolvedToken = candidateToken;
+      writeCachedWatchClientSession({
+        pairingCode: cleanCode,
+        sessionToken: resolvedToken,
+        watchDeviceId
+      });
+
+      const sessionSnap = await getDoc(doc(db, "watch_sessions", resolvedToken));
+      if (!sessionSnap.exists()) {
+        clearCachedWatchClientSessionTokenOnly();
+        return {
+          ok: false,
+          error: "Sesión no encontrada. Abre el panel Reloj en tu teléfono."
+        };
+      }
+      initialSnapshot = mapCloudDocToSnapshot(sessionSnap.data() || {});
+    } catch (err: any) {
+      const isPermDenied =
+        err?.code === "permission-denied" ||
+        String(err?.message || "").toLowerCase().includes("missing or insufficient permissions");
+      if (isPermDenied && (typeof navigator === "undefined" || navigator.onLine)) {
+        clearCachedWatchClientSessionTokenOnly();
+        return {
+          ok: false,
+          error: "Código expirado o ya reclamado. Abre el panel Reloj en tu teléfono para renovarlo."
+        };
+      }
+      return { ok: false, error: "Sin conexión para verificar el código." };
+    }
   }
+
+  pauseWatchClientSubscription();
 
   activeWatchClientCode = cleanCode;
+  activeWatchClientSessionToken = resolvedToken;
+  activeWatchClientDeviceId = watchDeviceId;
+  writeCachedWatchClientSession({
+    pairingCode: cleanCode,
+    sessionToken: resolvedToken,
+    watchDeviceId
+  });
+
+  const sessionRef = doc(db, "watch_sessions", resolvedToken);
+
   try {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(WATCH_CLIENT_CODE_KEY, cleanCode);
+    const hbNow = Date.now();
+    await updateDoc(sessionRef, {
+      watchDeviceId,
+      watchSource: "WEB_WATCH",
+      watchHeartbeatAt: hbNow,
+      updatedAt: hbNow
+    });
+  } catch (hbErr: any) {
+    const isPermDenied =
+      hbErr?.code === "permission-denied" ||
+      String(hbErr?.message || "").toLowerCase().includes("missing or insufficient permissions");
+    if (isPermDenied && (typeof navigator === "undefined" || navigator.onLine)) {
+      clearCachedWatchClientSessionTokenOnly();
+      activeWatchClientSessionToken = "";
+      return {
+        ok: false,
+        error: "Este código ya está vinculado a otro reloj. Genera un código nuevo en tu teléfono."
+      };
     }
-  } catch {}
+  }
 
   if (initialSnapshot) {
     try {
@@ -1454,18 +1947,10 @@ export async function connectWatchClientToPairingCode(
     dispatchWatchCommandInternal({ type: "STATE_UPDATE", payload: initialSnapshot });
   }
 
-  try {
-    const hbNow = Date.now();
-    await updateDoc(sessionRef, {
-      watchSource: "WEB_WATCH",
-      watchHeartbeatAt: hbNow,
-      updatedAt: hbNow
-    });
-  } catch {}
-
   notifyCloudPairingStatus({
     pairingCode: cleanCode,
     cloudConnected: true,
+    cloudSyncError: "",
     watchLinked: true,
     watchSource: "WEB_WATCH",
     lastCloudSyncAt: Date.now(),
@@ -1475,11 +1960,20 @@ export async function connectWatchClientToPairingCode(
   watchClientUnsubscribe = onSnapshot(
     sessionRef,
     (snap) => {
-      if (!snap.exists()) return;
+      if (!snap.exists()) {
+        clearCachedWatchClientSessionTokenOnly();
+        notifyCloudPairingStatus({
+          cloudConnected: false,
+          watchLinked: false,
+          cloudSyncError: "SESSION_EXPIRED"
+        });
+        return;
+      }
       const mapped = mapCloudDocToSnapshot(snap.data() || {});
       if (mapped.sessionActive === false) {
         latestWatchClientSteps = 0;
         latestWatchClientDistM = 0;
+        latestWatchClientKcal = 0;
       }
       try {
         localStorage.setItem(WATCH_STORAGE_KEY, JSON.stringify(mapped));
@@ -1487,6 +1981,7 @@ export async function connectWatchClientToPairingCode(
       notifyCloudPairingStatus({
         pairingCode: cleanCode,
         cloudConnected: true,
+        cloudSyncError: "",
         watchLinked: true,
         watchSource: "WEB_WATCH",
         lastCloudSyncAt: Date.now(),
@@ -1498,8 +1993,19 @@ export async function connectWatchClientToPairingCode(
         } catch {}
       });
     },
-    () => {
-      notifyCloudPairingStatus({ cloudConnected: false, watchLinked: false });
+    (snapErr: any) => {
+      const isPermDenied =
+        snapErr?.code === "permission-denied" ||
+        String(snapErr?.message || "").toLowerCase().includes("missing or insufficient permissions");
+      if (isPermDenied && (typeof navigator === "undefined" || navigator.onLine)) {
+        clearCachedWatchClientSessionTokenOnly();
+        activeWatchClientSessionToken = "";
+      }
+      notifyCloudPairingStatus({
+        cloudConnected: false,
+        watchLinked: false,
+        cloudSyncError: isPermDenied ? "SESSION_EXPIRED" : "OFFLINE"
+      });
     }
   );
 
@@ -1526,8 +2032,14 @@ export function publishWatchState(snapshot: BiometricSessionSnapshot): void {
   try {
     // Notify native Android Wear OS bridge or iOS WKWebView WatchConnectivity bridge
     const nativePayload =
-      activePhonePairingCode && /^[1-9]\d{5}$/.test(activePhonePairingCode)
-        ? JSON.stringify({ ...snapshot, pairingCode: activePhonePairingCode })
+      activePhonePairingCode && PAIRING_CODE_RE.test(activePhonePairingCode)
+        ? JSON.stringify({
+            ...snapshot,
+            pairingCode: activePhonePairingCode,
+            ...(SESSION_TOKEN_RE.test(activePhoneSessionToken)
+              ? { sessionToken: activePhoneSessionToken }
+              : {})
+          })
         : serialized;
     const bridge = (window as any).ArcheryWatchNativeBridge;
     if (bridge?.onSessionTelemetryUpdate) {
@@ -1567,32 +2079,34 @@ function buildCompactCloudWatchCmd(
   };
 
   if (cmd.type === "INCREMENT_ARROW" || cmd.type === "DECREMENT_ARROW") {
-    if (typeof cmd.delta === "number") out.delta = Math.round(cmd.delta);
+    if (typeof cmd.delta === "number") out.delta = Math.round(clampNum(cmd.delta, 0, -20, 20));
     if (typeof cmd.source === "string") out.source = cmd.source.slice(0, 24);
     if ("totalScore" in cmd && typeof cmd.totalScore === "number") {
-      out.totalScore = Math.max(0, Math.round(cmd.totalScore));
+      out.totalScore = Math.round(clampNum(cmd.totalScore, 0, 0, 100000));
     }
   } else if (cmd.type === "UNDO_ARROW") {
     if (typeof cmd.totalScore === "number") {
-      out.totalScore = Math.max(0, Math.round(cmd.totalScore));
+      out.totalScore = Math.round(clampNum(cmd.totalScore, 0, 0, 100000));
     }
   } else if (cmd.type === "SET_SENSITIVITY") {
-    out.sensitivityLevel = cmd.sensitivityLevel;
+    out.sensitivityLevel = Math.round(clampNum(cmd.sensitivityLevel, 1, 0, 10));
   } else if (cmd.type === "SCORE_INPUT") {
     const val = cmd.payload?.value ?? cmd.value;
     const tot = cmd.payload?.totalScore ?? cmd.totalScore;
     if (val !== undefined) out.value = String(val).slice(0, 12);
-    if (typeof tot === "number") out.totalScore = Math.max(0, Math.round(tot));
+    if (typeof tot === "number") out.totalScore = Math.round(clampNum(tot, 0, 0, 100000));
   } else if (cmd.type === "SYNC_TELEMETRY_FROM_WATCH") {
     const st = cmd.stepsCount ?? cmd.payload?.stepsCount;
     const dm = cmd.distanceWalkedM ?? cmd.payload?.distanceWalkedM;
     const kc = cmd.activeKcal ?? cmd.payload?.activeKcal;
-    if (typeof st === "number") out.stepsCount = Math.max(0, Math.round(st));
-    if (typeof dm === "number") out.distanceWalkedM = Math.max(0, Math.round(dm));
-    if (typeof kc === "number") out.activeKcal = Math.max(0, Math.round(kc));
+    if (typeof st === "number") out.stepsCount = Math.round(clampNum(st, 0, 0, 1000000));
+    if (typeof dm === "number") out.distanceWalkedM = Math.round(clampNum(dm, 0, 0, 1000000));
+    if (typeof kc === "number") out.activeKcal = Math.round(clampNum(kc, 0, 0, 100000));
   } else if (cmd.type === "TOGGLE_AUTO_DETECT") {
     out.enabled = Boolean(cmd.enabled);
-    if (typeof cmd.sensitivityLevel === "number") out.sensitivityLevel = cmd.sensitivityLevel;
+    if (typeof cmd.sensitivityLevel === "number") {
+      out.sensitivityLevel = Math.round(clampNum(cmd.sensitivityLevel, 1, 0, 10));
+    }
   } else if (cmd.type === "ANALYSIS_SHOT") {
     if (typeof cmd.analysisShotJson === "string") {
       out.analysisShotJson = cmd.analysisShotJson.slice(0, 3400);
@@ -1611,14 +2125,14 @@ function buildCompactCloudWatchCmd(
     if (Array.isArray(cmd.zeroGravityVec) && cmd.zeroGravityVec.length === 3) {
       out.analysisShotJson = JSON.stringify(
         cmd.zeroGravityVec.map((n) => Number((Number(n) || 0).toFixed(3)))
-      );
+      ).slice(0, 240);
     } else if (typeof cmd.analysisShotJson === "string") {
       out.analysisShotJson = cmd.analysisShotJson.slice(0, 240);
     }
   }
 
   const bounded: Record<string, string | number | boolean> = {};
-  for (const [k, v] of Object.entries(out).slice(0, 8)) {
+  for (const [k, v] of Object.entries(out).slice(0, 10)) {
     const maxLen = k === "analysisShotJson" ? 3400 : 64;
     bounded[k.slice(0, 32)] = typeof v === "string" ? v.slice(0, maxLen) : v;
   }
@@ -1668,24 +2182,90 @@ export function sendWatchCommand(cmd: WatchCommandMessage): void {
     }
   } catch {}
 
-  // Route standalone /watch commands over 6-Digit Cloud Watch Sync when linked
-  if (activeWatchClientCode && cmd.type !== "REQUEST_STATE" && cmd.type !== "STATE_UPDATE") {
-    if (cmd.type === "SYNC_TELEMETRY_FROM_WATCH") {
-      const st = cmd.stepsCount ?? cmd.payload?.stepsCount;
-      const dm = cmd.distanceWalkedM ?? cmd.payload?.distanceWalkedM;
-      if (typeof st === "number") latestWatchClientSteps = Math.max(0, Math.round(st));
-      if (typeof dm === "number") latestWatchClientDistM = Math.max(0, Math.round(dm));
-    }
-    updateDoc(doc(db, "watch_sessions", activeWatchClientCode), {
+  // Route standalone /watch commands over 256-bit watch_sessions/{sessionToken} when linked
+  if (
+    activeWatchClientCode &&
+    SESSION_TOKEN_RE.test(activeWatchClientSessionToken) &&
+    cmd.type !== "REQUEST_STATE" &&
+    cmd.type !== "STATE_UPDATE"
+  ) {
+    const deviceId = activeWatchClientDeviceId || getOrCreateWatchClientDeviceId();
+    activeWatchClientDeviceId = deviceId;
+
+    const telemetryPatch: Record<string, any> = {
       lastWatchCmd: buildCompactCloudWatchCmd(cmd, cmdId, now),
       lastWatchCmdId: cmdId.slice(0, 64),
       lastWatchCmdSeq: watchClientCmdSeq,
       watchStepsCount: latestWatchClientSteps,
       watchDistanceM: latestWatchClientDistM,
+      watchCaloriesKcal: latestWatchClientKcal,
       watchSource: "WEB_WATCH",
+      watchDeviceId: deviceId,
       watchHeartbeatAt: now,
       updatedAt: now
-    }).catch(() => {});
+    };
+
+    if (cmd.type === "SYNC_TELEMETRY_FROM_WATCH") {
+      const st = cmd.stepsCount ?? cmd.payload?.stepsCount;
+      const dm = cmd.distanceWalkedM ?? cmd.payload?.distanceWalkedM;
+      const kc = cmd.activeKcal ?? cmd.payload?.activeKcal;
+      const hr = cmd.heartRateBpm ?? cmd.payload?.heartRateBpm;
+      const avgHr = cmd.avgHeartRateBpm ?? cmd.payload?.avgHeartRateBpm;
+      const maxHr = cmd.maxHeartRateBpm ?? cmd.payload?.maxHeartRateBpm;
+      if (typeof st === "number") {
+        latestWatchClientSteps = Math.round(clampNum(st, 0, 0, 1000000));
+        telemetryPatch.watchStepsCount = latestWatchClientSteps;
+      }
+      if (typeof dm === "number") {
+        latestWatchClientDistM = Math.round(clampNum(dm, 0, 0, 1000000));
+        telemetryPatch.watchDistanceM = latestWatchClientDistM;
+      }
+      if (typeof kc === "number") {
+        latestWatchClientKcal = Math.round(clampNum(kc, 0, 0, 100000));
+        telemetryPatch.watchCaloriesKcal = latestWatchClientKcal;
+      }
+      if (typeof hr === "number" && hr >= 30 && hr <= 250) {
+        telemetryPatch.watchHeartRateBpm = Math.round(hr);
+      }
+      if (typeof avgHr === "number" && avgHr >= 30 && avgHr <= 250) {
+        telemetryPatch.watchAvgHeartRateBpm = Math.round(avgHr);
+      }
+      if (typeof maxHr === "number" && maxHr >= 30 && maxHr <= 250) {
+        telemetryPatch.watchMaxHeartRateBpm = Math.round(maxHr);
+      }
+    } else if (cmd.type === "ANALYSIS_SHOT") {
+      if (typeof cmd.heartRateBpm === "number" && cmd.heartRateBpm >= 30 && cmd.heartRateBpm <= 250) {
+        telemetryPatch.watchHeartRateBpm = Math.round(cmd.heartRateBpm);
+      }
+    } else if (cmd.type === "ANALYSIS_CALIBRATE_ZERO") {
+      telemetryPatch.calibrateZeroAt = now;
+    } else if (
+      cmd.type === "ANALYSIS_ZERO_VECTOR" &&
+      Array.isArray(cmd.zeroGravityVec) &&
+      cmd.zeroGravityVec.length === 3
+    ) {
+      telemetryPatch.zeroGravityVec = cmd.zeroGravityVec.map((v) =>
+        clampNum(v, 0, -100000, 100000)
+      );
+    }
+
+    updateDoc(doc(db, "watch_sessions", activeWatchClientSessionToken), telemetryPatch).catch(
+      (err: any) => {
+        const isPermDenied =
+          err?.code === "permission-denied" ||
+          err?.code === "not-found" ||
+          String(err?.message || "").toLowerCase().includes("missing or insufficient permissions");
+        if (isPermDenied && (typeof navigator === "undefined" || navigator.onLine)) {
+          clearCachedWatchClientSessionTokenOnly();
+          activeWatchClientSessionToken = "";
+          notifyCloudPairingStatus({
+            cloudConnected: false,
+            watchLinked: false,
+            cloudSyncError: "SESSION_EXPIRED"
+          });
+        }
+      }
+    );
   }
 }
 
@@ -1890,6 +2470,11 @@ export function installAppOnWatch(): boolean {
     const bridge = (window as any).ArcheryWatchNativeBridge;
     if (bridge?.installAppOnWatch) {
       bridge.installAppOnWatch();
+      return true;
+    }
+    const iosHandler = (window as any).webkit?.messageHandlers?.ArcheryWatchNativeBridge;
+    if (iosHandler?.postMessage) {
+      iosHandler.postMessage({ action: "installAppOnWatch" });
       return true;
     }
   } catch {}

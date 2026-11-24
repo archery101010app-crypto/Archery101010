@@ -165,8 +165,13 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
     const localCode = user.clubInviteCode ? user.clubInviteCode.trim() : "";
     const hasValidLocalCode = /^\d{6}$/.test(localCode);
     try {
-      const { generateClubInviteCode, updateProfile } = await import("@/lib/authService");
-      const { doc, getDoc, setDoc } = await import("firebase/firestore");
+      const {
+        generateUniqueClubInviteCode,
+        promoteUserToCoachClub,
+        syncCoachInviteCodeDoc,
+        updateProfile
+      } = await import("@/lib/authService");
+      const { doc, getDoc } = await import("firebase/firestore");
       const { db } = await import("@/lib/firebase");
 
       let cloudData: any = null;
@@ -183,6 +188,17 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         return;
       }
 
+      // If still an archer, promote via server-side `promoteToCoachClub` callable (never self-escalate via client write)
+      if ((user.role === "archer" && !user.isClubCreator) || (cloudData && cloudData.role === "archer" && !cloudData.isClubCreator)) {
+        try {
+          const promoted = await promoteUserToCoachClub(user, { desiredRole: "coach" });
+          if (onUserUpdate) onUserUpdate(promoted);
+        } catch (promoteErr) {
+          console.warn("Coach promotion skipped or deferred:", promoteErr);
+        }
+        return;
+      }
+
       const cloudCode = cloudData?.clubInviteCode ? String(cloudData.clubInviteCode).trim() : "";
       const hasValidCloudCode = /^\d{6}$/.test(cloudCode);
 
@@ -190,7 +206,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
         ? localCode
         : hasValidCloudCode
         ? cloudCode
-        : generateClubInviteCode();
+        : await generateUniqueClubInviteCode();
       const finalClubId = activeClubId;
       const cloudInSync =
         !!cloudData &&
@@ -206,24 +222,12 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
 
       if (cloudInSync && localInSync) return;
 
-      const updates: Partial<UserProfile> = {
+      const updated = await updateProfile(user.uid, {
         clubInviteCode: finalCode,
         clubId: finalClubId,
         isClubCreator: true
-      };
-      if (user.role === "archer") {
-        updates.role = "coach";
-      }
-      const updated = await updateProfile(user.uid, updates);
-      try {
-        await setDoc(doc(db, "users", user.uid), updated, { merge: true });
-        const authMod: any = await import("@/lib/authService");
-        if (typeof authMod.syncCoachInviteCodeDoc === "function") {
-          authMod.syncCoachInviteCodeDoc(updated).catch(() => {});
-        }
-      } catch (cloudErr) {
-        console.warn("Código del Coach pendiente de subir a la nube:", cloudErr);
-      }
+      });
+      await syncCoachInviteCodeDoc(updated).catch(() => {});
       if (!localInSync && onUserUpdate) {
         onUserUpdate(updated);
       }
@@ -291,48 +295,36 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             // Query 1: explicit coachId === user.uid
             try {
               const snapCoachId = await getDocs(
-                query(collection(db, "users"), where("coachId", "==", user.uid), limit(250))
+                query(collection(db, "users"), where("coachId", "==", user.uid), limit(300))
               );
               snapCoachId.forEach(addRemoteDoc);
             } catch (e) {
               console.warn("Query users by coachId failed:", e);
             }
 
-            // Query 2: clubId === activeClubId
+            // Query 2: clubId === canonicalCoachClubId
             try {
-              const snapClub = await getDocs(
-                query(collection(db, "users"), where("clubId", "==", activeClubId), limit(250))
+              const snapCanonical = await getDocs(
+                query(collection(db, "users"), where("clubId", "==", canonicalCoachClubId), limit(300))
               );
-              snapClub.forEach(addRemoteDoc);
+              snapCanonical.forEach(addRemoteDoc);
             } catch (e) {
-              console.warn("Query users by activeClubId failed:", e);
+              console.warn("Query users by canonicalCoachClubId failed:", e);
             }
 
-            // Query 3: canonicalCoachClubId if different from activeClubId
-            if (canonicalCoachClubId !== activeClubId) {
+            // Query 3: activeClubId if distinct from canonicalCoachClubId
+            if (activeClubId && activeClubId !== canonicalCoachClubId) {
               try {
-                const snapCanonical = await getDocs(
-                  query(collection(db, "users"), where("clubId", "==", canonicalCoachClubId), limit(250))
+                const snapClub = await getDocs(
+                  query(collection(db, "users"), where("clubId", "==", activeClubId), limit(300))
                 );
-                snapCanonical.forEach(addRemoteDoc);
+                snapClub.forEach(addRemoteDoc);
               } catch (e) {
-                console.warn("Query users by canonicalCoachClubId failed:", e);
+                console.warn("Query users by activeClubId failed:", e);
               }
             }
 
-            // Query 4: legacy clubInviteCode match
-            if (user.clubInviteCode) {
-              try {
-                const snapCode = await getDocs(
-                  query(collection(db, "users"), where("clubInviteCode", "==", user.clubInviteCode), limit(250))
-                );
-                snapCode.forEach(addRemoteDoc);
-              } catch (e) {
-                console.warn("Query users by clubInviteCode failed:", e);
-              }
-            }
-
-            // Query 5: superadmin bounded sample (full paginated directory lives in SuperAdmin panel)
+            // Query 4: superadmin bounded sample (full paginated directory lives in SuperAdmin panel)
             if (user.role === "superadmin") {
               try {
                 const snapAll = await getDocs(query(collection(db, "users"), limit(50)));
@@ -880,8 +872,16 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
           )
         );
       }
-    } catch (e) {
+    } catch (e: unknown) {
       console.error(e);
+      const msg =
+        e instanceof Error && e.message
+          ? e.message
+          : tx(
+              "No se pudo activar Coach PRO en este momento.",
+              "Could not activate Coach PRO right now."
+            );
+      await showOledAlert(msg);
     }
   };
 
@@ -1014,24 +1014,26 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
                 );
                 if (confirmed) {
                   try {
-                    const { generateClubInviteCode, updateProfile } = await import(
-                      "@/lib/authService"
-                    );
-                    const freshCode = generateClubInviteCode();
-                    const updated = await updateProfile(user.uid, {
-                      clubInviteCode: freshCode,
-                      clubId: activeClubId,
-                      isClubCreator: true
-                    });
-                    if (onUserUpdate) onUserUpdate(updated);
+                    const { rotateCoachClubInviteCode } = await import("@/lib/authService");
+                    const { clubInviteCode: freshCode, updatedUser } =
+                      await rotateCoachClubInviteCode(user);
+                    if (onUserUpdate) onUserUpdate(updatedUser);
                     await showOledAlert(
                       tx(
                         `Nuevo código de 6 dígitos generado: ${freshCode}`,
                         `New 6-digit invite code generated: ${freshCode}`
                       )
                     );
-                  } catch (err) {
+                  } catch (err: unknown) {
                     console.error("Error al regenerar código:", err);
+                    const msg =
+                      err instanceof Error && err.message
+                        ? err.message
+                        : tx(
+                            "No se pudo generar el nuevo código en este momento.",
+                            "Could not generate a new invite code right now."
+                          );
+                    await showOledAlert(msg);
                   }
                 }
               }}
@@ -1157,10 +1159,10 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as Tab)}
-              className={`min-w-0 flex flex-col items-center justify-center gap-1 ${
-                isEs ? "px-0.5" : "px-1 overflow-hidden"
-              } py-2.5 rounded-xl ${
-                isEs ? "text-[10.4px] sm:text-[11.8px]" : "text-[9.8px] min-[390px]:text-[10.4px] sm:text-[11.8px]"
+              className={`min-w-0 flex flex-col items-center justify-center gap-1 px-1 py-2.5 rounded-xl ${
+                isEs
+                  ? "text-[9.8px] min-[390px]:text-[10.4px] sm:text-[11.8px]"
+                  : "text-[9.4px] min-[390px]:text-[10.2px] sm:text-[11.8px]"
               } font-black uppercase tracking-[-0.02em] sm:tracking-wider transition-all duration-200 cursor-pointer ${
                 active
                   ? "bg-cyan-neon/12 border border-cyan-neon/35 text-cyan-neon"
@@ -1168,13 +1170,7 @@ export default function CoachPortalView({ user, onNavigate, onUserUpdate }: Coac
               }`}
             >
               <Icon size={15} className={active ? "text-cyan-neon" : "text-white"} />
-              <span
-                className={
-                  isEs
-                    ? "whitespace-nowrap leading-tight break-words max-w-full"
-                    : "block w-full text-center whitespace-nowrap leading-tight break-words"
-                }
-              >
+              <span className="block w-full text-center leading-tight break-words">
                 {cleanLabel}
               </span>
             </button>

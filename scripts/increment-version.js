@@ -86,9 +86,35 @@ if (fs.existsSync(garminManifestPath)) {
   console.log(`Updated garmin-ciq/manifest.xml with: version="${newVersion}"`);
 }
 
-// 6. Write public/ota-version.json with the live version for all modern Google Play, App Store & Web
-// clients (v2.110+), while keeping legacy public/version.json & public/app-version.json at "0.0.0"
-// so old v2.100 shells (before allowNavigation & reloadInAppOta) never freeze or jump to external browser.
+// 5c. Update iOS Xcode project (ios/App/App.xcodeproj/project.pbxproj) MARKETING_VERSION & CURRENT_PROJECT_VERSION
+const iosPbxprojPath = path.join(__dirname, '../ios/App/App.xcodeproj/project.pbxproj');
+if (fs.existsSync(iosPbxprojPath)) {
+  let pbxContent = fs.readFileSync(iosPbxprojPath, 'utf8');
+  pbxContent = pbxContent.replace(/MARKETING_VERSION\s*=\s*[^;]+;/g, `MARKETING_VERSION = ${displayVersion};`);
+  pbxContent = pbxContent.replace(/CURRENT_PROJECT_VERSION\s*=\s*[^;]+;/g, `CURRENT_PROJECT_VERSION = ${vCode};`);
+  fs.writeFileSync(iosPbxprojPath, pbxContent, 'utf8');
+  console.log(`Updated ios/App/App.xcodeproj/project.pbxproj with: MARKETING_VERSION = ${displayVersion}, CURRENT_PROJECT_VERSION = ${vCode}`);
+}
+
+// 5d. Update watchOS companion Info.plist (ios-watchos/WatchApp/Info.plist) CFBundleShortVersionString & CFBundleVersion
+const watchInfoPlistPath = path.join(__dirname, '../ios-watchos/WatchApp/Info.plist');
+if (fs.existsSync(watchInfoPlistPath)) {
+  let watchPlist = fs.readFileSync(watchInfoPlistPath, 'utf8');
+  watchPlist = watchPlist.replace(
+    /(<key>CFBundleShortVersionString<\/key>\s*<string>)[^<]*(<\/string>)/,
+    `$1${displayVersion}$2`
+  );
+  watchPlist = watchPlist.replace(
+    /(<key>CFBundleVersion<\/key>\s*<string>)[^<]*(<\/string>)/,
+    `$1${wearVCode}$2`
+  );
+  fs.writeFileSync(watchInfoPlistPath, watchPlist, 'utf8');
+  console.log(`Updated ios-watchos/WatchApp/Info.plist with: CFBundleShortVersionString "${displayVersion}", CFBundleVersion "${wearVCode}"`);
+}
+
+// 6. Write public/ota-version.json (and ios/App/App/public/ota-version.json if present) with the live version
+// for all modern Google Play, App Store & Web clients (v2.110+), while keeping legacy public/version.json &
+// public/app-version.json at "0.0.0" so old v2.100 shells never freeze or jump to external browser.
 const otaVersionJsonPath = path.join(__dirname, '../public/ota-version.json');
 const appVersionJsonPath = path.join(__dirname, '../public/app-version.json');
 const versionJsonPath = path.join(__dirname, '../public/version.json');
@@ -112,12 +138,51 @@ fs.writeFileSync(appVersionJsonPath, JSON.stringify(disarmedLegacyPayload, null,
 fs.writeFileSync(versionJsonPath, JSON.stringify(disarmedLegacyPayload, null, 2) + '\n', 'utf8');
 console.log(`Updated public/ota-version.json for v${displayVersion} (versionCode ${vCode}) and silenced legacy v2.100 manifest`);
 
+const iosOtaVersionJsonPath = path.join(__dirname, '../ios/App/App/public/ota-version.json');
+if (fs.existsSync(iosOtaVersionJsonPath)) {
+  fs.writeFileSync(iosOtaVersionJsonPath, JSON.stringify(otaPayload, null, 2) + '\n', 'utf8');
+  console.log(`Updated ios/App/App/public/ota-version.json for v${displayVersion} (versionCode ${vCode})`);
+}
+const iosAppVersionJsonPath = path.join(__dirname, '../ios/App/App/public/app-version.json');
+if (fs.existsSync(iosAppVersionJsonPath)) {
+  fs.writeFileSync(iosAppVersionJsonPath, JSON.stringify(disarmedLegacyPayload, null, 2) + '\n', 'utf8');
+}
+const iosVersionJsonPath = path.join(__dirname, '../ios/App/App/public/version.json');
+if (fs.existsSync(iosVersionJsonPath)) {
+  fs.writeFileSync(iosVersionJsonPath, JSON.stringify(disarmedLegacyPayload, null, 2) + '\n', 'utf8');
+}
+
 // 7. Keep firebase.json .aab headers & Android-safe .firebaseapp.com download redirects synchronized
+//    while strictly preserving Coach Rodrigo's PDF attachment headers and CSP rules intact!
 const firebaseJsonPath = path.join(__dirname, '../firebase.json');
 if (fs.existsSync(firebaseJsonPath)) {
   let fbContent = fs.readFileSync(firebaseJsonPath, 'utf8');
   fbContent = fbContent.replace(/Archery101010-Mobile-v\d+\.\d+(?:\.\d+)?\.aab/g, `Archery101010-Mobile-v${displayVersion}.aab`);
   fbContent = fbContent.replace(/Archery101010-WearOS-v\d+\.\d+(?:\.\d+)?\.aab/g, `Archery101010-WearOS-v${displayVersion}.aab`);
+  if (
+    !fbContent.includes('/Plan-Asesoria-Coach-Rodrigo-Saborio-Archery101010.pdf') ||
+    !fbContent.includes('/Plan-Asesoria-Documento-Coach-Rodrigo-Saborio-Archery101010.pdf')
+  ) {
+    console.error('Error: Coach Rodrigo PDF headers missing in firebase.json! Aborting firebase.json write.');
+    process.exit(1);
+  }
   fs.writeFileSync(firebaseJsonPath, fbContent, 'utf8');
-  console.log(`Synchronized firebase.json .aab download endpoints to v${displayVersion}`);
+  console.log(`Synchronized firebase.json .aab download endpoints to v${displayVersion} (Coach Rodrigo PDF headers intact)`);
+}
+
+// 8. Keep DOCUMENTACION_COMPLETA.md and public/manual/index.html version banners synchronized
+const docsPath = path.join(__dirname, '../DOCUMENTACION_COMPLETA.md');
+if (fs.existsSync(docsPath)) {
+  let docsContent = fs.readFileSync(docsPath, 'utf8');
+  docsContent = docsContent.replace(/Versión Actual:\s*v\d+\.\d+(?:\.\d+)?/g, `Versión Actual: v${displayVersion}`);
+  fs.writeFileSync(docsPath, docsContent, 'utf8');
+  console.log(`Synchronized DOCUMENTACION_COMPLETA.md banner to v${displayVersion}`);
+}
+const manualHtmlPath = path.join(__dirname, '../public/manual/index.html');
+if (fs.existsSync(manualHtmlPath)) {
+  let manualHtml = fs.readFileSync(manualHtmlPath, 'utf8');
+  manualHtml = manualHtml.replace(/Manual\s+v\d+\.\d+(?:\.\d+)?/g, `Manual v${displayVersion}`);
+  manualHtml = manualHtml.replace(/v\d+\.\d+(?:\.\d+)?\s*—\s*Manual de Usuario/g, `v${displayVersion} — Manual de Usuario`);
+  fs.writeFileSync(manualHtmlPath, manualHtml, 'utf8');
+  console.log(`Synchronized public/manual/index.html badges to v${displayVersion}`);
 }

@@ -10,12 +10,13 @@ const OUTFIT_TTF = path.join(ROOT, 'android/wear/src/main/assets/fonts/Outfit.tt
 const LOGO3_PNG = path.join(ROOT, 'public/images/logo3.png');
 
 const CHARSET_HERO = '0123456789';
-const CHARSET_FULL = ' 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz·./+-:>ÁÉÍÓÚÑáéíóúñ';
+const CHARSET_FULL = ' 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz·./+-:<>%ÁÉÍÓÚÑáéíóúñ';
 
 const BUCKETS = [
   { folder: 'resources', dim: 240, antialias: false, mono: false, iconSize: 60 },
-  { folder: 'resources-mono', dim: 176, antialias: false, mono: true, iconSize: 40 },
-  { folder: 'resources-round-208x208', dim: 208, antialias: false, mono: false, iconSize: 40 },
+  { folder: 'resources-mono', dim: 176, antialias: false, mono: true, iconSize: 62 },
+  { folder: 'resources-mono-compact', dim: 156, antialias: false, mono: true, iconSize: 54 },
+  { folder: 'resources-round-208x208', dim: 208, antialias: false, mono: false, iconSize: 35 },
   { folder: 'resources-round-218x218', dim: 218, antialias: true, mono: false, iconSize: 40 },
   { folder: 'resources-round-240x240', dim: 240, antialias: true, mono: false, iconSize: 40 },
   { folder: 'resources-round-260x260', dim: 260, antialias: true, mono: false, iconSize: 40 },
@@ -26,10 +27,32 @@ const BUCKETS = [
   { folder: 'resources-round-454x454', dim: 454, antialias: true, mono: false, iconSize: 65 }
 ];
 
+const ICON_OVERRIDES = [
+  { folder: 'resources-icon-30', iconSize: 30, devices: ['vivoactive4s'] },
+  { folder: 'resources-icon-35', iconSize: 35, devices: ['vivoactive4'] },
+  { folder: 'resources-icon-54', iconSize: 54, devices: ['fr70', 'fr165', 'fr165m', 'fr170', 'fr170m', 'fr57042mm'] },
+  { folder: 'resources-icon-56', iconSize: 56, devices: ['vivoactive5'] },
+  { folder: 'resources-icon-60', iconSize: 60, devices: ['epix2pro51mm'] },
+  { folder: 'resources-icon-61', iconSize: 61, devices: ['venu2s'] },
+  { folder: 'resources-icon-70', iconSize: 70, devices: ['venu2', 'venu2plus', 'venu3s', 'venu3'] }
+];
+
 function nextPow2(v) {
   let p = 32;
   while (p < v) p *= 2;
   return p;
+}
+
+async function writeBufferResilient(outPath, buf) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      fs.writeFileSync(outPath, buf);
+      return;
+    } catch (err) {
+      if (attempt === 4) throw err;
+      await new Promise((r) => setTimeout(r, 120 * (attempt + 1)));
+    }
+  }
 }
 
 async function cropMasterLogo() {
@@ -51,7 +74,7 @@ async function cropMasterLogo() {
 }
 
 async function generateBrandLogoForBucket(masterLogo, outPath, dim, mono, lowBpp) {
-  const targetW = Math.max(88, Math.round(dim * 0.50));
+  const targetW = mono ? (dim <= 160 ? 82 : 88) : Math.max(88, Math.round(dim * 0.50));
   const innerH = Math.max(7, Math.round(targetW * (masterLogo.h / masterLogo.w)));
   const padY = 1;
   const totalH = innerH + padY * 2;
@@ -108,9 +131,10 @@ async function generateBrandLogoForBucket(masterLogo, outPath, dim, mono, lowBpp
     }
   }
 
-  await sharp(out, { raw: { width: targetW, height: totalH, channels: 4 } })
+  const outPngBuf = await sharp(out, { raw: { width: targetW, height: totalH, channels: 4 } })
     .png({ compressionLevel: 9 })
-    .toFile(outPath);
+    .toBuffer();
+  await writeBufferResilient(outPath, outPngBuf);
 }
 
 async function generateFontAtlas(fontInstance, charset, emPx, antialias, tabularDigits, baseName, fontsDir) {
@@ -261,9 +285,10 @@ async function generateFontAtlas(fontInstance, charset, emPx, antialias, tabular
     processed[i + 3] = 255;
   }
 
-  await sharp(processed, { raw: { width: info.width, height: info.height, channels: 4 } })
+  const atlasPngBuf = await sharp(processed, { raw: { width: info.width, height: info.height, channels: 4 } })
     .png({ compressionLevel: 9 })
-    .toFile(pngOutPath);
+    .toBuffer();
+  await writeBufferResilient(pngOutPath, atlasPngBuf);
 
   // Write AngelCode .fnt file matching Garmin Connect IQ specification
   const fntLines = [
@@ -304,10 +329,11 @@ async function main() {
     await generateBrandLogoForBucket(masterLogo, path.join(drawDir, 'brand_logo.png'), b.dim, b.mono, lowBpp);
 
     // 2. Properly sized LauncherIcon for bucket
-    await sharp(baseIconBuf)
+    const bucketIconBuf = await sharp(baseIconBuf)
       .resize(b.iconSize, b.iconSize, { kernel: sharp.kernel.lanczos3 })
       .png({ compressionLevel: 9 })
-      .toFile(path.join(drawDir, 'launcher_icon.png'));
+      .toBuffer();
+    await writeBufferResilient(path.join(drawDir, 'launcher_icon.png'), bucketIconBuf);
 
     // 3. Calibrated Outfit Bitmap Fonts (exact proportional sizes to b.dim)
     const microEm = Math.max(10, Math.round(b.dim * 0.045)); // 16px on 360, 11px on 240
@@ -343,14 +369,43 @@ async function main() {
     console.log(`  ✔ ${b.folder} (${b.dim}px): micro=${microEm}px, label=${labelEm}px, value=${valueEm}px, hero=${heroEm}px`);
   }
 
-  // Update monkey.jungle so 1-bit monochrome Instinct 2 family uses resources-mono
-  const jungle = [
+  // Generate exact-pixel LauncherIcon override directories for devices whose SDK 9.3.0 icon size differs from their screen resolution bucket
+  for (const ov of ICON_OVERRIDES) {
+    const ovDrawDir = path.join(GARMIN_DIR, ov.folder, 'drawables');
+    fs.mkdirSync(ovDrawDir, { recursive: true });
+    const ovIconBuf = await sharp(baseIconBuf)
+      .resize(ov.iconSize, ov.iconSize, { kernel: sharp.kernel.lanczos3 })
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+    await writeBufferResilient(path.join(ovDrawDir, 'launcher_icon.png'), ovIconBuf);
+    const ovXml = [
+      `<drawables>`,
+      `    <bitmap id="LauncherIcon" filename="launcher_icon.png" dithering="none" />`,
+      `</drawables>`
+    ].join('\n') + '\n';
+    fs.writeFileSync(path.join(ovDrawDir, 'drawables.xml'), ovXml, 'utf8');
+    console.log(`  ✔ ${ov.folder} (icon=${ov.iconSize}x${ov.iconSize}): ${ov.devices.join(', ')}`);
+  }
+
+  // Remove legacy duplicate strings-spa directory inside resources/ if present (kept at resources-spa/strings/)
+  const dupStringsSpa = path.join(GARMIN_DIR, 'resources/strings-spa');
+  if (fs.existsSync(dupStringsSpa)) {
+    fs.rmSync(dupStringsSpa, { recursive: true, force: true });
+  }
+
+  // Update monkey.jungle so 1-bit monochrome Instinct 2 family & all icon-override models map cleanly with 0 warnings
+  const jungleLines = [
     `project.manifest = manifest.xml`,
     `instinct2.resourcePath = $(instinct2.resourcePath);resources-mono`,
-    `instinct2s.resourcePath = $(instinct2s.resourcePath);resources-mono`,
+    `instinct2s.resourcePath = $(instinct2s.resourcePath);resources-mono-compact`,
     `instinct2x.resourcePath = $(instinct2x.resourcePath);resources-mono`
-  ].join('\n') + '\n';
-  fs.writeFileSync(path.join(GARMIN_DIR, 'monkey.jungle'), jungle, 'utf8');
+  ];
+  for (const ov of ICON_OVERRIDES) {
+    for (const dev of ov.devices) {
+      jungleLines.push(`${dev}.resourcePath = $(${dev}.resourcePath);${ov.folder}`);
+    }
+  }
+  fs.writeFileSync(path.join(GARMIN_DIR, 'monkey.jungle'), jungleLines.join('\n') + '\n', 'utf8');
 
   console.log('Done generating all Garmin resources!');
 }

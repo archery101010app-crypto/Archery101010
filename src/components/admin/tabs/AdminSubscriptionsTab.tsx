@@ -267,33 +267,15 @@ export default function AdminSubscriptionsTab() {
       timestamp: now
     }).catch(() => {});
 
-    // 3. Persist directly to Firestore users/{targetUid} + subscription_audit_logs
+    // 3. Persist audit log directly to Firestore (`updateProfile` already persisted `users/{targetUid}`)
     try {
-      const { doc, updateDoc, setDoc } = await import("firebase/firestore");
+      const { doc, setDoc } = await import("firebase/firestore");
       const { db, auth } = await import("@/lib/firebase");
       if (auth.currentUser) {
-        await updateDoc(doc(db, "users", targetUid), {
-          plan: nextPlan,
-          proExpiresAt: nextExpiresAt,
-          updatedAt: now
-        }).catch(async () => {
-          await setDoc(
-            doc(db, "users", targetUid),
-            {
-              ...user,
-              uid: targetUid,
-              plan: nextPlan,
-              proExpiresAt: nextExpiresAt,
-              updatedAt: now
-            },
-            { merge: true }
-          );
-        });
-
         await setDoc(doc(db, "subscription_audit_logs", newLog.id), newLog).catch(() => {});
       }
     } catch (err) {
-      console.warn("Could not sync SuperAdmin plan override directly to cloud:", err);
+      console.warn("Could not sync SuperAdmin plan audit log directly to cloud:", err);
     }
   };
 

@@ -4,7 +4,8 @@ import {
   athleteStarsStore,
   starHistoryStore,
   addToSyncQueue,
-  generateResilientId
+  generateResilientId,
+  getLocalSetting
 } from "@/lib/db/indexedDB";
 import { getLocalISODate } from "@/lib/i18n/regionalUtils";
 
@@ -117,6 +118,27 @@ export async function checkAndAwardStar(
     const todayStr = getLocalISODate(now);
     const currentDoc = await athleteStarsStore.getItem<AthleteStarDoc>(userId);
 
+    // Resolve athlete's active clubId so first-time star unlocks and star_history entries are visible to their Coach (`AUD-FB-04`)
+    let resolvedClubId: string | null = currentDoc?.clubId || null;
+    if (!resolvedClubId) {
+      const currentUser = await getLocalSetting<{ uid?: string; clubId?: string | null } | null>(
+        "current_user",
+        null
+      );
+      if (currentUser && currentUser.uid === userId && currentUser.clubId) {
+        resolvedClubId = currentUser.clubId;
+      } else {
+        const usersList = await getLocalSetting<Array<{ uid?: string; clubId?: string | null }>>(
+          "simulated_users",
+          []
+        );
+        const matched = usersList.find((u) => u?.uid === userId);
+        if (matched?.clubId) {
+          resolvedClubId = matched.clubId;
+        }
+      }
+    }
+
     // Seed existing bowStats from legacy top-level fields if not yet populated
     const existingBowStats: Record<string, BowStarStat> = { ...(currentDoc?.bowStats || {}) };
     if (
@@ -176,7 +198,7 @@ export async function checkAndAwardStar(
       const starDoc: AthleteStarDoc = {
         userId,
         userName,
-        ...(currentDoc?.clubId ? { clubId: currentDoc.clubId } : {}),
+        ...(resolvedClubId ? { clubId: resolvedClubId } : {}),
         bowType: bestBow,
         bowStats: nextBowStats,
         highestScore: bestScore,
@@ -191,7 +213,7 @@ export async function checkAndAwardStar(
         id: historyId,
         userId,
         userName,
-        ...(currentDoc?.clubId ? { clubId: currentDoc.clubId } : {}),
+        ...(resolvedClubId ? { clubId: resolvedClubId } : {}),
         bowType: normalizedBow,
         score: safeScore,
         starLevel: sessionStar.level,
@@ -254,6 +276,7 @@ export async function checkAndAwardStar(
 
       const updatedDoc: AthleteStarDoc = {
         ...currentDoc,
+        ...(resolvedClubId && !currentDoc.clubId ? { clubId: resolvedClubId } : {}),
         bowStats: nextBowStats,
         highestScore: Math.max(currentDoc.highestScore || 0, safeScore),
         updatedAt: now

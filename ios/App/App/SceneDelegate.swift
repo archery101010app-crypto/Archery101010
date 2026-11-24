@@ -1,7 +1,6 @@
 import UIKit
 import Capacitor
 import CoreBluetooth
-import WatchConnectivity
 import WebKit
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
@@ -10,33 +9,68 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
 
-        window = UIWindow(windowScene: windowScene)
-        window?.rootViewController = ArcheryIosBridgeViewController()
+        let oledBlack = UIColor(red: 2.0 / 255.0, green: 3.0 / 255.0, blue: 5.0 / 255.0, alpha: 1.0)
+        if window == nil {
+            window = UIWindow(windowScene: windowScene)
+        }
+        if !(window?.rootViewController is ArcheryIosBridgeViewController) {
+            window?.rootViewController = ArcheryIosBridgeViewController()
+        }
+        window?.backgroundColor = oledBlack
+        window?.rootViewController?.view.backgroundColor = oledBlack
         window?.makeKeyAndVisible()
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
+
+        for ctx in connectionOptions.urlContexts {
+            _ = ArcheryIosNativeAuthManager.shared.handleIncomingOpenURL(ctx.url)
+        }
+        for activity in connectionOptions.userActivities {
+            if activity.activityType == NSUserActivityTypeBrowsingWeb, let webUrl = activity.webpageURL {
+                _ = ArcheryIosNativeAuthManager.shared.handleIncomingOpenURL(webUrl)
+            }
+        }
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        for ctx in URLContexts {
+            _ = ArcheryIosNativeAuthManager.shared.handleIncomingOpenURL(ctx.url)
+        }
         SceneDelegateProxy.shared.scene(scene, openURLContexts: URLContexts)
     }
 
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+        if userActivity.activityType == NSUserActivityTypeBrowsingWeb, let webUrl = userActivity.webpageURL {
+            _ = ArcheryIosNativeAuthManager.shared.handleIncomingOpenURL(webUrl)
+        }
         SceneDelegateProxy.shared.scene(scene, continue: userActivity)
     }
 }
 
-/// Capacitor ViewController that wires CoreBluetooth (0x180D / 0x2A37) + WatchConnectivity
-/// directly into WKWebView with the exact same JS contract as Android's ArcheryBleHeartRateBridge.
+/// Capacitor ViewController that wires unified WatchConnectivity (`ArcheryWatchSessionManager`),
+/// CoreBluetooth (`0x180D` / `0x2A37`), and Native Apple/OAuth Authentication (`ArcheryIosNativeAuthManager`)
+/// into `WKWebView` strictly on trusted app origins before `loadWebView()` runs.
+@objc(ArcheryIosBridgeViewController)
 final class ArcheryIosBridgeViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         super.capacitorDidLoad()
+        let oledBlack = UIColor(red: 2.0 / 255.0, green: 3.0 / 255.0, blue: 5.0 / 255.0, alpha: 1.0)
+        self.view.backgroundColor = oledBlack
         guard let wv = self.webView else { return }
+        wv.isOpaque = false
+        wv.backgroundColor = oledBlack
+        wv.scrollView.backgroundColor = oledBlack
+
+        ArcheryWatchSessionManager.shared.onWatchHeartRateReceived = { hrPayload in
+            ArcheryIosBleHeartRateManager.shared.receiveWatchHeartRatePayload(hrPayload)
+        }
+        ArcheryWatchSessionManager.shared.attach(to: wv)
         ArcheryIosBleHeartRateManager.shared.attach(to: wv)
+        ArcheryIosNativeAuthManager.shared.attach(to: wv)
     }
 }
 
-final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, WCSessionDelegate, WKScriptMessageHandler {
+final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, WKScriptMessageHandler {
     static let shared = ArcheryIosBleHeartRateManager()
 
     private let hrServiceUUID = CBUUID(string: "180D")
@@ -45,6 +79,7 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
     private let batteryLevelUUID = CBUUID(string: "2A19")
     private let savedUuidPrefsKey = "archery_ios_ble_saved_uuid"
     private let savedNamePrefsKey = "archery_ios_ble_saved_name"
+    private let maxAutoReconnectAttempts = 5
 
     private weak var webView: WKWebView?
     private var central: CBCentralManager?
@@ -52,6 +87,8 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
     private var discoveredMeta: [String: [String: Any]] = [:]
     private var activePeripheral: CBPeripheral?
     private var scanStopWorkItem: DispatchWorkItem?
+    private var reconnectWorkItem: DispatchWorkItem?
+    private var reconnectAttemptCount: Int = 0
     private var userRequestedDisconnect = false
     private var pendingActionAfterPowerOn = 0 // 1 = scan, 2 = connect, 3 = autoReconnect
 
@@ -60,6 +97,8 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
     private var deviceNameStr: String = ""
     private var errorCodeStr: String = ""
     private var batteryPctVal: Int? = nil
+    private var lastWearHrJson: String = ""
+    private var lastWearHrReceivedMs: Int64 = 0
 
     func attach(to webView: WKWebView) {
         self.webView = webView
@@ -74,11 +113,23 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
             deviceNameStr = savedName
         }
 
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let freshWearJson = (!lastWearHrJson.isEmpty && (nowMs - lastWearHrReceivedMs) <= 35_000) ? lastWearHrJson : ""
         let initialJson = escapeJs(buildStatusJson(rawBytes: nil))
+        let initialWearEscaped = escapeJs(freshWearJson)
+
         let shimJs = """
         (function() {
+          var o = String((window.location && window.location.origin) || '').toLowerCase();
+          if (o !== 'capacitor://localhost' &&
+              o !== 'ionic://localhost' &&
+              o !== 'https://archery101010-c0bb4.web.app' &&
+              o !== 'https://archery101010-c0bb4.firebaseapp.com') {
+            return;
+          }
           if (window.ArcheryBleHeartRateBridge) return;
           window.__archeryIosBleCachedStatus = '\(initialJson)';
+          window.__archeryIosLastWearHrJson = window.__archeryIosLastWearHrJson || '\(initialWearEscaped)';
           window.ArcheryBleHeartRateBridge = {
             startScan: function() {
               window.webkit.messageHandlers.ArcheryIosBleHr.postMessage({ action: 'startScan' });
@@ -100,19 +151,16 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
             },
             getStatusJson: function() {
               return window.__archeryIosBleCachedStatus || '{"state":"disconnected"}';
+            },
+            getLastWearHeartRateJson: function() {
+              return window.__archeryIosLastWearHrJson || '';
             }
           };
         })();
         """
         ucc.addUserScript(WKUserScript(source: shimJs, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        webView.evaluateJavaScript(shimJs, completionHandler: nil)
-
-        if WCSession.isSupported() {
-            let session = WCSession.default
-            if session.delegate == nil {
-                session.delegate = self
-                session.activate()
-            }
+        if ArcheryWatchSessionManager.isTrustedWebViewURL(webView.url) {
+            webView.evaluateJavaScript(shimJs, completionHandler: nil)
         }
     }
 
@@ -123,9 +171,18 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
         return mgr
     }
 
+    private func cancelPendingReconnect() {
+        reconnectWorkItem?.cancel()
+        reconnectWorkItem = nil
+    }
+
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard let body = message.body as? [String: Any],
-              let action = body["action"] as? String else { return }
+        guard message.frameInfo.isMainFrame,
+              ArcheryWatchSessionManager.isTrustedOrigin(securityOrigin: message.frameInfo.securityOrigin),
+              let body = message.body as? [String: Any],
+              let action = body["action"] as? String else {
+            return
+        }
 
         switch action {
         case "startScan":
@@ -149,15 +206,25 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
     }
 
     private func requestWatchHeartRateInternal() {
-        guard WCSession.isSupported() else { return }
-        let session = WCSession.default
-        if session.activationState != .activated {
-            session.activate()
-            return
+        ArcheryWatchSessionManager.shared.requestWatchHeartRate()
+    }
+
+    func receiveWatchHeartRatePayload(_ payload: [String: Any]) {
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload, options: []),
+              let jsonStr = String(data: data, encoding: .utf8) else { return }
+        lastWearHrJson = jsonStr
+        lastWearHrReceivedMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let escaped = escapeJs(jsonStr)
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self,
+                  let webView = self.webView,
+                  ArcheryWatchSessionManager.isTrustedWebViewURL(webView.url) else { return }
+            webView.evaluateJavaScript(
+                "window.__archeryIosLastWearHrJson = '\(escaped)'; if (window.__onNativeWearHrUpdate) { window.__onNativeWearHrUpdate('\(escaped)'); }",
+                completionHandler: nil
+            )
         }
-        guard session.isReachable else { return }
-        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
-        session.sendMessage(["type": "HR_REQUEST", "_ts": nowMs], replyHandler: nil, errorHandler: nil)
     }
 
     private func startScanInternal() {
@@ -232,6 +299,8 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
 
     private func connectDeviceInternal(uuidStr: String, name: String) {
         guard !uuidStr.isEmpty else { return }
+        cancelPendingReconnect()
+        reconnectAttemptCount = 0
         userRequestedDisconnect = false
         deviceIdStr = uuidStr
         if !name.isEmpty { deviceNameStr = name }
@@ -286,6 +355,8 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
 
     private func disconnectInternal(forgetSaved: Bool) {
         userRequestedDisconnect = true
+        cancelPendingReconnect()
+        reconnectAttemptCount = 0
         stopScanInternal()
         if let mgr = central, let p = activePeripheral {
             mgr.cancelPeripheralConnection(p)
@@ -317,10 +388,12 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
                 tryAutoReconnectInternal()
             }
         } else if central.state == .poweredOff {
+            cancelPendingReconnect()
             stateStr = "error"
             errorCodeStr = "BLUETOOTH_OFF"
             emitStatus(rawBytes: nil)
         } else if central.state == .unauthorized {
+            cancelPendingReconnect()
             stateStr = "error"
             errorCodeStr = "PERMISSION_DENIED"
             emitStatus(rawBytes: nil)
@@ -345,6 +418,7 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         guard peripheral == activePeripheral else { return }
+        cancelPendingReconnect()
         if let name = peripheral.name, !name.isEmpty {
             deviceNameStr = name
         }
@@ -356,6 +430,7 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         guard peripheral == activePeripheral else { return }
+        cancelPendingReconnect()
         activePeripheral = nil
         stateStr = "error"
         errorCodeStr = "CONNECT_FAILED"
@@ -364,22 +439,70 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         guard peripheral == activePeripheral else { return }
+        cancelPendingReconnect()
         batteryPctVal = nil
-        if !userRequestedDisconnect {
-            stateStr = "reconnecting"
-            emitStatus(rawBytes: nil)
-            central.connect(peripheral, options: nil)
-        } else {
+
+        if userRequestedDisconnect {
+            reconnectAttemptCount = 0
             activePeripheral = nil
             stateStr = "disconnected"
+            errorCodeStr = ""
             emitStatus(rawBytes: nil)
+            return
         }
+
+        // Exponential backoff capped at 5 attempts: 1s, 2s, 4s, 8s, 16s
+        guard reconnectAttemptCount < maxAutoReconnectAttempts, central.state == .poweredOn else {
+            reconnectAttemptCount = 0
+            activePeripheral = nil
+            stateStr = "disconnected"
+            errorCodeStr = "RECONNECT_EXHAUSTED"
+            emitStatus(rawBytes: nil)
+            return
+        }
+
+        reconnectAttemptCount += 1
+        let delaySeconds = Double(1 << (reconnectAttemptCount - 1)) // 1, 2, 4, 8, 16
+        stateStr = "reconnecting"
+        errorCodeStr = ""
+        emitStatus(rawBytes: nil)
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self = self,
+                  !self.userRequestedDisconnect,
+                  let mgr = self.central,
+                  mgr.state == .poweredOn,
+                  let target = self.activePeripheral,
+                  target == peripheral else {
+                return
+            }
+            mgr.connect(target, options: nil)
+        }
+        reconnectWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds, execute: work)
     }
 
     // MARK: - CBPeripheralDelegate
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-        guard peripheral == activePeripheral, let services = peripheral.services else { return }
+        guard peripheral == activePeripheral else { return }
+        if error != nil {
+            stateStr = "error"
+            errorCodeStr = "SERVICE_DISCOVERY_FAILED"
+            central?.cancelPeripheralConnection(peripheral)
+            activePeripheral = nil
+            emitStatus(rawBytes: nil)
+            return
+        }
+        guard let services = peripheral.services, !services.isEmpty else {
+            stateStr = "error"
+            errorCodeStr = "HR_BROADCAST_NOT_ENABLED"
+            central?.cancelPeripheralConnection(peripheral)
+            activePeripheral = nil
+            emitStatus(rawBytes: nil)
+            return
+        }
+
         var foundHr = false
         for svc in services {
             if svc.uuid == hrServiceUUID {
@@ -399,14 +522,35 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
-        guard peripheral == activePeripheral, let chars = service.characteristics else { return }
-        for ch in chars {
-            if ch.uuid == hrMeasurementUUID {
-                peripheral.setNotifyValue(true, for: ch)
-                stateStr = "connected"
-                errorCodeStr = ""
+        guard peripheral == activePeripheral else { return }
+        if service.uuid == hrServiceUUID {
+            if error != nil {
+                stateStr = "error"
+                errorCodeStr = "CHAR_DISCOVERY_FAILED"
+                central?.cancelPeripheralConnection(peripheral)
+                activePeripheral = nil
                 emitStatus(rawBytes: nil)
-            } else if ch.uuid == batteryLevelUUID {
+                return
+            }
+            guard let chars = service.characteristics,
+                  let hrChar = chars.first(where: { $0.uuid == hrMeasurementUUID }) else {
+                stateStr = "error"
+                errorCodeStr = "HR_CHARACTERISTIC_MISSING"
+                central?.cancelPeripheralConnection(peripheral)
+                activePeripheral = nil
+                emitStatus(rawBytes: nil)
+                return
+            }
+            reconnectAttemptCount = 0
+            peripheral.setNotifyValue(true, for: hrChar)
+            stateStr = "connected"
+            errorCodeStr = ""
+            emitStatus(rawBytes: nil)
+            return
+        }
+
+        if service.uuid == batteryServiceUUID, error == nil, let chars = service.characteristics {
+            for ch in chars where ch.uuid == batteryLevelUUID {
                 peripheral.readValue(for: ch)
             }
         }
@@ -416,6 +560,7 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
         guard peripheral == activePeripheral, error == nil, let data = characteristic.value else { return }
         if characteristic.uuid == hrMeasurementUUID {
             if stateStr != "connected" {
+                reconnectAttemptCount = 0
                 stateStr = "connected"
                 errorCodeStr = ""
             }
@@ -429,59 +574,7 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
         }
     }
 
-    // MARK: - WCSessionDelegate (Live Pulse from Paired Watch)
-
-    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {}
-    func sessionDidBecomeInactive(_ session: WCSession) {}
-    func sessionDidDeactivate(_ session: WCSession) { WCSession.default.activate() }
-
-    func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-        forwardWatchHrIfPresent(message)
-    }
-
-    func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
-        forwardWatchHrIfPresent(message)
-        replyHandler(["type": "PONG", "_ts": Int64(Date().timeIntervalSince1970 * 1000)])
-    }
-
-    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
-        forwardWatchHrIfPresent(userInfo)
-    }
-
-    private func forwardWatchHrIfPresent(_ dict: [String: Any]) {
-        let msgType = (dict["type"] as? String) ?? ""
-        if msgType == "HR" {
-            emitWearHr(
-                bpm: (dict["bpm"] as? Int) ?? 0,
-                status: (dict["status"] as? String) ?? "ok",
-                name: (dict["deviceName"] as? String) ?? "Smartwatch Deportivo"
-            )
-            return
-        }
-        if let hr = dict["heartRateBpm"] as? Int, hr >= 30 {
-            emitWearHr(bpm: hr, status: "ok", name: "Smartwatch Deportivo")
-        }
-    }
-
-    private func emitWearHr(bpm: Int, status: String, name: String) {
-        let out: [String: Any] = [
-            "bpm": bpm,
-            "status": status,
-            "deviceName": name,
-            "nodeId": "watchos-companion"
-        ]
-        guard let data = try? JSONSerialization.data(withJSONObject: out, options: []),
-              let jsonStr = String(data: data, encoding: .utf8) else { return }
-        let escaped = escapeJs(jsonStr)
-        DispatchQueue.main.async { [weak self] in
-            self?.webView?.evaluateJavaScript(
-                "if (window.__onNativeWearHrUpdate) { window.__onNativeWearHrUpdate('\(escaped)'); }",
-                completionHandler: nil
-            )
-        }
-    }
-
-    // MARK: - JSON Serialization & WebView Emission
+    // MARK: - JSON Serialization & Trusted WebView Emission
 
     private func buildDevicesArray() -> [[String: Any]] {
         return Array(discoveredMeta.values)
@@ -514,7 +607,10 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
         let jsonStr = buildStatusJson(rawBytes: rawBytes)
         let escaped = escapeJs(jsonStr)
         DispatchQueue.main.async { [weak self] in
-            self?.webView?.evaluateJavaScript(
+            guard let self = self,
+                  let webView = self.webView,
+                  ArcheryWatchSessionManager.isTrustedWebViewURL(webView.url) else { return }
+            webView.evaluateJavaScript(
                 "window.__archeryIosBleCachedStatus = '\(escaped)'; if (window.__onNativeBleHrUpdate) { window.__onNativeBleHrUpdate('\(escaped)'); }",
                 completionHandler: nil
             )
@@ -526,7 +622,10 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
               let jsonStr = String(data: data, encoding: .utf8) else { return }
         let escaped = escapeJs(jsonStr)
         DispatchQueue.main.async { [weak self] in
-            self?.webView?.evaluateJavaScript(
+            guard let self = self,
+                  let webView = self.webView,
+                  ArcheryWatchSessionManager.isTrustedWebViewURL(webView.url) else { return }
+            webView.evaluateJavaScript(
                 "if (window.__onNativeBleHrDevices) { window.__onNativeBleHrDevices('\(escaped)'); }",
                 completionHandler: nil
             )
@@ -539,5 +638,7 @@ final class ArcheryIosBleHeartRateManager: NSObject, CBCentralManagerDelegate, C
             .replacingOccurrences(of: "'", with: "\\'")
             .replacingOccurrences(of: "\n", with: "\\n")
             .replacingOccurrences(of: "\r", with: "\\r")
+            .replacingOccurrences(of: "\u{2028}", with: "\\u2028")
+            .replacingOccurrences(of: "\u{2029}", with: "\\u2029")
     }
 }

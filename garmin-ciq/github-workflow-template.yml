@@ -39,19 +39,19 @@ jobs:
           connect-iq-sdk-manager agreement view >/dev/null
           connect-iq-sdk-manager agreement accept
           connect-iq-sdk-manager login
-          connect-iq-sdk-manager sdk set ^8.0.0 || connect-iq-sdk-manager sdk set ^7.0.0
+          connect-iq-sdk-manager sdk set 9.3.0 || connect-iq-sdk-manager sdk set "^9.3.0"
           connect-iq-sdk-manager device download --include-fonts --manifest=garmin-ciq/manifest.xml
 
-      - name: Generate or Load 4096-bit RSA Developer Key
+      - name: Load Official 4096-bit RSA Developer Key
         env:
           GARMIN_DEVELOPER_KEY_B64: ${{ secrets.GARMIN_DEVELOPER_KEY_B64 }}
         run: |
-          if [ -n "$GARMIN_DEVELOPER_KEY_B64" ]; then
-            echo "$GARMIN_DEVELOPER_KEY_B64" | base64 -d > developer_key.der
-          else
-            openssl genrsa -out developer_key.pem 4096
-            openssl pkcs8 -topk8 -inform PEM -outform DER -in developer_key.pem -out developer_key.der -nocrypt
+          if [ -z "$GARMIN_DEVELOPER_KEY_B64" ]; then
+            echo "::error::Falta el secreto obligatorio GARMIN_DEVELOPER_KEY_B64. Nunca se debe generar una clave RSA aleatoria para paquetes de tienda."
+            exit 1
           fi
+          echo "$GARMIN_DEVELOPER_KEY_B64" | base64 -d > developer_key.der
+          test -s developer_key.der
 
       - name: Compile Signed Archery101010.iq Package
         run: |

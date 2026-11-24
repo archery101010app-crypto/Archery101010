@@ -1,5 +1,5 @@
-importScripts('https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/12.19.0/firebase-messaging-compat.js');
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -33,8 +33,8 @@ try {
     const notificationTitle = rawNotif.title || rawData.title || 'ARCHERY 101010';
     const notificationOptions = {
       body: rawNotif.body || rawData.body || 'Tienes un nuevo reto o actualización en ARCHERY 101010.',
-      icon: rawNotif.icon || rawData.icon || '/icons/icon-192x192.png',
-      badge: '/icons/icon-192x192.png',
+      icon: rawNotif.icon || rawData.icon || '/icon-192.png',
+      badge: '/icon-192.png',
       vibrate: [180, 90, 180],
       tag: rawData.tag || rawData.type || 'archery-101010-push',
       renotify: true,

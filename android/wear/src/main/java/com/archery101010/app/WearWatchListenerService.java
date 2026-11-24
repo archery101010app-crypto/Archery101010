@@ -12,6 +12,7 @@ import com.google.android.gms.wearable.Node;
 import com.google.android.gms.wearable.Wearable;
 import com.google.android.gms.wearable.WearableListenerService;
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 import org.json.JSONObject;
 
 /**
@@ -130,9 +131,7 @@ public class WearWatchListenerService extends WearableListenerService {
                 SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
                 SharedPreferences.Editor editor = prefs.edit();
                 editor.putInt("sensitivityLevel", Math.max(0, Math.min(2, rootObj.optInt("sensitivityLevel", 1))));
-                if (rootObj.has("enabled")) {
-                    editor.putBoolean("autoDetectEnabled", rootObj.optBoolean("enabled", true));
-                }
+                editor.putBoolean("autoDetectEnabled_v2", false);
                 editor.apply();
                 return;
             }
@@ -144,14 +143,30 @@ public class WearWatchListenerService extends WearableListenerService {
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
             SharedPreferences.Editor editor = prefs.edit();
 
+            String existingDeviceId = prefs.getString("watchDeviceId", "");
+            if (existingDeviceId == null || existingDeviceId.trim().isEmpty() || existingDeviceId.length() > 80) {
+                editor.putString("watchDeviceId", "WEAR-" + UUID.randomUUID().toString());
+            }
+
             String incomingPairingCode = obj.optString("pairingCode", rootObj.optString("pairingCode", "")).trim();
-            if (incomingPairingCode.matches("^[1-9][0-9]{5}$")) {
+            String incomingSessionToken = obj.optString("sessionToken", rootObj.optString("sessionToken", "")).trim();
+            boolean validToken = incomingSessionToken.matches("^[A-Za-z0-9_-]{32,64}$");
+            if (incomingPairingCode.matches("^[0-9]{6}$")) {
+                String prevPairingCode = prefs.getString("pairingCode", "");
                 editor.putString("pairingCode", incomingPairingCode);
+                editor.putString("cloudPairingCode", incomingPairingCode);
+                if (!incomingPairingCode.equals(prevPairingCode) && !validToken) {
+                    editor.remove("cloudSessionToken");
+                }
+            }
+            if (validToken) {
+                editor.putString("cloudSessionToken", incomingSessionToken);
             }
 
             String savedSessionId = prefs.getString("currentSessionId", "");
             String incomingSessionId = obj.optString("sessionId", "");
             boolean sessionActive = obj.optBoolean("sessionActive", rootObj.optBoolean("sessionActive", true));
+            editor.putBoolean("sessionActive", sessionActive);
             boolean isNewSession = !incomingSessionId.isEmpty() && !incomingSessionId.equals(savedSessionId);
 
             if (!sessionActive || isNewSession) {

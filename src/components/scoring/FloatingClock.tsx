@@ -27,7 +27,9 @@ interface FloatingClockProps {
 export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange, onTimeUpdate }: FloatingClockProps) {
   const { language, t, tx } = useLanguage();
   const languageRef = useRef(language);
-  languageRef.current = language;
+  useEffect(() => {
+    languageRef.current = language;
+  }, [language]);
 
   /**
    * Official World Archery Timing Presets (Book 2 Art. 7.3 & Book 3 Art. 13.4 / 15.1.1)
@@ -206,46 +208,61 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
     }
   };
 
-  // Core Timer ticking loop
-  const startTimerLoop = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
+  // Pure Timer ticking loop (zero side effects inside state updater)
+  const lastSpokenSecRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!isActive || isPaused) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
 
     timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (isPaused) return prev;
-
-        const nextVal = prev - 1;
-
-        if (phase === "prep") {
-          // Official WA: No intermediate beeps during 10s prep. At 0, 1 blast starts shooting (Green light).
-          if (nextVal <= 0) {
-            setPhase("shoot");
-            setTimeLeft(shootTime);
-            setTotalPhaseTime(shootTime);
-            playShootSignal();
-            return shootTime;
-          }
-        } else if (phase === "shoot") {
-          // Official WA: At 30s remaining, light turns Yellow silently (no horn blast).
-          // Optional voice countdown if enabled by user for solo training:
-          if (nextVal <= 10 && nextVal > 0) {
-            speakNumber(nextVal);
-          }
-
-          if (nextVal <= 0) {
-            // Timer expired: 3 blasts to stop shooting & light turns RED
-            if (timerRef.current) clearInterval(timerRef.current);
-            setPhase("stop");
-            setIsActive(false);
-            playEndSignal();
-            return 0;
-          }
-        }
-
-        return nextVal;
-      });
+      setTimeLeft((prev) => Math.max(0, prev - 1));
     }, 1000);
-  };
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [isActive, isPaused]);
+
+  // Phase transition & World Archery audio signal effect (driven cleanly by pure `timeLeft` state)
+  useEffect(() => {
+    if (!isActive || isPaused) return;
+
+    if (phase === "prep") {
+      if (timeLeft <= 0) {
+        lastSpokenSecRef.current = null;
+        setPhase("shoot");
+        setTimeLeft(shootTime);
+        setTotalPhaseTime(shootTime);
+        playShootSignal();
+      }
+      return;
+    }
+
+    if (phase === "shoot") {
+      if (timeLeft <= 10 && timeLeft > 0 && lastSpokenSecRef.current !== timeLeft) {
+        lastSpokenSecRef.current = timeLeft;
+        speakNumber(timeLeft);
+      } else if (timeLeft <= 0) {
+        lastSpokenSecRef.current = null;
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+        setPhase("stop");
+        setIsActive(false);
+        playEndSignal();
+      }
+    }
+  }, [isActive, isPaused, phase, timeLeft, shootTime]);
 
   // Clock Actions
   const handleStart = () => {
@@ -254,22 +271,25 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
     localStorage.setItem("relojSegsEntrada", String(prepTime));
     localStorage.setItem("relojSegsTiro", String(shootTime));
 
-    setIsActive(true);
-    setIsPaused(false);
+    lastSpokenSecRef.current = null;
     setPhase("prep");
     setTimeLeft(prepTime);
     setTotalPhaseTime(prepTime);
+    setIsPaused(false);
+    setIsActive(true);
     playPrepSignal(); // 2 beeps + Red Light
-
-    startTimerLoop();
   };
 
   const handleEmergencyStop = () => {
     triggerHaptic("miss");
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis?.cancel();
     }
+    lastSpokenSecRef.current = null;
     setIsActive(false);
     setIsPaused(false);
     setPhase("stop");
@@ -292,27 +312,14 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
     localStorage.setItem("relojVoice", String(next));
   };
 
-  useEffect(() => {
-    if (isActive && !isPaused) {
-      startTimerLoop();
-    } else {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isActive, isPaused, phase, prepTime, shootTime]);
-
   const handlePauseToggle = () => {
     triggerHaptic("arrow");
-    setIsPaused(!isPaused);
+    setIsPaused((prev) => !prev);
   };
 
   const handleResetPhase = () => {
     triggerHaptic("undo");
+    lastSpokenSecRef.current = null;
     const nextPhase = phase === "stop" ? "prep" : phase;
     setPhase(nextPhase);
     setTimeLeft(nextPhase === "prep" ? prepTime : shootTime);
@@ -326,10 +333,14 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
   };
 
   const handleStop = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis?.cancel();
     }
+    lastSpokenSecRef.current = null;
     setIsActive(false);
     setIsPaused(false);
     setPhase("prep");

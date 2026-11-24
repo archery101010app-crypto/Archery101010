@@ -9,6 +9,7 @@ import {
   WatchConnectionStatus,
   ensurePhoneWatchPairingReady,
   getOrCreatePhoneWatchPairingCode,
+  refreshPhoneWatchPairingWindow,
   pingNativeWatch,
   subscribeCloudWatchPairingStatus,
   subscribeWatchConnectionStatus
@@ -37,9 +38,13 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
   const isEs = language === "es";
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
   const syncWatchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleId = useId();
+  const [evalNowMs, setEvalNowMs] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   const [status, setStatus] = useState<BleHeartRateStatus>(() => getBleHeartRateStatus());
   const [tappedUnsupported, setTappedUnsupported] = useState(false);
@@ -72,8 +77,14 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
         setIsSyncingWatch(false);
       }
     });
-    const unsubWatch = subscribeWatchConnectionStatus(setWatchConnStatus);
-    const unsubCloud = subscribeCloudWatchPairingStatus(setCloudStatus);
+    const unsubWatch = subscribeWatchConnectionStatus((next) => {
+      setWatchConnStatus(next);
+      setEvalNowMs(Date.now());
+    });
+    const unsubCloud = subscribeCloudWatchPairingStatus((next) => {
+      setCloudStatus(next);
+      setEvalNowMs(Date.now());
+    });
     return () => {
       unsubBle();
       unsubWatch();
@@ -151,13 +162,23 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
       }
       const effectiveUid = userUid || auth.currentUser?.uid;
       ensurePhoneWatchPairingReady(effectiveUid);
+      if (effectiveUid) {
+        refreshPhoneWatchPairingWindow(effectiveUid, true).catch(() => {});
+      }
       requestWatchAppHeartRate();
       pingNativeWatch();
       const pollWatchTimer = setInterval(() => {
+        setEvalNowMs(Date.now());
         ensurePhoneWatchPairingReady(userUid || auth.currentUser?.uid);
         requestWatchAppHeartRate({ unmute: false });
         pingNativeWatch();
       }, 3000);
+      const refreshPairingWindowTimer = setInterval(() => {
+        const curUid = userUid || auth.currentUser?.uid;
+        if (curUid) {
+          refreshPhoneWatchPairingWindow(curUid, false).catch(() => {});
+        }
+      }, 60_000);
       const current = getBleHeartRateStatus();
       if (
         current.transport === "native_android" &&
@@ -176,6 +197,7 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
       });
       return () => {
         clearInterval(pollWatchTimer);
+        clearInterval(refreshPairingWindowTimer);
         unregisterBack();
       };
     } else if (dialog.open) {
@@ -197,7 +219,11 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
 
   const handleSyncWatchPulseClick = () => {
     setIsSyncingWatch(true);
-    ensurePhoneWatchPairingReady(userUid || auth.currentUser?.uid);
+    const curUid = userUid || auth.currentUser?.uid;
+    ensurePhoneWatchPairingReady(curUid);
+    if (curUid) {
+      refreshPhoneWatchPairingWindow(curUid, true).catch(() => {});
+    }
     pingNativeWatch();
     requestWatchAppHeartRate();
     if (syncWatchTimerRef.current) {
@@ -222,7 +248,7 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
       });
   };
 
-  const nowMs = Date.now();
+  const nowMs = evalNowMs;
   const hasNativeWatchConnected =
     watchConnStatus.bridgeReady &&
     ((watchConnStatus.connectedNodesCount > 0 &&
@@ -405,9 +431,9 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
               draggable={false}
             />
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full h-[25px] px-2.5 border text-[10px] min-[385px]:text-[10.8px] font-bold tracking-[0.04em] uppercase leading-none ${
-                isEs ? "shrink-0" : "min-w-0 overflow-hidden"
-              } tabular-nums whitespace-nowrap ${
+              className={`inline-flex items-center gap-1.5 rounded-full min-h-[25px] px-2.5 py-0.5 border text-[10px] min-[385px]:text-[10.8px] font-bold tracking-[0.04em] uppercase leading-tight ${
+                isEs ? "shrink-0 whitespace-nowrap" : "min-w-0"
+              } tabular-nums ${
                 isConnected
                   ? "bg-[#051810] border-[#00C853]/65 text-white"
                   : isScanning || isConnecting || isWatchSyncInFlight
@@ -593,26 +619,37 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
             </div>
 
             {!isWearConnected && cloudStatus.pairingCode && (
-              <div className="bg-[#06080D] border border-white/[0.11] rounded-xl px-3 py-2 flex items-center justify-between gap-2">
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#94A3B8] leading-tight">
-                    {tx("Código para pantalla 5 del reloj", "Code for watch screen 5")}
-                  </span>
-                  <span
-                    dir="ltr"
-                    className="text-[18px] font-extrabold tracking-[0.14em] text-[#FFE500] tabular-nums leading-tight mt-0.5"
+              <div className="bg-[#06080D] border border-white/[0.11] rounded-xl px-3 py-2 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#94A3B8] leading-tight break-words">
+                      {tx(
+                        "Código para pantalla VINCULAR (pantalla 5) del reloj",
+                        "Code for watch LINK screen (screen 5)"
+                      )}
+                    </span>
+                    <span
+                      dir="ltr"
+                      className="text-[18px] font-extrabold tracking-[0.14em] text-[#FFE500] tabular-nums leading-tight mt-0.5"
+                    >
+                      {`${cloudStatus.pairingCode.slice(0, 3)} ${cloudStatus.pairingCode.slice(3)}`}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isWatchSyncInFlight}
+                    onClick={handleRefreshPairingCodeClick}
+                    className="min-h-[34px] px-2.5 rounded-lg bg-[#11151F] border border-white/[0.14] text-white text-[11.5px] font-bold uppercase tracking-wider shrink-0 cursor-pointer hover:bg-white/10 transition disabled:opacity-60"
                   >
-                    {`${cloudStatus.pairingCode.slice(0, 3)} ${cloudStatus.pairingCode.slice(3)}`}
-                  </span>
+                    {tx("Nuevo", "New")}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  disabled={isWatchSyncInFlight}
-                  onClick={handleRefreshPairingCodeClick}
-                  className="min-h-[34px] px-2.5 rounded-lg bg-[#11151F] border border-white/[0.14] text-white text-[11.5px] font-bold uppercase tracking-wider shrink-0 cursor-pointer hover:bg-white/10 transition disabled:opacity-60"
-                >
-                  {tx("Nuevo", "New")}
-                </button>
+                <span className="text-[11px] font-medium text-[#CBD5E1] leading-snug break-words">
+                  {tx(
+                    "Con la app compañera Bluetooth activa en tu teléfono, abre ARCHERY 101010 en tu Reloj Deportivo GPS o Reloj Inteligente e ingresa este código.",
+                    "With the Bluetooth companion app active on your phone, open ARCHERY 101010 on your GPS Sports Watch or Smartwatch and enter this code."
+                  )}
+                </span>
               </div>
             )}
           </div>

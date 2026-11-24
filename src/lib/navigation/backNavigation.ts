@@ -6,9 +6,26 @@
 
 type DismissHandler = () => boolean | void;
 
+interface BackNavigationConfig {
+  getCurrentScreen: () => string;
+  onNavigateHome: () => void;
+  showToast?: (message: string) => void;
+}
+
+declare global {
+  interface Window {
+    __onNativeAndroidBack?: () => "HANDLED" | "EXIT";
+    ArcheryNativeAuth?: {
+      exitApp?: () => void;
+      [key: string]: unknown;
+    };
+  }
+}
+
 const modalDismissStack: DismissHandler[] = [];
 let isInitialized = false;
 let lastBackPressTime = 0;
+let activeBackConfig: BackNavigationConfig | null = null;
 
 /**
  * Register a dismiss callback for an open modal, popup, or drawer.
@@ -72,14 +89,29 @@ export function handleBackAction(
 }
 
 /**
- * Initialize listeners for both Web (popstate) and Native Capacitor (App.addListener)
+ * Initialize listeners for Web (`popstate`), Native Android WebView (`window.__onNativeAndroidBack`),
+ * and Native Capacitor (`App.addListener`).
  */
-export function initMobileBackNavigation(config: {
-  getCurrentScreen: () => string;
-  onNavigateHome: () => void;
-  showToast?: (message: string) => void;
-}): () => void {
-  if (typeof window === "undefined" || isInitialized) {
+export function initMobileBackNavigation(config: BackNavigationConfig): () => void {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  activeBackConfig = config;
+
+  // Always expose `window.__onNativeAndroidBack` for Android `MainActivity.onBackPressedCallback`
+  window.__onNativeAndroidBack = (): "HANDLED" | "EXIT" => {
+    const cfg = activeBackConfig;
+    if (!cfg) return "EXIT";
+    const handled = handleBackAction(
+      cfg.getCurrentScreen(),
+      cfg.onNavigateHome,
+      cfg.showToast
+    );
+    return handled ? "HANDLED" : "EXIT";
+  };
+
+  if (isInitialized) {
     return () => {};
   }
 
@@ -95,17 +127,18 @@ export function initMobileBackNavigation(config: {
   }
 
   // 1. Web & iOS Safari Edge Swipe Listener
-  const onPopState = (event: PopStateEvent) => {
+  const onPopState = (_event: PopStateEvent) => {
+    const cfg = activeBackConfig || config;
     const handled = handleBackAction(
-      config.getCurrentScreen(),
-      config.onNavigateHome,
-      config.showToast
+      cfg.getCurrentScreen(),
+      cfg.onNavigateHome,
+      cfg.showToast
     );
 
     if (handled) {
       // Re-anchor history state so user stays in app
       try {
-        window.history.pushState({ screen: config.getCurrentScreen() }, "");
+        window.history.pushState({ screen: cfg.getCurrentScreen() }, "");
       } catch {
         // ignore
       }
@@ -120,21 +153,34 @@ export function initMobileBackNavigation(config: {
     .then(({ App }) => {
       try {
         const listenerPromise = App.addListener("backButton", () => {
+          const cfg = activeBackConfig || config;
           const handled = handleBackAction(
-            config.getCurrentScreen(),
-            config.onNavigateHome,
-            config.showToast
+            cfg.getCurrentScreen(),
+            cfg.onNavigateHome,
+            cfg.showToast
           );
 
           if (!handled) {
-            // Double press on HOME confirmed: exit native app
+            // Double press on HOME confirmed: exit native app via native bridge or Capacitor App.exitApp
+            try {
+              if (typeof window.ArcheryNativeAuth?.exitApp === "function") {
+                window.ArcheryNativeAuth.exitApp();
+                return;
+              }
+            } catch {
+              // Fall through to Capacitor App.exitApp
+            }
             try {
               const exitPromise = App.exitApp();
               if (exitPromise && typeof (exitPromise as Promise<void>).catch === "function") {
-                (exitPromise as Promise<void>).catch(() => {});
+                (exitPromise as Promise<void>).catch(() => {
+                  window.ArcheryNativeAuth?.exitApp?.();
+                });
               }
             } catch {
-              // Ignore when native App plugin bridge is unavailable on remote OTA origin
+              try {
+                window.ArcheryNativeAuth?.exitApp?.();
+              } catch {}
             }
           }
         });
@@ -170,6 +216,8 @@ export function initMobileBackNavigation(config: {
     if (capacitorRemoveListener) {
       capacitorRemoveListener();
     }
+    delete window.__onNativeAndroidBack;
+    activeBackConfig = null;
     isInitialized = false;
   };
 }

@@ -12,6 +12,7 @@ export const OWNER_SELF_SERVICE_PROFILE_KEYS = new Set<string>([
   "clubName",
   "clubCountry",
   "fcmToken",
+  "fcmTokens",
   "profileSetupCompleted",
   "bowConfig",
   "bows",
@@ -309,6 +310,24 @@ export function mergeUserProfilesNonDestructive(
       ? local.clubName
       : remote.clubName || local.clubName || null;
 
+  const mergedFcmTokens = (() => {
+    const combined: string[] = [];
+    const pushToken = (val: unknown) => {
+      if (typeof val !== "string") return;
+      const trimmed = val.trim();
+      if (trimmed.length >= 10 && trimmed.length <= 512 && !combined.includes(trimmed)) {
+        combined.push(trimmed);
+      }
+    };
+    const primaryList = localIsNewer ? local.fcmTokens : remote.fcmTokens;
+    const secondaryList = localIsNewer ? remote.fcmTokens : local.fcmTokens;
+    if (Array.isArray(primaryList)) primaryList.forEach(pushToken);
+    if (Array.isArray(secondaryList)) secondaryList.forEach(pushToken);
+    pushToken(localIsNewer ? local.fcmToken : remote.fcmToken);
+    pushToken(localIsNewer ? remote.fcmToken : local.fcmToken);
+    return combined.slice(0, 10);
+  })();
+
   const merged = sanitizeUserProfilePure({
     ...local,
     ...remote,
@@ -328,6 +347,7 @@ export function mergeUserProfilesNonDestructive(
     ...(mergedPhysicalData ? { physicalData: mergedPhysicalData } : {}),
     ...(mergedBowConfig ? { bowConfig: mergedBowConfig } : {}),
     ...(mergedBows ? { bows: mergedBows } : {}),
+    ...(mergedFcmTokens.length > 0 ? { fcmTokens: mergedFcmTokens } : {}),
     profileSetupCompleted: Boolean(remote.profileSetupCompleted || local.profileSetupCompleted),
     updatedAt: Math.max(remoteTs, localTs)
   });

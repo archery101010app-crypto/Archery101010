@@ -419,11 +419,15 @@ export default function AdminUsersTab() {
       const auditEntry = {
         id: generateResilientId("SUB"),
         userId: targetUid,
+        userName: (userToUpdate.fullName || userToUpdate.email || targetUid).slice(0, 128),
         email: userToUpdate.email || "",
+        previousPlan: userToUpdate.plan || "FREE",
+        newPlan: nextPlan,
         plan: nextPlan,
         sku: nextPlan === "PRO" ? "admin_manual_pro_annual" : "admin_manual_free_revoke",
         source: "superadmin_users_tab",
         activatedAt: now,
+        createdAt: now,
         expiresAt: proExpiresAt,
         updatedAt: now
       };
@@ -432,20 +436,15 @@ export default function AdminUsersTab() {
 
       if (typeof navigator !== "undefined" && navigator.onLine) {
         try {
-          const { doc, updateDoc, setDoc } = await import("firebase/firestore");
+          const { doc, setDoc } = await import("firebase/firestore");
           const { db, auth } = await import("@/lib/firebase");
           if (auth.currentUser) {
-            await updateDoc(doc(db, "users", targetUid), {
-              plan: nextPlan,
-              proExpiresAt,
-              updatedAt: now
-            });
             await setDoc(doc(db, "subscription_audit_logs", auditEntry.id), auditEntry, {
               merge: true
             });
           }
         } catch (cloudErr) {
-          console.warn("[Admin Users] Could not sync plan toggle directly to Firestore:", cloudErr);
+          console.warn("[Admin Users] Could not sync plan audit log directly to Firestore:", cloudErr);
         }
       }
 
@@ -495,23 +494,8 @@ export default function AdminUsersTab() {
       const currentIndex = roles.indexOf(normalizedCurrent);
       const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % roles.length;
       const newRole = roles[nextIndex];
-      const now = Date.now();
 
       const updatedProfile = await updateProfile(uid, { role: newRole });
-      if (typeof navigator !== "undefined" && navigator.onLine) {
-        try {
-          const { doc, updateDoc } = await import("firebase/firestore");
-          const { db, auth } = await import("@/lib/firebase");
-          if (auth.currentUser) {
-            await updateDoc(doc(db, "users", uid), {
-              role: newRole,
-              updatedAt: now
-            });
-          }
-        } catch (cloudErr) {
-          console.warn("[Admin Users] Could not sync role toggle directly to Firestore:", cloudErr);
-        }
-      }
       setUsers((prev) => prev.map((u) => (u.uid === uid ? updatedProfile : u)));
       setSelectedUser((prev) => (prev?.uid === uid ? updatedProfile : prev));
     } catch (err) {

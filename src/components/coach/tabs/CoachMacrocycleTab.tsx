@@ -132,6 +132,46 @@ export default function CoachMacrocycleTab({
     }
   }, [selectedMacro]);
 
+  const loadFilteredCoachMacrocycles = async (): Promise<Macrocycle[]> => {
+    const activeClubId = canonicalClubId;
+    const list = await getLocalMacrocycles();
+    const cleanList: Macrocycle[] = [];
+    for (const macro of list) {
+      const phasesDump = JSON.stringify(macro.phases || []).toLowerCase();
+      const lowerName = (macro.name || "").trim().toLowerCase();
+      const hasTestUid = (macro.assignedAthleteIds || []).some((id: string) =>
+        id.startsWith("qNEkEf15NKZABcadQ0l")
+      );
+      const isTestSheetsPlan =
+        (lowerName === "plan google sheets" &&
+          (macro.startDate === "2026-10-01" || (macro.volumeGoal || 0) === 0 || hasTestUid)) ||
+        hasTestUid;
+      const isIndoorDemo =
+        macro.id === "MAC-DEMO-1" ||
+        isTestSheetsPlan ||
+        lowerName.includes("indoor 2026") ||
+        lowerName.includes("preparación indoor") ||
+        lowerName.includes("preparacion indoor") ||
+        lowerName.includes("offline mode active") ||
+        lowerName.includes("connect to the internet") ||
+        phasesDump.includes("15 min calentamiento con liga") ||
+        phasesDump.includes("core y estabilidad") ||
+        phasesDump.includes("volumen técnico 70m");
+      if (isIndoorDemo) {
+        await unlinkAndPurgePlan(macro.id);
+      } else {
+        const belongsToCoach =
+          macro.coachId === user.uid ||
+          (activeClubId && macro.clubId === activeClubId) ||
+          (user.clubId && macro.clubId === user.clubId);
+        if (belongsToCoach) {
+          cleanList.push(macro);
+        }
+      }
+    }
+    return cleanList;
+  };
+
   const handleOpenImportModal = () => {
     setShowImportModal(true);
   };
@@ -143,7 +183,7 @@ export default function CoachMacrocycleTab({
     macrocycle: Macrocycle;
     summary: SyncCycleSummary;
   }) => {
-    const list = await getLocalMacrocycles();
+    const list = await loadFilteredCoachMacrocycles();
     setMacrocycles(list);
     setSelectedMacro(macrocycle);
 
@@ -263,41 +303,7 @@ export default function CoachMacrocycleTab({
 
       setRoster(athletes.filter((a) => !isFictitiousUser(a)));
 
-      const list = await getLocalMacrocycles();
-      const cleanList: Macrocycle[] = [];
-      for (const macro of list) {
-        const phasesDump = JSON.stringify(macro.phases || []).toLowerCase();
-        const lowerName = (macro.name || "").trim().toLowerCase();
-        const hasTestUid = (macro.assignedAthleteIds || []).some((id: string) =>
-          id.startsWith("qNEkEf15NKZABcadQ0l")
-        );
-        const isTestSheetsPlan =
-          (lowerName === "plan google sheets" &&
-            (macro.startDate === "2026-10-01" || (macro.volumeGoal || 0) === 0 || hasTestUid)) ||
-          hasTestUid;
-        const isIndoorDemo =
-          macro.id === "MAC-DEMO-1" ||
-          isTestSheetsPlan ||
-          lowerName.includes("indoor 2026") ||
-          lowerName.includes("preparación indoor") ||
-          lowerName.includes("preparacion indoor") ||
-          lowerName.includes("offline mode active") ||
-          lowerName.includes("connect to the internet") ||
-          phasesDump.includes("15 min calentamiento con liga") ||
-          phasesDump.includes("core y estabilidad") ||
-          phasesDump.includes("volumen técnico 70m");
-        if (isIndoorDemo) {
-          await unlinkAndPurgePlan(macro.id);
-        } else {
-          const belongsToCoach =
-            macro.coachId === user.uid ||
-            (activeClubId && macro.clubId === activeClubId) ||
-            (user.clubId && macro.clubId === user.clubId);
-          if (belongsToCoach) {
-            cleanList.push(macro);
-          }
-        }
-      }
+      const cleanList = await loadFilteredCoachMacrocycles();
       setMacrocycles(cleanList);
       const localSess = await getLocalSessions();
       const mergedMap = new Map<string, any>();
@@ -503,7 +509,7 @@ export default function CoachMacrocycleTab({
       canonicalClubId
     );
 
-    const list = await getLocalMacrocycles();
+    const list = await loadFilteredCoachMacrocycles();
     setMacrocycles(list);
     setShowCreateModal(false);
 
@@ -526,7 +532,7 @@ export default function CoachMacrocycleTab({
 
     await unlinkAndPurgePlan(id);
 
-    const updated = await getLocalMacrocycles();
+    const updated = await loadFilteredCoachMacrocycles();
     setMacrocycles(updated);
     if (selectedMacro?.id === id) setSelectedMacro(null);
     await showOledAlert(
@@ -549,7 +555,7 @@ export default function CoachMacrocycleTab({
 
     await unlinkAndPurgePlan(macro.id, athlete.uid);
 
-    const updated = await getLocalMacrocycles();
+    const updated = await loadFilteredCoachMacrocycles();
     setMacrocycles(updated);
     const refreshedSelected = updated.find((m) => m.id === macro.id) || null;
     setSelectedMacro(refreshedSelected);
@@ -586,7 +592,7 @@ export default function CoachMacrocycleTab({
       timestamp: Date.now()
     });
 
-    const list = await getLocalMacrocycles();
+    const list = await loadFilteredCoachMacrocycles();
     setMacrocycles(list);
   };
 
@@ -1065,7 +1071,7 @@ export default function CoachMacrocycleTab({
                           >
                             <div className="flex items-center gap-2.5 min-w-0 flex-1">
                               <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center font-bold text-xs text-white shrink-0">
-                                {athlete.fullName[0]}
+                                {(athlete.fullName || athlete.email || "?").trim().charAt(0).toUpperCase() || "?"}
                               </div>
                               <div className="min-w-0 flex-1">
                                 <span className="text-xs font-bold text-white block break-words leading-tight">
@@ -1468,7 +1474,7 @@ export default function CoachMacrocycleTab({
                             >
                               <div className="flex items-center gap-2 min-w-0 flex-1">
                                 <div className="h-6 w-6 rounded bg-white/5 border border-white/5 flex items-center justify-center font-bold text-[11.6px] text-white shrink-0">
-                                  {athlete.fullName[0]}
+                                  {(athlete.fullName || athlete.email || "?").trim().charAt(0).toUpperCase() || "?"}
                                 </div>
                                 <span className="text-xs font-bold break-words leading-tight">
                                   {athlete.fullName}

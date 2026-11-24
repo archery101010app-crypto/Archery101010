@@ -1,5 +1,5 @@
 import { auth, db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, increment } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { logger } from "@/lib/logger";
 import {
@@ -320,8 +320,36 @@ export async function runSync(
               }
             } else if (item.operation === "UPDATE") {
               if (item.collection === "ad_campaigns" && !cleanPayload.name) {
-                const { id: _omitId, ...metricOnlyPayload } = cleanPayload;
-                await withTimeout(updateDoc(docRef, metricOnlyPayload), NETWORK_TIMEOUT_MS);
+                const metricUpdatedAt = Number(cleanPayload.updatedAt) || Date.now();
+                const atomicMetricPatch =
+                  cleanPayload.metricKind === "click"
+                    ? {
+                        clicks: increment(1),
+                        totalClicks: increment(1),
+                        updatedAt: metricUpdatedAt
+                      }
+                    : {
+                        impressions: increment(1),
+                        totalImpressions: increment(1),
+                        updatedAt: metricUpdatedAt
+                      };
+                await withTimeout(updateDoc(docRef, atomicMetricPatch), NETWORK_TIMEOUT_MS);
+              } else if (
+                item.collection === "calendar_events" &&
+                typeof cleanPayload.athleteChecklistUid === "string" &&
+                cleanPayload.athleteChecklistUid.trim().length > 0
+              ) {
+                const checklistUid = cleanPayload.athleteChecklistUid.trim();
+                const checklistItems = Array.isArray(cleanPayload.athleteChecklistItems)
+                  ? cleanPayload.athleteChecklistItems
+                  : [];
+                await withTimeout(
+                  updateDoc(docRef, {
+                    [`completedByAthlete.${checklistUid}`]: checklistItems,
+                    updatedAt: Number(cleanPayload.updatedAt) || Date.now()
+                  }),
+                  NETWORK_TIMEOUT_MS
+                );
               } else {
                 try {
                   await withTimeout(

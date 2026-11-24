@@ -5,6 +5,7 @@ import { useLanguage } from "@/lib/contexts/LanguageContext";
 import {
   getLocalISODate,
   formatRegionalDate,
+  formatShootingDistance,
   LANG_TO_BCP47,
   toStandardLangCode
 } from "@/lib/i18n/regionalUtils";
@@ -74,7 +75,7 @@ interface CalendarViewProps {
 }
 
 export default function CalendarView({ user, onBack, onNavigate, coachViewMode = false }: CalendarViewProps) {
-  const { language, t, tx } = useLanguage();
+  const { language, unitSystem, t, tx } = useLanguage();
   const isEs = language === "es";
   const hasCoachRole =
     user.role === "coach" ||
@@ -388,8 +389,8 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
         }
       }
       setMacrocycles(cleanMacroList);
-      if (cleanMacroList.length > 0 && !syncMacroId) {
-        setSyncMacroId(cleanMacroList[0].id);
+      if (cleanMacroList.length > 0) {
+        setSyncMacroId((prev) => prev || cleanMacroList[0].id);
       }
     }
     loadData();
@@ -405,7 +406,7 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     return () => {
       window.removeEventListener("local-db-change", handleDbChange);
     };
-  }, [syncMacroId, canonicalClubId, isCoach, user]);
+  }, [canonicalClubId, isCoach, user]);
 
   const getPhaseOnDate = (dateStr: string) => {
     let filteredMacros = selectedMacrocycleId === "ALL" 
@@ -868,17 +869,25 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
     await saveLocalEvent(updatedEv.id, updatedEv);
     setEvents((prev) => prev.map((item) => (item.id === updatedEv.id ? updatedEv : item)));
 
+    const isAthleteSelfChecklistOnly = !isCoach && ev.createdByUid !== user.uid;
     await addToSyncQueue({
       id: generateResilientId("TXN"),
       collection: "calendar_events",
       operation: "UPDATE",
       payloadId: updatedEv.id,
-      payload: {
-        id: updatedEv.id,
-        completedItems: updatedEv.completedItems,
-        completedByAthlete: updatedEv.completedByAthlete,
-        updatedAt
-      },
+      payload: isAthleteSelfChecklistOnly
+        ? {
+            id: updatedEv.id,
+            athleteChecklistUid: user.uid,
+            athleteChecklistItems: nextCompleted,
+            updatedAt
+          }
+        : {
+            id: updatedEv.id,
+            completedItems: updatedEv.completedItems,
+            completedByAthlete: updatedEv.completedByAthlete,
+            updatedAt
+          },
       timestamp: updatedAt
     });
 
@@ -2469,7 +2478,14 @@ export default function CalendarView({ user, onBack, onNavigate, coachViewMode =
                                   })`}
                             </span>
                             <span className="text-[10.5px] text-white">
-                              {ses.distance ? `${ses.distance}m · ` : ""}
+                              {ses.distance
+                                ? `${formatShootingDistance(
+                                    Number(ses.distance),
+                                    unitSystem,
+                                    ses.distanceUnit,
+                                    ses.distanceValue
+                                  )} · `
+                                : ""}
                               {ses.endsCount && ses.arrowsPerEnd ? `${ses.endsCount * ses.arrowsPerEnd} ${tx("flechas", "arrows")}` : ""}
                             </span>
                           </div>

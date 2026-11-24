@@ -220,7 +220,10 @@ async function generateFlatPrintFiles() {
   const blackCanvas = new Jimp({ width: W, height: H, color: 0x000000ff });
   blackCanvas.composite(transparentCanvas, 0, 0);
 
-  const artifactDir = 'C:/Users/Archery 101010/.gemini/antigravity/brain/6a327e3e-d87f-4993-ab10-ae63666eaeeb';
+  const artifactDir =
+    process.env.ARCHERY_ARTIFACTS_DIR ||
+    process.argv[2] ||
+    path.resolve(__dirname, '../artifacts');
   const transPaths = [
     path.join(artifactDir, 'archery101010-serigrafia-transparente.png'),
     path.join(rootDir, 'public', 'archery101010-serigrafia-transparente.png'),
@@ -234,8 +237,14 @@ async function generateFlatPrintFiles() {
     path.join(rootDir, 'releases', 'archery101010-serigrafia-negro.png')
   ];
 
-  for (const p of transPaths) await transparentCanvas.write(p);
-  for (const p of blackPaths) await blackCanvas.write(p);
+  for (const p of transPaths) {
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    await transparentCanvas.write(p);
+  }
+  for (const p of blackPaths) {
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    await blackCanvas.write(p);
+  }
 
   console.log('✅ Generated 3600x2000 HD flat screen-printing files (transparent + black background)');
 }

@@ -70,6 +70,8 @@ export interface UserProfile {
   clubInviteCode?: string;
   /** Verified 6-digit Coach invite code proof persisted when an archer links to a club. */
   joinedWithInviteCode?: string;
+  fcmToken?: string;
+  fcmTokens?: string[];
   profileSetupCompleted?: boolean;
   lastActiveAt?: number;
   createdAt?: number;
@@ -255,11 +257,24 @@ function sanitizeUserProfile(u: any): UserProfile {
       copy.coachEmail = null;
     }
 
+    // Prevent unverified superadmin email from showing broken Admin UI or failing Firestore rules
+    if (
+      copy.role === "superadmin" &&
+      auth.currentUser &&
+      auth.currentUser.uid === copy.uid &&
+      !auth.currentUser.emailVerified
+    ) {
+      copy.role = copy.isClubCreator ? "coach" : "archer";
+      if (copy.plan === "PRO" && (!copy.proExpiresAt || copy.proExpiresAt <= Date.now())) {
+        copy.plan = "FREE";
+      }
+    }
+
     if (isLinkedToExternalCoach(copy)) {
       // Athlete is linked to another user's Coach account: never allow self-coach flags or own invite code
       copy.isClubCreator = false;
       copy.clubInviteCode = "";
-      if (copy.role !== "superadmin" && !isSuperAdminEmail(copy.email)) {
+      if (copy.role !== "superadmin" && !isVerifiedSuperAdminForUid(copy.email, copy.uid)) {
         copy.role = "archer";
       }
       const externalCoachUid = getExternalCoachUid(copy);
@@ -393,7 +408,10 @@ export async function cloudWriteUser(
         try {
           const cleanBootstrap = sanitizeUserProfile({
             ...profile,
-            role: profile.role === "superadmin" && !isSuperAdminEmail(profile.email) ? "archer" : profile.role,
+            role:
+              profile.role === "superadmin" && !isVerifiedSuperAdminForUid(profile.email, profile.uid)
+                ? "archer"
+                : profile.role,
             clubId: profile.role === "archer" ? null : profile.clubId,
             coachId: profile.role === "archer" ? null : profile.coachId,
             joinedWithInviteCode: "",
@@ -432,8 +450,12 @@ function isClubOwnerRole(u: Partial<UserProfile> | null | undefined): boolean {
 
 /**
  * Registers or updates the private O(1) lookup-only `coach_invite_codes/{code}` document for a Coach.
+ * Never persists coach `email` PII (`email: null` is enforced by `firestore.rules`).
  */
-export async function syncCoachInviteCodeDoc(coach: Partial<UserProfile>): Promise<boolean> {
+export async function syncCoachInviteCodeDoc(
+  coach: Partial<UserProfile>,
+  options?: { throwOnError?: boolean }
+): Promise<boolean> {
   const isOnline = typeof navigator === "undefined" || navigator.onLine;
   const cleanCode = (coach?.clubInviteCode || "").trim();
   if (
@@ -447,7 +469,15 @@ export async function syncCoachInviteCodeDoc(coach: Partial<UserProfile>): Promi
     return false;
   }
 
+  const resolvedRole =
+    coach.role === "team_admin" || coach.role === "team_admin_coach"
+      ? coach.role
+      : coach.role === "superadmin" && isVerifiedSuperAdminForUid(coach.email, coach.uid)
+      ? "superadmin"
+      : "coach";
+
   try {
+    // Write complete validated document (no `{ merge: true }`) so any legacy `email` field is wiped clean
     await withTimeout(
       setDoc(
         doc(db, "coach_invite_codes", cleanCode),
@@ -455,23 +485,319 @@ export async function syncCoachInviteCodeDoc(coach: Partial<UserProfile>): Promi
           code: cleanCode,
           coachUid: coach.uid,
           fullName: (coach.fullName || "").slice(0, 100),
-          email: (coach.email || "").slice(0, 128),
+          email: null,
           clubId: getCanonicalCoachClubId(coach),
           clubName: coach.clubName || null,
           clubCountry: coach.clubCountry || coach.country || "CR",
           clubLogo: coach.clubLogo || "0",
-          role: coach.role === "archer" ? "coach" : (coach.role || "coach"),
+          role: resolvedRole,
           updatedAt: Date.now()
-        }),
-        { merge: true }
+        })
       ),
       6000
     );
     return true;
   } catch (err) {
     console.warn("Could not sync coach_invite_codes doc:", err);
+    if (options?.throwOnError) {
+      throw err;
+    }
     return false;
   }
+}
+
+function isFunctionsCallableUnavailable(err: unknown): boolean {
+  const code = String((err as { code?: string })?.code || "").toLowerCase();
+  const msg = String((err as { message?: string })?.message || "").toLowerCase();
+  return (
+    code.includes("not-found") ||
+    code.includes("unavailable") ||
+    code.includes("unimplemented") ||
+    (code.includes("internal") && (msg.includes("cors") || msg.includes("failed to fetch") || msg === "internal"))
+  );
+}
+
+/**
+ * Promotes an adult (18+) independent archer to Coach / Club Creator via the `promoteToCoachClub` Cloud Function.
+ * Never poisons `cola_sincronizacion` with forbidden client self-escalation writes on Spark.
+ */
+export async function promoteUserToCoachClub(
+  user: UserProfile,
+  opts?: {
+    desiredRole?: "coach" | "team_admin" | "team_admin_coach";
+    birthDate?: string;
+    clubName?: string | null;
+    clubCountry?: string;
+  }
+): Promise<UserProfile> {
+  if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") {
+    throw new Error(
+      txAuth(
+        "Inicia sesión con tu cuenta para activar tu club de entrenador.",
+        "Sign in with your account to activate your coach club."
+      )
+    );
+  }
+  if (isLinkedToExternalCoach(user)) {
+    throw new Error(
+      txAuth(
+        "Debes desvincularte de tu entrenador actual antes de crear tu propio club.",
+        "You must leave your current coach's club before creating your own club."
+      )
+    );
+  }
+
+  const effectiveBirthDate = (opts?.birthDate || user.birthDate || "").trim();
+  const age = calculateAgeFromBirthDate(effectiveBirthDate);
+  if (user.role !== "superadmin" && (age === null || age < 18)) {
+    throw new Error(
+      txAuth(
+        "Debes tener al menos 18 años para activar un perfil de Entrenador.",
+        "You must be at least 18 years old to activate a Coach profile."
+      )
+    );
+  }
+
+  const desiredRole = opts?.desiredRole || "team_admin_coach";
+
+  // SuperAdmin is permitted directly by Firestore rules
+  if (user.role === "superadmin" && isVerifiedSuperAdminForUid(user.email, user.uid)) {
+    const inviteCode =
+      user.clubInviteCode && /^\d{6}$/.test(user.clubInviteCode.trim())
+        ? user.clubInviteCode.trim()
+        : await generateUniqueClubInviteCode();
+    return await updateProfile(user.uid, {
+      isClubCreator: true,
+      clubId: getCanonicalCoachClubId(user),
+      clubInviteCode: inviteCode,
+      clubName: opts?.clubName !== undefined ? opts.clubName : user.clubName,
+      clubCountry: opts?.clubCountry || user.clubCountry || user.country
+    });
+  }
+
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    throw new Error(
+      txAuth(
+        "Se requiere conexión a internet para activar tu perfil de Entrenador.",
+        "An internet connection is required to activate your Coach profile."
+      )
+    );
+  }
+
+  const [{ getFunctions, httpsCallable }, { app }] = await Promise.all([
+    import("firebase/functions"),
+    import("./firebase")
+  ]);
+
+  try {
+    const promoteFn = httpsCallable<
+      Record<string, unknown>,
+      { ok?: boolean; profile?: Partial<UserProfile> }
+    >(getFunctions(app), "promoteToCoachClub", { timeout: 20000 });
+
+    const res = await promoteFn({
+      desiredRole,
+      birthDate: effectiveBirthDate,
+      clubName: opts?.clubName ?? user.clubName ?? null,
+      clubCountry: opts?.clubCountry || user.clubCountry || user.country || ""
+    });
+
+    if (!res.data?.ok || !res.data.profile) {
+      throw new Error(
+        txAuth(
+          "No se pudo completar la activación del club en el servidor.",
+          "Could not complete club activation on the server."
+        )
+      );
+    }
+
+    const nowTs = Number(res.data.profile.updatedAt || Date.now());
+    const merged = sanitizeUserProfile({
+      ...user,
+      ...res.data.profile,
+      uid: user.uid,
+      profileSetupCompleted: true,
+      updatedAt: nowTs
+    });
+
+    markLocalUserWrite(user.uid, nowTs);
+    await saveLocalSetting("current_user", merged);
+    const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
+    const idx = usersList.findIndex((u) => u.uid === user.uid);
+    if (idx !== -1) {
+      usersList[idx] = merged;
+    } else {
+      usersList.push(merged);
+    }
+    await saveLocalSetting("simulated_users", usersList);
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: merged } }));
+    }
+
+    return merged;
+  } catch (err: unknown) {
+    if (isFunctionsCallableUnavailable(err)) {
+      throw new Error(
+        txAuth(
+          "El servicio de activación de Entrenador en la nube no está disponible en este momento. Inténtalo más tarde.",
+          "The cloud Coach activation service is unavailable right now. Please try again later."
+        )
+      );
+    }
+    throw err instanceof Error
+      ? err
+      : new Error(txAuth("Error al activar el club de Entrenador.", "Error activating Coach club."));
+  }
+}
+
+/**
+ * Rotates a Coach's 6-digit invite code safely without collisions or silent failures.
+ * Uses `rotateCoachInviteCode` Cloud Function first, falling back to collision-checked `coach_invite_codes` swap for existing coaches.
+ */
+export async function rotateCoachClubInviteCode(
+  user: UserProfile
+): Promise<{ clubInviteCode: string; clubId: string; updatedUser: UserProfile }> {
+  if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") {
+    throw new Error(
+      txAuth(
+        "Inicia sesión para generar un código de invitación.",
+        "Sign in to generate an invite code."
+      )
+    );
+  }
+  if (isLinkedToExternalCoach(user)) {
+    throw new Error(
+      txAuth(
+        "Los atletas vinculados a un entrenador externo no pueden rotar el código del club.",
+        "Athletes linked to an external coach cannot rotate the club invite code."
+      )
+    );
+  }
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    throw new Error(
+      txAuth(
+        "Necesitas conexión a internet para generar un nuevo código de invitación.",
+        "An internet connection is required to generate a new invite code."
+      )
+    );
+  }
+
+  let workingUser = user;
+  if (workingUser.role === "archer" && !workingUser.isClubCreator) {
+    workingUser = await promoteUserToCoachClub(workingUser, { desiredRole: "coach" });
+    if (workingUser.clubInviteCode && /^\d{6}$/.test(workingUser.clubInviteCode)) {
+      return {
+        clubInviteCode: workingUser.clubInviteCode,
+        clubId: getCanonicalCoachClubId(workingUser),
+        updatedUser: workingUser
+      };
+    }
+  }
+
+  // 1. Primary path: transactional `rotateCoachInviteCode` Cloud Function
+  if (auth.currentUser && auth.currentUser.uid === workingUser.uid) {
+    try {
+      const [{ getFunctions, httpsCallable }, { app }] = await Promise.all([
+        import("firebase/functions"),
+        import("./firebase")
+      ]);
+      const rotateFn = httpsCallable<
+        Record<string, never>,
+        { ok?: boolean; clubInviteCode?: string; clubId?: string }
+      >(getFunctions(app), "rotateCoachInviteCode", { timeout: 15000 });
+
+      const res = await rotateFn({});
+      if (res.data?.ok && res.data.clubInviteCode) {
+        const nowTs = Date.now();
+        const canonicalClubId = res.data.clubId || getCanonicalCoachClubId(workingUser);
+        const merged = sanitizeUserProfile({
+          ...workingUser,
+          clubInviteCode: res.data.clubInviteCode,
+          clubId: canonicalClubId,
+          isClubCreator: true,
+          updatedAt: nowTs
+        });
+        markLocalUserWrite(workingUser.uid, nowTs);
+        await saveLocalSetting("current_user", merged);
+        const usersList = (await getLocalSetting<UserProfile[]>("simulated_users", [])).map(sanitizeUserProfile);
+        const idx = usersList.findIndex((u) => u.uid === workingUser.uid);
+        if (idx !== -1) {
+          usersList[idx] = merged;
+        } else {
+          usersList.push(merged);
+        }
+        await saveLocalSetting("simulated_users", usersList);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: merged } }));
+        }
+        return {
+          clubInviteCode: res.data.clubInviteCode,
+          clubId: canonicalClubId,
+          updatedUser: merged
+        };
+      }
+    } catch (fnErr) {
+      if (!isFunctionsCallableUnavailable(fnErr)) {
+        console.warn("rotateCoachInviteCode callable warning, trying direct swap:", fnErr);
+      }
+    }
+  }
+
+  // 2. Spark fallback for existing verified coaches: allocate unique code, claim `coach_invite_codes/{newCode}` first, update profile, delete old code
+  const oldCode = (workingUser.clubInviteCode || "").trim();
+  const canonicalClubId = getCanonicalCoachClubId(workingUser);
+  let allocatedCode = "";
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const candidate = await generateUniqueClubInviteCode();
+    if (candidate === oldCode) continue;
+    try {
+      await syncCoachInviteCodeDoc(
+        {
+          ...workingUser,
+          clubId: canonicalClubId,
+          clubInviteCode: candidate
+        },
+        { throwOnError: true }
+      );
+      allocatedCode = candidate;
+      break;
+    } catch (claimErr) {
+      console.warn("Invite code claim collision or error on attempt", attempt + 1, claimErr);
+    }
+  }
+
+  if (!allocatedCode) {
+    throw new Error(
+      txAuth(
+        "No se pudo reservar un nuevo código único de 6 dígitos en la nube. Inténtalo de nuevo.",
+        "Could not allocate a unique 6-digit invite code in the cloud. Please try again."
+      )
+    );
+  }
+
+  const updatedUser = await updateProfile(workingUser.uid, {
+    clubInviteCode: allocatedCode,
+    clubId: canonicalClubId,
+    isClubCreator: true
+  });
+
+  if (/^\d{6}$/.test(oldCode) && oldCode !== allocatedCode) {
+    await deleteDoc(doc(db, "coach_invite_codes", oldCode)).catch((delErr) => {
+      console.warn("Could not delete previous coach_invite_codes doc:", delErr);
+    });
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("current-user-updated", { detail: { user: updatedUser } }));
+  }
+
+  return {
+    clubInviteCode: allocatedCode,
+    clubId: canonicalClubId,
+    updatedUser
+  };
 }
 
 /**
@@ -531,7 +857,46 @@ export async function findClubOwnerByInviteCode(rawCode: string, excludeUid?: st
       console.warn("Primary coach_invite_codes lookup failed, trying users fallback:", codeErr);
     }
 
-    // 2. Fallback lookup on `users` filtered strictly to `isClubOwnerRole(u)`
+    // 2. Server-side callable lookup (`lookupCoachInviteCode`) so athletes never fail Firestore read rules on legacy coaches
+    if (auth.currentUser) {
+      try {
+        const [{ getFunctions, httpsCallable }, { app }] = await Promise.all([
+          import("firebase/functions"),
+          import("./firebase")
+        ]);
+        const lookupFn = httpsCallable<
+          { code: string },
+          { found?: boolean; coach?: Record<string, unknown> }
+        >(getFunctions(app), "lookupCoachInviteCode", { timeout: 8000 });
+        const lookupRes = await lookupFn({ code: cleanCode });
+        const coachData = lookupRes.data?.coach;
+        if (
+          lookupRes.data?.found &&
+          coachData &&
+          typeof coachData.uid === "string" &&
+          (!excludeUid || coachData.uid !== excludeUid)
+        ) {
+          return sanitizeUserProfile({
+            uid: coachData.uid,
+            fullName: String(coachData.fullName || "Entrenador"),
+            email: "",
+            clubId: String(coachData.clubId || getCanonicalCoachClubId({ uid: coachData.uid })),
+            clubName: (coachData.clubName as string | null) || null,
+            clubCountry: String(coachData.clubCountry || "CR"),
+            clubLogo: String(coachData.clubLogo || "0"),
+            clubInviteCode: cleanCode,
+            role: (coachData.role as UserProfile["role"]) || "coach",
+            isClubCreator: true
+          });
+        }
+      } catch (callableErr) {
+        if (!isFunctionsCallableUnavailable(callableErr)) {
+          console.warn("lookupCoachInviteCode callable warning:", callableErr);
+        }
+      }
+    }
+
+    // 3. Fallback lookup on `users` filtered strictly to `isClubOwnerRole(u)`
     try {
       const snap = await withTimeout(
         getDocs(query(collection(db, "users"), where("clubInviteCode", "==", cleanCode), limit(10))),
@@ -668,11 +1033,23 @@ function isSuperAdminEmail(email?: string | null): boolean {
   );
 }
 
+/**
+ * Verifies SuperAdmin eligibility aligned with `firestore.rules` (`email_verified == true`).
+ * Unverified accounts are never auto-promoted to `superadmin` on the client.
+ */
+function isVerifiedSuperAdminForUid(email?: string | null, uid?: string | null): boolean {
+  if (!isSuperAdminEmail(email)) return false;
+  const currentUser = auth.currentUser;
+  if (!currentUser) return false;
+  if (uid && currentUser.uid !== uid) return false;
+  return currentUser.emailVerified === true;
+}
+
 export async function getLoggedUser(): Promise<UserProfile | null> {
   const u = await getLocalSetting<UserProfile | null>("current_user", null);
   if (!u) return null;
   const sanitized = sanitizeUserProfile(u);
-  if (isSuperAdminEmail(sanitized.email) && sanitized.role !== "superadmin") {
+  if (isVerifiedSuperAdminForUid(sanitized.email, sanitized.uid) && sanitized.role !== "superadmin") {
     sanitized.role = "superadmin";
     sanitized.plan = "PRO";
   }
@@ -704,7 +1081,7 @@ export async function sendPasswordReset(email: string): Promise<void> {
     const continueUrl =
       typeof window !== "undefined" && window.location?.origin
         ? window.location.origin
-        : "https://archery101010-c0bb4.web.app";
+        : "https://archery101010-c0bb4.firebaseapp.com";
     try {
       await sendPasswordResetEmail(auth, cleanEmail, {
         url: continueUrl,
@@ -728,7 +1105,6 @@ export async function sendPasswordReset(email: string): Promise<void> {
 
 export async function loginUser(email: string, password?: string): Promise<UserProfile> {
   const normalizedEmail = email.trim().toLowerCase();
-  const isAdminEmail = isSuperAdminEmail(normalizedEmail);
 
   const targetEmail = normalizedEmail === "admin101010" ? "admin@archery101010.com" : normalizedEmail;
 
@@ -760,6 +1136,8 @@ export async function loginUser(email: string, password?: string): Promise<UserP
       );
     }
   }
+
+  const isAdminEmail = isVerifiedSuperAdminForUid(targetEmail, authUid);
 
   let user: UserProfile | undefined = undefined;
   let cloudFetchFailed = false;
@@ -986,29 +1364,27 @@ export async function registerUser(
   }
 
   const isAdult = age >= 18;
-  const isAdminEmail = isSuperAdminEmail(normalizedEmail);
+  const isAdminEmail = isVerifiedSuperAdminForUid(normalizedEmail, uid);
+  const requestedCoachClubCreation = !isAdminEmail && profileData.clubId === "CREATE_NEW" && isAdult;
+  const requestedCoachRole: "team_admin_coach" | "team_admin" =
+    profileData.actAsCoach !== false ? "team_admin_coach" : "team_admin";
 
-  let finalRole: UserProfile["role"] = isAdminEmail ? "superadmin" : "archer";
-  let isCreator = false;
-  let inviteCode = "";
+  const finalRole: UserProfile["role"] = isAdminEmail ? "superadmin" : "archer";
+  const isCreator = false;
+  const inviteCode = "";
   let clubLogo = profileData.clubLogo || "0";
   let clubCountry = profileData.clubCountry || profileData.country;
 
   // Strip password and actAsCoach so they are NEVER saved in UserProfile
-  const { actAsCoach, password: _discardedPassword, ...userFields } = profileData;
+  const { actAsCoach: _discardedActAsCoach, password: _discardedPassword, ...userFields } = profileData;
   let linkedCoachOnRegister: UserProfile | null = null;
 
   if (!isAdminEmail) {
-    if (profileData.clubId === "CREATE_NEW" && isAdult) {
-      finalRole = actAsCoach !== false ? "team_admin_coach" : "team_admin";
-      isCreator = true;
-      userFields.clubId = getCanonicalCoachClubId({ uid });
-      inviteCode = await generateUniqueClubInviteCode();
-    } else if (profileData.clubId === "CREATE_NEW" && !isAdult) {
+    if (profileData.clubId === "CREATE_NEW") {
+      // Initial user document is created as a valid `archer` first so Firestore `create` rules pass;
+      // server-verified coach club promotion runs immediately after via `promoteUserToCoachClub`.
       userFields.clubId = null;
-      finalRole = "archer";
     } else if (profileData.clubId && profileData.clubId !== "NONE") {
-      finalRole = "archer";
       const clubCoach = await findClubOwnerByInviteCode(profileData.clubId, uid);
       if (clubCoach && clubCoach.uid !== uid) {
         linkedCoachOnRegister = clubCoach;
@@ -1029,14 +1405,13 @@ export async function registerUser(
       }
     } else {
       userFields.clubId = null;
-      finalRole = "archer";
     }
   } else {
     userFields.clubId = null;
   }
 
   const nowTs = Date.now();
-  const newProfile: UserProfile = sanitizeUserProfile({
+  let newProfile: UserProfile = sanitizeUserProfile({
     ...userFields,
     email: normalizedEmail,
     uid,
@@ -1102,7 +1477,18 @@ export async function registerUser(
         );
       } catch {}
     }
-    if (isClubOwnerRole(newProfile) && /^\d{6}$/.test(newProfile.clubInviteCode || "")) {
+    if (requestedCoachClubCreation) {
+      try {
+        newProfile = await promoteUserToCoachClub(newProfile, {
+          desiredRole: requestedCoachRole,
+          birthDate: profileData.birthDate,
+          clubName: profileData.clubName ?? null,
+          clubCountry
+        });
+      } catch (promoteErr) {
+        console.warn("Coach club server promotion deferred during registration:", promoteErr);
+      }
+    } else if (isClubOwnerRole(newProfile) && /^\d{6}$/.test(newProfile.clubInviteCode || "")) {
       await syncCoachInviteCodeDoc(newProfile).catch(() => {});
     }
   }
@@ -1409,17 +1795,22 @@ export async function deleteUserAccount(uid: string): Promise<void> {
     }
   }
 
-  // Capture & clear local 6-digit watch pairing code before cloud cleanup
+  // Capture & clear local 6-digit watch pairing code and 256-bit watch session token before cloud cleanup
   let savedPairingCode = "";
+  let savedSessionToken = "";
   if (typeof window !== "undefined") {
     const pairingStorageKey = `archery_watch_pairing_code_${uid}`;
+    const tokenStorageKey = `archery_watch_session_token_${uid}`;
     try {
       savedPairingCode = (localStorage.getItem(pairingStorageKey) || "").trim();
+      savedSessionToken = (localStorage.getItem(tokenStorageKey) || "").trim();
       localStorage.removeItem(pairingStorageKey);
+      localStorage.removeItem(tokenStorageKey);
     } catch {}
   }
 
-  const DELETE_BATCH_TIMEOUT_MS = 20000;
+  const DELETE_BATCH_TIMEOUT_MS = 45000;
+  const PURGE_CALLABLE_TIMEOUT_MS = 30000;
 
   // 2. Delete all user cloud records BEFORE calling deleteUser(auth.currentUser)
   if (isOnline && !isGuest) {
@@ -1427,14 +1818,28 @@ export async function deleteUserAccount(uid: string): Promise<void> {
       const { deleteDoc } = await import("firebase/firestore");
 
       const deleteByQuery = async (colName: string, field: string) => {
-        const q = query(collection(db, colName), where(field, "==", uid), limit(250));
-        const snap = await getDocs(q).catch(() => null);
-        if (!snap || snap.empty) return;
-        const docs = snap.docs;
+        const PAGE_LIMIT = 250;
         const CHUNK_SIZE = 25;
-        for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
-          const chunk = docs.slice(i, i + CHUNK_SIZE);
-          await Promise.allSettled(chunk.map((d) => deleteDoc(doc(db, colName, d.id))));
+        const MAX_PAGES = 20;
+        for (let page = 0; page < MAX_PAGES; page++) {
+          const q = query(collection(db, colName), where(field, "==", uid), limit(PAGE_LIMIT));
+          const snap = await getDocs(q).catch((err) => {
+            console.warn(`Cleanup query skipped for ${colName}.${field}:`, err);
+            return null;
+          });
+          if (!snap || snap.empty) break;
+          const docs = snap.docs;
+          for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+            const chunk = docs.slice(i, i + CHUNK_SIZE);
+            await Promise.allSettled(
+              chunk.map((d) =>
+                deleteDoc(doc(db, colName, d.id)).catch((delErr) => {
+                  console.warn(`Cleanup delete warning for ${colName}/${d.id}:`, delErr);
+                })
+              )
+            );
+          }
+          if (docs.length < PAGE_LIMIT) break;
         }
       };
 
@@ -1445,29 +1850,49 @@ export async function deleteUserAccount(uid: string): Promise<void> {
             deleteByQuery("calendar_events", "createdByUid"),
             deleteByQuery("macrocycles", "coachId"),
             deleteByQuery("coach_records", "coachId"),
+            deleteByQuery("coach_records", "athleteUid"),
             deleteByQuery("star_history", "userId"),
             deleteByQuery("coach_notifications", "athleteUid"),
             deleteByQuery("coach_notifications", "coachUid"),
             deleteByQuery("duel_invitations", "senderUid"),
             deleteByQuery("duel_invitations", "receiverUid"),
+            deleteByQuery("active_duels", "creatorUid"),
+            deleteByQuery("active_duels", "playerUid"),
+            deleteByQuery("watch_sessions", "userId"),
             /^[0-9]{6}$/.test(savedPairingCode)
-              ? deleteDoc(doc(db, "watch_sessions", savedPairingCode))
+              ? deleteDoc(doc(db, "watch_pairings", savedPairingCode)).catch(() => {})
+              : Promise.resolve(),
+            /^[0-9]{6}$/.test(savedPairingCode)
+              ? deleteDoc(doc(db, "watch_sessions", savedPairingCode)).catch(() => {})
+              : Promise.resolve(),
+            /^[A-Za-z0-9_-]{32,64}$/.test(savedSessionToken)
+              ? deleteDoc(doc(db, "watch_sessions", savedSessionToken)).catch(() => {})
               : Promise.resolve(),
             targetProfile?.clubInviteCode && /^[0-9]{6}$/.test(targetProfile.clubInviteCode.trim())
-              ? deleteDoc(doc(db, "coach_invite_codes", targetProfile.clubInviteCode.trim()))
+              ? deleteDoc(doc(db, "coach_invite_codes", targetProfile.clubInviteCode.trim())).catch(() => {})
               : Promise.resolve(),
-            deleteDoc(doc(db, "athlete_stars", uid))
+            deleteDoc(doc(db, "athlete_stars", uid)).catch(() => {})
           ]);
 
-          // Delete users_public/{uid} and users/{uid} after dependent collections; also invoke server-side recursive purge callable if deployed
-          await deleteDoc(doc(db, "users_public", uid)).catch(() => {});
+          // Delete users_public/{uid} and invoke server-side recursive purge callable (`purgeDeletedUserAccount`) before deleting users/{uid}
+          await deleteDoc(doc(db, "users_public", uid)).catch((pubErr) => {
+            console.warn("Cleanup warning for users_public:", pubErr);
+          });
           try {
             const { getFunctions, httpsCallable } = await import("firebase/functions");
             const { app } = await import("./firebase");
-            const purgeFn = httpsCallable(getFunctions(app), "purgeDeletedUserAccount");
-            await withTimeout(purgeFn({ uid }), 8000).catch(() => {});
-          } catch {}
-          await deleteDoc(doc(db, "users", uid)).catch(() => {});
+            const purgeFn = httpsCallable(getFunctions(app), "purgeDeletedUserAccount", {
+              timeout: PURGE_CALLABLE_TIMEOUT_MS
+            });
+            await withTimeout(purgeFn({ uid, deleteAuth: false }), PURGE_CALLABLE_TIMEOUT_MS);
+          } catch (purgeErr) {
+            if (!isFunctionsCallableUnavailable(purgeErr)) {
+              console.warn("purgeDeletedUserAccount callable warning:", purgeErr);
+            }
+          }
+          await deleteDoc(doc(db, "users", uid)).catch((userErr) => {
+            console.warn("Cleanup warning for users doc:", userErr);
+          });
         })(),
         DELETE_BATCH_TIMEOUT_MS
       );
@@ -1601,8 +2026,8 @@ export async function loginSocialUser(email: string, displayName: string, explic
 
 async function loginSocialUserInternal(email: string, displayName: string, explicitUid?: string): Promise<UserProfile> {
   const targetEmail = email.trim().toLowerCase();
-  const isAdminEmail = isSuperAdminEmail(targetEmail);
   const authUid = explicitUid || auth.currentUser?.uid || "";
+  const isAdminEmail = isVerifiedSuperAdminForUid(targetEmail, authUid);
   if (!authUid) {
     // Never fabricate a local-only UID: without a real Firebase Auth session every cloud write is rejected
     throw new Error(
@@ -2214,7 +2639,7 @@ export async function joinClubByInviteCode(
 
   // 3. Link the athlete to the Coach and reset any accidental self-coach flags
   const preservedRole: UserProfile["role"] =
-    currentLogged?.role === "superadmin" || isSuperAdminEmail(currentLogged?.email)
+    currentLogged?.role === "superadmin" || isVerifiedSuperAdminForUid(currentLogged?.email, userUid)
       ? "superadmin"
       : "archer";
   const hasValidPro =
@@ -2544,7 +2969,7 @@ export async function leaveCurrentClub(userUid: string): Promise<{ success: bool
   }
 
   const preservedRole: UserProfile["role"] =
-    currentLogged?.role === "superadmin" || isSuperAdminEmail(currentLogged?.email)
+    currentLogged?.role === "superadmin" || isVerifiedSuperAdminForUid(currentLogged?.email, userUid)
       ? "superadmin"
       : "archer";
   const hasValidProOnLeave =

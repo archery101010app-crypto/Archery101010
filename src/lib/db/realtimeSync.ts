@@ -973,7 +973,11 @@ export function startRealtimeSync(
       (Array.isArray(val?.assignedAthleteIds) && val.assignedAthleteIds.includes(currentUserUid)),
     (remoteVal) => {
       if (!isCoachRole && !isSuperAdmin && !effectiveClubId) {
-        return remoteVal?.coachId === currentUserUid;
+        return (
+          remoteVal?.coachId === currentUserUid ||
+          (Array.isArray(remoteVal?.assignedAthleteIds) &&
+            remoteVal.assignedAthleteIds.includes(currentUserUid))
+        );
       }
       return true;
     }

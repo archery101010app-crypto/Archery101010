@@ -43,15 +43,18 @@ import android.os.Looper;
 import android.os.ParcelUuid;
 import android.os.PowerManager;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.util.Base64;
 import android.view.MotionEvent;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
+import android.webkit.URLUtil;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Keep;
@@ -125,6 +128,10 @@ public class MainActivity extends BridgeActivity {
     private static final String WATCH_BRIDGE_PREFS = "archery_watch_bridge_prefs";
     private static final String SPOTIFY_PREFS = "archery_spotify_prefs";
     private static final String BLE_HR_PREFS = "archery_ble_hr_prefs";
+    private static final String CAMERA_PREFS = "archery_camera_prefs";
+    private static final String KEY_PENDING_CAMERA_PATH = "pending_camera_capture_path";
+    private static final long STALE_CACHE_TTL_MS = 24L * 60L * 60L * 1000L;
+    private static final long SESSION_WAKELOCK_TIMEOUT_MS = 30L * 60L * 1000L;
 
     private ActivityResultLauncher<Intent> googleSignInLauncher;
     private ActivityResultLauncher<String[]> locationPermissionLauncher;
@@ -147,7 +154,12 @@ public class MainActivity extends BridgeActivity {
             Network activeNet = cm.getActiveNetwork();
             if (activeNet == null) return false;
             NetworkCapabilities caps = cm.getNetworkCapabilities(activeNet);
-            return caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+            if (caps == null) return false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+            }
+            return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
         } catch (Exception ignored) {
             return false;
         }
@@ -207,6 +219,8 @@ public class MainActivity extends BridgeActivity {
 
     // Native Wear OS Dual-Channel State Cache & Command Queue (works even when phone screen is off)
     private volatile String lastWatchSnapshotJson = "";
+    private volatile String lastWatchSessionToken = "";
+    private volatile String lastWatchPairingCode = "";
     private volatile long lastWatchMessageTimeMs = 0L;
     private volatile long lastWatchPongTimeMs = 0L;
     private volatile long lastWatchCmdSeq = 0L;
@@ -462,6 +476,12 @@ public class MainActivity extends BridgeActivity {
             new ActivityResultContracts.RequestMultiplePermissions(),
             result -> {
                 if (hasBlePermissionsInternal()) {
+                    try {
+                        getSharedPreferences(BLE_HR_PREFS, MODE_PRIVATE)
+                            .edit()
+                            .putInt("ble_perm_denied_count", 0)
+                            .apply();
+                    } catch (Exception ignored) {}
                     if (pendingBleActionAfterPermission == 2 && pendingBleConnectAddress != null) {
                         String addr = pendingBleConnectAddress;
                         String name = pendingBleConnectName;
@@ -473,6 +493,11 @@ public class MainActivity extends BridgeActivity {
                     }
                 } else {
                     pendingBleActionAfterPermission = 0;
+                    try {
+                        android.content.SharedPreferences prefs = getSharedPreferences(BLE_HR_PREFS, MODE_PRIVATE);
+                        int denied = prefs.getInt("ble_perm_denied_count", 0) + 1;
+                        prefs.edit().putInt("ble_perm_denied_count", denied).apply();
+                    } catch (Exception ignored) {}
                     bleHrState = "error";
                     bleHrErrorCode = "PERMISSION_DENIED";
                     emitBleHrStatusToWebView(null);
@@ -501,6 +526,8 @@ public class MainActivity extends BridgeActivity {
                     new Thread(() -> {
                         processCapturedCameraPhoto(result.getData());
                     }).start();
+                } else {
+                    cleanupPendingCameraCaptureFile();
                 }
             }
         );
@@ -523,8 +550,41 @@ public class MainActivity extends BridgeActivity {
             }
         );
 
+        restorePendingCameraCaptureFile(savedInstanceState);
         super.onCreate(savedInstanceState);
         activeInstanceRef = new WeakReference<>(this);
+        pruneStaleCacheFilesAsync();
+
+        // Register AFTER super.onCreate so LIFO order intercepts BEFORE Capacitor's AppPlugin callback (works in both localhost and remote OTA mode!)
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                runOnUiThread(() -> {
+                    if (bridge != null && bridge.getWebView() != null) {
+                        final WebView wv = bridge.getWebView();
+                        wv.evaluateJavascript(
+                            "(typeof window.__onNativeAndroidBack === 'function') ? String(window.__onNativeAndroidBack()) : 'NO_HANDLER'",
+                            value -> {
+                                if (value != null && value.contains("HANDLED")) {
+                                    return;
+                                }
+                                if (value != null && value.contains("EXIT")) {
+                                    moveTaskToBack(true);
+                                    return;
+                                }
+                                if (wv.canGoBack()) {
+                                    wv.goBack();
+                                } else {
+                                    moveTaskToBack(true);
+                                }
+                            }
+                        );
+                    } else {
+                        moveTaskToBack(true);
+                    }
+                });
+            }
+        });
 
         // Configure WebView for Native Google Account Picker, OAuth, Spotify playback, and session cookies
         if (getBridge() != null && getBridge().getWebView() != null) {
@@ -599,7 +659,7 @@ public class MainActivity extends BridgeActivity {
                 }
             });
 
-            // Handle standard HTTP/HTTPS downloadable files and data: URIs from WebView
+            // Handle standard HTTP/HTTPS downloadable files, blob: URLs, and data: URIs from WebView
             webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
                 if (url == null || url.isEmpty()) return;
                 if (url.startsWith("data:")) {
@@ -610,12 +670,35 @@ public class MainActivity extends BridgeActivity {
                         String resolvedMime = (mimetype != null && !mimetype.isEmpty()) ? mimetype : "application/octet-stream";
                         int semi = meta.indexOf(';');
                         if (semi > 0) {
-                            resolvedMime = meta.substring(0, semi);
+                            String metaMime = meta.substring(0, semi).trim();
+                            if (!metaMime.isEmpty()) {
+                                resolvedMime = metaMime;
+                            }
+                        } else if (!meta.trim().isEmpty() && !meta.contains("base64")) {
+                            resolvedMime = meta.trim();
                         }
+                        String exportName = deriveExportFileName(url, contentDisposition, resolvedMime);
                         if (meta.contains("base64")) {
-                            nativeShareBridge.saveOrShareFile(dataPart, "Archery101010-Export", resolvedMime, "Exportar archivo");
+                            nativeShareBridge.saveOrShareFile(dataPart, exportName, resolvedMime, "Exportar archivo");
+                        } else {
+                            try {
+                                String decoded = Uri.decode(dataPart);
+                                String encodedB64 = Base64.encodeToString(decoded.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
+                                nativeShareBridge.saveOrShareFile(encodedB64, exportName, resolvedMime, "Exportar archivo");
+                            } catch (Exception ignored) {}
                         }
                     }
+                    return;
+                }
+                if (url.startsWith("blob:")) {
+                    final String safeMime = (mimetype != null && !mimetype.isEmpty()) ? mimetype : "text/csv";
+                    final String exportName = deriveExportFileName(url, contentDisposition, safeMime);
+                    final String qUrl = JSONObject.quote(url);
+                    final String qName = JSONObject.quote(exportName);
+                    final String qMime = JSONObject.quote(safeMime);
+                    String blobJs = "(function(u,fn,mt){try{fetch(u).then(function(r){return r.blob();}).then(function(b){var fr=new FileReader();fr.onloadend=function(){if(typeof fr.result==='string'&&window.ArcheryNativeShare&&window.ArcheryNativeShare.saveOrShareFile){var resolved=b.type||mt||'application/octet-stream';window.ArcheryNativeShare.saveOrShareFile(fr.result,fn,resolved,'Exportar archivo');}};fr.readAsDataURL(b);}).catch(function(){});}catch(e){}})("
+                        + qUrl + "," + qName + "," + qMime + ");";
+                    webView.evaluateJavascript(blobJs, null);
                     return;
                 }
                 if (url.startsWith("http://") || url.startsWith("https://")) {
@@ -714,10 +797,16 @@ public class MainActivity extends BridgeActivity {
                                     .apply();
                             }
                         }
-                        String urlStr = uri.toString();
-                        if (urlStr.startsWith("https://archery101010-c0bb4.firebaseapp.com/__/auth/handler") ||
-                            urlStr.startsWith("https://archery101010-c0bb4.web.app/__/auth/handler")) {
-                            String targetOrigin = activeAppOrigin != null ? activeAppOrigin : "https://localhost";
+                        String query = uri.getQuery();
+                        boolean isImplicitFragmentAuthCallback =
+                            request.isForMainFrame()
+                            && "/__/auth/handler".equals(path)
+                            && (host.equals("archery101010-c0bb4.firebaseapp.com") || host.equals("archery101010-c0bb4.web.app"))
+                            && (query == null || query.isEmpty());
+                        if (isImplicitFragmentAuthCallback) {
+                            String targetOrigin = "https://archery101010-c0bb4.web.app".equals(activeAppOrigin)
+                                ? "https://archery101010-c0bb4.web.app"
+                                : "https://localhost";
                             String html = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><script>" +
                                 "window.location.replace('" + targetOrigin + "/' + window.location.search + window.location.hash);" +
                                 "</script></head><body style=\"background:#050505\"></body></html>";
@@ -727,8 +816,8 @@ public class MainActivity extends BridgeActivity {
                                 new ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8))
                             );
                         }
-                        // Let Chromium's native HTTP/3 stack fetch remote OTA assets directly without WebViewLocalServer proxy
-                        if (host.equals("archery101010-c0bb4.web.app")) {
+                        // Let Chromium's native HTTP/3 stack fetch remote OTA and Firebase Auth handler assets directly
+                        if (host.equals("archery101010-c0bb4.web.app") || host.equals("archery101010-c0bb4.firebaseapp.com")) {
                             return null;
                         }
                     }
@@ -742,9 +831,12 @@ public class MainActivity extends BridgeActivity {
                         String scheme = uri.getScheme() != null ? uri.getScheme().toLowerCase() : "";
                         String host = uri.getHost() != null ? uri.getHost().toLowerCase() : "";
                         String path = uri.getPath() != null ? uri.getPath() : "";
+                        if (scheme.equals("whatsapp")) {
+                            handleMessagingDeepLinkWithFallback(uri);
+                            return true;
+                        }
                         if (scheme.equals("spotify") ||
                             scheme.equals("market") ||
-                            scheme.equals("whatsapp") ||
                             scheme.equals("mailto") ||
                             scheme.equals("tel") ||
                             host.equals("api.whatsapp.com") ||
@@ -782,22 +874,14 @@ public class MainActivity extends BridgeActivity {
                                     return true;
                                 } catch (Exception ignored) {}
                             }
-                            boolean isTrustedAppOrAuthHost =
-                                host.equals("localhost") ||
-                                host.equals("127.0.0.1") ||
-                                host.equals("archery101010-c0bb4.web.app") ||
-                                host.equals("archery101010-c0bb4.firebaseapp.com") ||
-                                host.equals("accounts.google.com") ||
-                                host.endsWith(".google.com") ||
-                                host.endsWith(".googleusercontent.com") ||
-                                host.equals("accounts.youtube.com");
+                            boolean isTrustedAppOrAuthHost = isTrustedOriginHost(host);
 
                             if (request.isForMainFrame()) {
                                 if (isTrustedAppOrAuthHost) {
                                     return false;
                                 }
                                 // Keep the privileged @JavascriptInterface WebView strictly on app origins;
-                                // open external third-party domains (open.spotify.com, youtube.com, etc.) externally.
+                                // open external third-party domains externally.
                                 if ("http".equals(scheme) || "https".equals(scheme)) {
                                     try {
                                         Intent extIntent = new Intent(Intent.ACTION_VIEW, uri);
@@ -818,12 +902,220 @@ public class MainActivity extends BridgeActivity {
             });
         }
 
-        // Ensure Android WebView respects system window insets (status bar, navigation bar, cutouts) once without duplicating into CSS env(safe-area-inset-*)
+        // Ensure Android WebView respects system bars, display cutouts, and soft keyboard (IME) on Android 15/16 edge-to-edge
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content), (view, insets) -> {
-            androidx.core.graphics.Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            view.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
+            androidx.core.graphics.Insets safeInsets = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars()
+                    | WindowInsetsCompat.Type.displayCutout()
+                    | WindowInsetsCompat.Type.ime()
+            );
+            view.setPadding(safeInsets.left, safeInsets.top, safeInsets.right, safeInsets.bottom);
             return WindowInsetsCompat.CONSUMED;
         });
+    }
+
+    @Override
+    public void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (outState != null && pendingCameraCaptureFile != null) {
+            outState.putString(KEY_PENDING_CAMERA_PATH, pendingCameraCaptureFile.getAbsolutePath());
+        }
+    }
+
+    static boolean isTrustedOriginHost(final String rawHost) {
+        if (rawHost == null || rawHost.isEmpty()) return false;
+        String host = rawHost.toLowerCase(java.util.Locale.ROOT).trim();
+        return "localhost".equals(host)
+            || "127.0.0.1".equals(host)
+            || "archery101010-c0bb4.web.app".equals(host)
+            || "archery101010-c0bb4.firebaseapp.com".equals(host)
+            || "accounts.google.com".equals(host);
+    }
+
+    static String extensionForMimeType(final String mimeType) {
+        if (mimeType == null) return "";
+        String lower = mimeType.toLowerCase(java.util.Locale.ROOT).trim();
+        if (lower.contains("csv") || lower.contains("comma-separated-values")) return ".csv";
+        if (lower.contains("png")) return ".png";
+        if (lower.contains("pdf")) return ".pdf";
+        if (lower.contains("jpeg") || lower.contains("jpg")) return ".jpg";
+        if (lower.contains("json")) return ".json";
+        if (lower.contains("spreadsheetml") || lower.contains("xlsx")) return ".xlsx";
+        if (lower.contains("ms-excel") || lower.contains("xls")) return ".xls";
+        if (lower.contains("text/plain")) return ".txt";
+        return "";
+    }
+
+    static String sanitizeExportFileName(final String rawFileName, final String fallbackExt) {
+        String ext = (fallbackExt != null && fallbackExt.startsWith(".")) ? fallbackExt : "";
+        String baseName = (rawFileName != null && !rawFileName.trim().isEmpty())
+            ? new File(rawFileName.trim()).getName()
+            : "";
+        String cleaned = baseName.replaceAll("[^a-zA-Z0-9._-]", "_");
+        while (cleaned.startsWith(".")) {
+            cleaned = cleaned.substring(1);
+        }
+        if (cleaned.isEmpty() || ".".equals(cleaned) || "..".equals(cleaned)) {
+            cleaned = "Archery101010-" + System.currentTimeMillis() + ext;
+        } else if (!ext.isEmpty() && !cleaned.contains(".")) {
+            cleaned = cleaned + ext;
+        }
+        return cleaned;
+    }
+
+    static String deriveExportFileName(final String url, final String contentDisposition, final String mimeType) {
+        String ext = extensionForMimeType(mimeType);
+        String candidate = "";
+        if (contentDisposition != null && !contentDisposition.trim().isEmpty()) {
+            try {
+                String cdLower = contentDisposition.toLowerCase(java.util.Locale.ROOT);
+                int fnIdx = cdLower.indexOf("filename=");
+                if (fnIdx >= 0) {
+                    String part = contentDisposition.substring(fnIdx + 9).trim();
+                    int semi = part.indexOf(';');
+                    if (semi >= 0) part = part.substring(0, semi).trim();
+                    if (part.startsWith("\"") && part.endsWith("\"") && part.length() >= 2) {
+                        part = part.substring(1, part.length() - 1);
+                    }
+                    candidate = Uri.decode(part);
+                } else {
+                    candidate = URLUtil.guessFileName(url, contentDisposition, mimeType);
+                }
+            } catch (Exception ignored) {}
+        }
+        if (candidate == null || candidate.trim().isEmpty() || candidate.startsWith("downloadfile")) {
+            candidate = "Archery101010-Export-" + System.currentTimeMillis() + ext;
+        }
+        String sanitized = sanitizeExportFileName(candidate, ext);
+        if (!ext.isEmpty()) {
+            String lowerSan = sanitized.toLowerCase(java.util.Locale.ROOT);
+            if (lowerSan.endsWith(".bin") && !".bin".equals(ext)) {
+                sanitized = sanitized.substring(0, sanitized.length() - 4) + ext;
+            } else if (!lowerSan.contains(".")) {
+                sanitized = sanitized + ext;
+            }
+        }
+        return sanitized;
+    }
+
+    private void handleMessagingDeepLinkWithFallback(final Uri uri) {
+        try {
+            Intent directIntent = new Intent(Intent.ACTION_VIEW, uri);
+            directIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(directIntent);
+            return;
+        } catch (Exception ignored) {}
+
+        String textParam = null;
+        String phoneParam = null;
+        try {
+            textParam = uri.getQueryParameter("text");
+            phoneParam = uri.getQueryParameter("phone");
+        } catch (Exception ignored) {}
+
+        try {
+            String cleanPhone = phoneParam != null ? phoneParam.replaceAll("[^0-9]", "") : "";
+            Uri.Builder webFallback = Uri.parse("https://wa.me/" + cleanPhone).buildUpon();
+            if (textParam != null && !textParam.isEmpty()) {
+                webFallback.appendQueryParameter("text", textParam);
+            }
+            Intent browserIntent = new Intent(Intent.ACTION_VIEW, webFallback.build());
+            browserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(browserIntent);
+            return;
+        } catch (Exception ignored) {}
+
+        if (textParam != null && !textParam.isEmpty()) {
+            try {
+                Intent shareText = new Intent(Intent.ACTION_SEND);
+                shareText.setType("text/plain");
+                shareText.putExtra(Intent.EXTRA_TEXT, textParam);
+                Intent chooser = Intent.createChooser(shareText, "Compartir mensaje");
+                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(chooser);
+                return;
+            } catch (Exception ignored) {}
+        }
+
+        runOnUiThread(() -> android.widget.Toast.makeText(
+            MainActivity.this,
+            "Aplicación de mensajería no instalada en este dispositivo",
+            android.widget.Toast.LENGTH_SHORT
+        ).show());
+    }
+
+    private void restorePendingCameraCaptureFile(final Bundle savedInstanceState) {
+        try {
+            String savedPath = null;
+            if (savedInstanceState != null) {
+                savedPath = savedInstanceState.getString(KEY_PENDING_CAMERA_PATH, null);
+            }
+            if (savedPath == null || savedPath.isEmpty()) {
+                savedPath = getSharedPreferences(CAMERA_PREFS, MODE_PRIVATE)
+                    .getString(KEY_PENDING_CAMERA_PATH, null);
+            }
+            if (savedPath != null && !savedPath.isEmpty()) {
+                File candidate = new File(savedPath);
+                if (candidate.exists()) {
+                    pendingCameraCaptureFile = candidate;
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void cleanupPendingCameraCaptureFile() {
+        try {
+            if (pendingCameraCaptureFile != null && pendingCameraCaptureFile.exists()) {
+                pendingCameraCaptureFile.delete();
+            }
+        } catch (Exception ignored) {}
+        pendingCameraCaptureFile = null;
+        try {
+            getSharedPreferences(CAMERA_PREFS, MODE_PRIVATE)
+                .edit()
+                .remove(KEY_PENDING_CAMERA_PATH)
+                .apply();
+        } catch (Exception ignored) {}
+    }
+
+    private void pruneStaleCacheFilesAsync() {
+        new Thread(() -> {
+            try {
+                long now = System.currentTimeMillis();
+                File cacheRoot = getCacheDir();
+                File activeCam = pendingCameraCaptureFile;
+                if (cacheRoot != null && cacheRoot.exists()) {
+                    File[] rootFiles = cacheRoot.listFiles();
+                    if (rootFiles != null) {
+                        for (File f : rootFiles) {
+                            if (f == null || !f.isFile()) continue;
+                            if (activeCam != null && f.getAbsolutePath().equals(activeCam.getAbsolutePath())) continue;
+                            String name = f.getName();
+                            boolean isTempShareOrCam = name.startsWith("archery_camera_")
+                                || name.startsWith("Archery101010-")
+                                || name.endsWith(".png")
+                                || name.endsWith(".jpg")
+                                || name.endsWith(".jpeg");
+                            if (isTempShareOrCam && f.lastModified() > 0L && (now - f.lastModified()) > STALE_CACHE_TTL_MS) {
+                                try { f.delete(); } catch (Exception ignored) {}
+                            }
+                        }
+                    }
+                    File exportsDir = new File(cacheRoot, "exports");
+                    if (exportsDir.exists() && exportsDir.isDirectory()) {
+                        File[] exportFiles = exportsDir.listFiles();
+                        if (exportFiles != null) {
+                            for (File ef : exportFiles) {
+                                if (ef != null && ef.isFile() && ef.lastModified() > 0L
+                                        && (now - ef.lastModified()) > STALE_CACHE_TTL_MS) {
+                                    try { ef.delete(); } catch (Exception ignored) {}
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }, "ArcheryCachePruner").start();
     }
 
     private void sendAccountSuccess(GoogleSignInAccount account) {
@@ -958,6 +1250,12 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception ignored) {}
             });
         }
+
+        @Keep
+        @JavascriptInterface
+        public void exitApp() {
+            runOnUiThread(() -> moveTaskToBack(true));
+        }
     }
 
     @Keep
@@ -969,7 +1267,10 @@ public class MainActivity extends BridgeActivity {
                 cleanBase64 = cleanBase64.substring(commaIdx + 1);
             }
             byte[] imageBytes = Base64.decode(cleanBase64, Base64.DEFAULT);
-            String safeName = (fileName != null && !fileName.isEmpty()) ? fileName : ("Archery101010-" + System.currentTimeMillis() + ".png");
+            String safeName = sanitizeExportFileName(fileName, ".png");
+            if (!safeName.toLowerCase(java.util.Locale.ROOT).endsWith(".png")) {
+                safeName = safeName + ".png";
+            }
             File outFile = new File(getCacheDir(), safeName);
             try (FileOutputStream fos = new FileOutputStream(outFile)) {
                 fos.write(imageBytes);
@@ -1026,8 +1327,7 @@ public class MainActivity extends BridgeActivity {
                     try {
                         startActivity(waIntent);
                     } catch (Exception notInstalled) {
-                        // Fallback to WhatsApp Business or general Android chooser
-                        Intent chooser = Intent.createChooser(waIntent.setPackage(null), "Compartir Planilla por WhatsApp");
+                        Intent chooser = Intent.createChooser(waIntent.setPackage(null), "Compartir planilla");
                         chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         startActivity(chooser);
                     }
@@ -1047,7 +1347,7 @@ public class MainActivity extends BridgeActivity {
                     try {
                         startActivity(waIntent);
                     } catch (Exception notInstalled) {
-                        Intent chooser = Intent.createChooser(waIntent.setPackage(null), "Compartir Planilla por WhatsApp");
+                        Intent chooser = Intent.createChooser(waIntent.setPackage(null), "Compartir planilla");
                         startActivity(chooser);
                     }
                 } catch (Exception ignored) {}
@@ -1070,13 +1370,10 @@ public class MainActivity extends BridgeActivity {
                     if (!exportsDir.exists()) {
                         exportsDir.mkdirs();
                     }
-                    String rawName = (fileName != null && !fileName.trim().isEmpty())
-                        ? fileName.trim()
-                        : ("Archery101010-" + System.currentTimeMillis());
-                    String safeFileName = rawName.replaceAll("[^a-zA-Z0-9._-]", "_");
-                    if (safeFileName.isEmpty() || ".".equals(safeFileName) || "..".equals(safeFileName)) {
-                        safeFileName = "Archery101010-" + System.currentTimeMillis();
-                    }
+                    String safeMime = (mimeType != null && !mimeType.trim().isEmpty())
+                        ? mimeType.trim()
+                        : "application/octet-stream";
+                    String safeFileName = sanitizeExportFileName(fileName, extensionForMimeType(safeMime));
                     File outFile = new File(exportsDir, safeFileName);
                     try (FileOutputStream fos = new FileOutputStream(outFile)) {
                         fos.write(decodedBytes);
@@ -1087,9 +1384,6 @@ public class MainActivity extends BridgeActivity {
                         getPackageName() + ".fileprovider",
                         outFile
                     );
-                    String safeMime = (mimeType != null && !mimeType.trim().isEmpty())
-                        ? mimeType.trim()
-                        : "application/octet-stream";
                     String safeTitle = (title != null && !title.trim().isEmpty())
                         ? title.trim()
                         : safeFileName;
@@ -1115,6 +1409,12 @@ public class MainActivity extends BridgeActivity {
                 try {
                     File photoFile = new File(getCacheDir(), "archery_camera_" + System.currentTimeMillis() + ".jpg");
                     pendingCameraCaptureFile = photoFile;
+                    try {
+                        getSharedPreferences(CAMERA_PREFS, MODE_PRIVATE)
+                            .edit()
+                            .putString(KEY_PENDING_CAMERA_PATH, photoFile.getAbsolutePath())
+                            .commit();
+                    } catch (Exception ignored) {}
                     Uri photoUri = FileProvider.getUriForFile(
                         MainActivity.this,
                         getPackageName() + ".fileprovider",
@@ -1137,6 +1437,9 @@ public class MainActivity extends BridgeActivity {
 
     private void processCapturedCameraPhoto(Intent data) {
         try {
+            if (pendingCameraCaptureFile == null || !pendingCameraCaptureFile.exists()) {
+                restorePendingCameraCaptureFile(null);
+            }
             Bitmap bmp = null;
             int rotationDegrees = 0;
 
@@ -1196,12 +1499,6 @@ public class MainActivity extends BridgeActivity {
             String base64Jpeg = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
             final String dataUrl = "data:image/jpeg;base64," + base64Jpeg;
 
-            try {
-                if (pendingCameraCaptureFile != null && pendingCameraCaptureFile.exists()) {
-                    pendingCameraCaptureFile.delete();
-                }
-            } catch (Exception ignored) {}
-
             runOnUiThread(() -> {
                 if (getBridge() != null && getBridge().getWebView() != null) {
                     JSONObject detail = new JSONObject();
@@ -1212,7 +1509,10 @@ public class MainActivity extends BridgeActivity {
                     getBridge().getWebView().evaluateJavascript(js, null);
                 }
             });
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        } finally {
+            cleanupPendingCameraCaptureFile();
+        }
     }
 
     @Keep
@@ -1315,7 +1615,7 @@ public class MainActivity extends BridgeActivity {
                             sessionTrackingWakeLock.setReferenceCounted(false);
                         }
                         if (!sessionTrackingWakeLock.isHeld()) {
-                            sessionTrackingWakeLock.acquire(4 * 60 * 60 * 1000L);
+                            sessionTrackingWakeLock.acquire(SESSION_WAKELOCK_TIMEOUT_MS);
                         }
                     }
                 } catch (Exception ignored) {}
@@ -1334,7 +1634,7 @@ public class MainActivity extends BridgeActivity {
                     }
                 } catch (Exception ignored) {}
 
-                // 2. Request OS runtime location permission if needed, then bind GPS + Fused providers
+                // 2. Request OS runtime location permission if needed, then bind single clean provider + Foreground Service
                 boolean fineGranted = ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
                 boolean coarseGranted = ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
                 if (fineGranted || coarseGranted) {
@@ -1357,6 +1657,7 @@ public class MainActivity extends BridgeActivity {
                 hasGpsFix = false;
                 lastValidGpsLocation = null;
                 lastRawFixLocation = null;
+                LocationTrackingService.stopSafely(MainActivity.this);
                 try {
                     if (sessionTrackingWakeLock != null && sessionTrackingWakeLock.isHeld()) {
                         sessionTrackingWakeLock.release();
@@ -1388,23 +1689,56 @@ public class MainActivity extends BridgeActivity {
             boolean coarseGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
             if (!fineGranted && !coarseGranted) return;
 
-            if (nativeLocationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                nativeLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0.5f, nativeLocationListener, Looper.getMainLooper());
+            if (isSessionTrackingActive) {
+                LocationTrackingService.startIfPermitted(this);
             }
-            if (nativeLocationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                nativeLocationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 1000L, 0.5f, nativeLocationListener, Looper.getMainLooper());
+
+            // Prefer "fused" (API 31+) or GPS_PROVIDER exclusively so multi-provider ping-pong never causes distance jitter
+            boolean providerBound = false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                try {
+                    if (nativeLocationManager.isProviderEnabled(LocationManager.FUSED_PROVIDER)) {
+                        nativeLocationManager.requestLocationUpdates(
+                            LocationManager.FUSED_PROVIDER,
+                            1000L,
+                            0.5f,
+                            nativeLocationListener,
+                            Looper.getMainLooper()
+                        );
+                        providerBound = true;
+                    }
+                } catch (Exception ignored) {}
             }
-            try {
-                if (nativeLocationManager.isProviderEnabled("fused")) {
-                    nativeLocationManager.requestLocationUpdates("fused", 1000L, 0.5f, nativeLocationListener, Looper.getMainLooper());
-                }
-            } catch (Exception ignored) {}
+            if (!providerBound && fineGranted && nativeLocationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                nativeLocationManager.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER,
+                    1000L,
+                    0.5f,
+                    nativeLocationListener,
+                    Looper.getMainLooper()
+                );
+                providerBound = true;
+            }
+            if (!providerBound && nativeLocationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                nativeLocationManager.requestLocationUpdates(
+                    LocationManager.NETWORK_PROVIDER,
+                    1000L,
+                    0.5f,
+                    nativeLocationListener,
+                    Looper.getMainLooper()
+                );
+            }
             hasGpsFix = (lastValidGpsLocation != null);
             emitLocationSnapshot();
         } catch (Exception ignored) {}
     }
 
     private void emitLocationSnapshot() {
+        if (isSessionTrackingActive && sessionTrackingWakeLock != null) {
+            try {
+                sessionTrackingWakeLock.acquire(SESSION_WAKELOCK_TIMEOUT_MS);
+            } catch (Exception ignored) {}
+        }
         pushMovementToWebView();
     }
 
@@ -1433,6 +1767,40 @@ public class MainActivity extends BridgeActivity {
             obj.put("_ackCmdSeq", lastWatchCmdSeq);
             if (!obj.has("sessionActive")) {
                 obj.put("sessionActive", true);
+            }
+            JSONObject nestedPayload = obj.optJSONObject("payload");
+            String incomingPairing = obj.optString(
+                "pairingCode",
+                nestedPayload != null ? nestedPayload.optString("pairingCode", "") : ""
+            ).trim();
+            String incomingToken = obj.optString(
+                "sessionToken",
+                nestedPayload != null ? nestedPayload.optString("sessionToken", "") : ""
+            ).trim();
+            if (!incomingPairing.isEmpty() && !incomingPairing.equals(lastWatchPairingCode) && incomingToken.isEmpty()) {
+                lastWatchSessionToken = "";
+            }
+            if (!incomingPairing.isEmpty()) {
+                lastWatchPairingCode = incomingPairing;
+            }
+            if (incomingToken.matches("^[A-Za-z0-9_-]{32,64}$")) {
+                lastWatchSessionToken = incomingToken;
+                obj.put("sessionToken", incomingToken);
+                if (nestedPayload != null) {
+                    nestedPayload.put("sessionToken", incomingToken);
+                }
+                try {
+                    getSharedPreferences(WATCH_BRIDGE_PREFS, MODE_PRIVATE)
+                        .edit()
+                        .putString("lastWatchSessionToken", incomingToken)
+                        .putString("lastWatchPairingCode", lastWatchPairingCode)
+                        .apply();
+                } catch (Exception ignored) {}
+            } else if (lastWatchSessionToken != null && lastWatchSessionToken.matches("^[A-Za-z0-9_-]{32,64}$")) {
+                obj.put("sessionToken", lastWatchSessionToken);
+                if (nestedPayload != null && !nestedPayload.has("sessionToken")) {
+                    nestedPayload.put("sessionToken", lastWatchSessionToken);
+                }
             }
             return obj.toString();
         } catch (Exception e) {
@@ -1466,12 +1834,17 @@ public class MainActivity extends BridgeActivity {
         } catch (Exception ignored) {}
     }
 
-    private int scorePointsFromLabel(final String label) {
-        if ("X".equalsIgnoreCase(label) || "10".equals(label)) return 10;
-        if ("M".equalsIgnoreCase(label) || label == null || label.isEmpty()) return 0;
+    static int scorePointsFromLabel(final String label) {
+        if (label == null) return 0;
+        String trimmed = label.trim();
+        if (trimmed.isEmpty() || "-".equals(trimmed) || "—".equals(trimmed) || "M".equalsIgnoreCase(trimmed)) {
+            return 0;
+        }
+        if ("X".equalsIgnoreCase(trimmed) || "10".equals(trimmed)) return 10;
         try {
-            return Integer.parseInt(label);
-        } catch (Exception e) {
+            int val = Integer.parseInt(trimmed);
+            return Math.max(0, Math.min(10, val));
+        } catch (NumberFormatException e) {
             return 0;
         }
     }
@@ -1484,6 +1857,10 @@ public class MainActivity extends BridgeActivity {
                 : new JSONObject();
             if (state.has("payload") && state.optJSONObject("payload") != null) {
                 state = state.optJSONObject("payload");
+            }
+            if (lastWatchSessionToken != null && lastWatchSessionToken.matches("^[A-Za-z0-9_-]{32,64}$")
+                    && !state.has("sessionToken")) {
+                state.put("sessionToken", lastWatchSessionToken);
             }
 
             long now = System.currentTimeMillis();
@@ -1603,7 +1980,7 @@ public class MainActivity extends BridgeActivity {
 
     private String buildWatchConnectionStatusJson() {
         try {
-            String appVer = "2.75";
+            String appVer = "2.159";
             try {
                 String vName = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
                 if (vName != null && !vName.isEmpty()) {
@@ -1850,25 +2227,61 @@ public class MainActivity extends BridgeActivity {
                 getBridge().getWebView().evaluateJavascript(js, result -> {
                     if (result == null || !result.contains("DELIVERED")) {
                         if (!"REQUEST_STATE".equals(finalCmdType)) {
-                            synchronized (pendingWatchCommands) {
-                                if (pendingWatchCommands.size() < 100 && !pendingWatchCommands.contains(payload)) {
-                                    pendingWatchCommands.add(payload);
-                                }
-                            }
+                            enqueueDurableWatchCommand(payload);
                         }
                     }
                 });
             } else if (!"REQUEST_STATE".equals(finalCmdType)) {
-                synchronized (pendingWatchCommands) {
-                    if (pendingWatchCommands.size() < 100 && !pendingWatchCommands.contains(payload)) {
-                        pendingWatchCommands.add(payload);
-                    }
-                }
+                enqueueDurableWatchCommand(payload);
             }
         });
     }
 
+    private void enqueueDurableWatchCommand(final String payload) {
+        if (payload == null || payload.isEmpty()) return;
+        synchronized (pendingWatchCommands) {
+            if (pendingWatchCommands.size() < 100 && !pendingWatchCommands.contains(payload)) {
+                pendingWatchCommands.add(payload);
+            }
+            persistPendingWatchCommandsLocked();
+        }
+    }
+
+    private void persistPendingWatchCommandsLocked() {
+        try {
+            JSONArray arr = new JSONArray();
+            String existingRaw = getSharedPreferences(WATCH_BRIDGE_PREFS, MODE_PRIVATE)
+                .getString("pendingWatchCommandsJson", "[]");
+            Set<String> merged = new LinkedHashSet<>();
+            if (existingRaw != null && !existingRaw.isEmpty() && !"[]".equals(existingRaw)) {
+                try {
+                    JSONArray existingArr = new JSONArray(existingRaw);
+                    for (int i = 0; i < existingArr.length() && merged.size() < 100; i++) {
+                        String item = existingArr.optString(i, "");
+                        if (item != null && !item.isEmpty()) merged.add(item);
+                    }
+                } catch (Exception ignored) {}
+            }
+            for (String item : pendingWatchCommands) {
+                if (item != null && !item.isEmpty() && merged.size() < 100) {
+                    merged.add(item);
+                }
+            }
+            for (String item : merged) {
+                arr.put(item);
+            }
+            getSharedPreferences(WATCH_BRIDGE_PREFS, MODE_PRIVATE)
+                .edit()
+                .putString("pendingWatchCommandsJson", arr.toString())
+                .apply();
+        } catch (Exception ignored) {}
+    }
+
     private void flushPendingWatchCommandsToWebView() {
+        if (!isWebWatchListenerReady || bridge == null || bridge.getWebView() == null) {
+            return;
+        }
+
         try {
             String persistedQueue = getSharedPreferences(WATCH_BRIDGE_PREFS, MODE_PRIVATE)
                 .getString("pendingWatchCommandsJson", "[]");
@@ -1889,10 +2302,6 @@ public class MainActivity extends BridgeActivity {
             }
         } catch (Exception ignored) {}
 
-        if (!isWebWatchListenerReady) {
-            return;
-        }
-
         final List<String> toFlush;
         synchronized (pendingWatchCommands) {
             if (pendingWatchCommands.isEmpty()) return;
@@ -1900,30 +2309,23 @@ public class MainActivity extends BridgeActivity {
             pendingWatchCommands.clear();
         }
         runOnUiThread(() -> {
-            if (getBridge() != null && getBridge().getWebView() != null) {
+            if (bridge != null && bridge.getWebView() != null) {
+                final WebView wv = bridge.getWebView();
                 for (final String cmdPayload : toFlush) {
                     String safePayload = JSONObject.quote(cmdPayload);
                     String js =
                         "(function() { if (window.__archeryWatchListenerReady === true && typeof window.__onNativeWatchMessage === 'function') { window.__onNativeWatchMessage(" +
                         safePayload +
                         "); return 'DELIVERED'; } return 'PENDING'; })()";
-                    getBridge().getWebView().evaluateJavascript(js, result -> {
+                    wv.evaluateJavascript(js, result -> {
                         if (result == null || !result.contains("DELIVERED")) {
-                            synchronized (pendingWatchCommands) {
-                                if (pendingWatchCommands.size() < 100 && !pendingWatchCommands.contains(cmdPayload)) {
-                                    pendingWatchCommands.add(cmdPayload);
-                                }
-                            }
+                            enqueueDurableWatchCommand(cmdPayload);
                         }
                     });
                 }
             } else {
-                synchronized (pendingWatchCommands) {
-                    for (String cmdPayload : toFlush) {
-                        if (pendingWatchCommands.size() < 100 && !pendingWatchCommands.contains(cmdPayload)) {
-                            pendingWatchCommands.add(cmdPayload);
-                        }
-                    }
+                for (String cmdPayload : toFlush) {
+                    enqueueDurableWatchCommand(cmdPayload);
                 }
             }
         });
@@ -1931,11 +2333,16 @@ public class MainActivity extends BridgeActivity {
 
     private void initWearableListener() {
         try {
-            String savedSnapshot = getSharedPreferences(WATCH_BRIDGE_PREFS, MODE_PRIVATE)
-                .getString("lastWatchSnapshotJson", "");
+            android.content.SharedPreferences wPrefs = getSharedPreferences(WATCH_BRIDGE_PREFS, MODE_PRIVATE);
+            String savedSnapshot = wPrefs.getString("lastWatchSnapshotJson", "");
             if (savedSnapshot != null && !savedSnapshot.isEmpty() && lastWatchSnapshotJson.isEmpty()) {
                 lastWatchSnapshotJson = savedSnapshot;
             }
+            String savedToken = wPrefs.getString("lastWatchSessionToken", "");
+            if (savedToken != null && savedToken.matches("^[A-Za-z0-9_-]{32,64}$")) {
+                lastWatchSessionToken = savedToken;
+            }
+            lastWatchPairingCode = wPrefs.getString("lastWatchPairingCode", "");
         } catch (Exception ignored) {}
 
         try {
@@ -2092,6 +2499,11 @@ public class MainActivity extends BridgeActivity {
             runOnUiThread(() -> {
                 if (spotifyRemote != null && spotifyRemote.isConnected()) {
                     spotifyRemote.getPlayerApi().play(spotifyUri);
+                } else if (resolveSpotifyClientId(null).isEmpty()) {
+                    emitSpotifyRemoteState(false, "MISSING_CLIENT_ID", null);
+                    if (spotifyUri != null && !spotifyUri.isEmpty()) {
+                        openInSpotifyApp(spotifyUri, null);
+                    }
                 } else {
                     pendingSpotifyUri = spotifyUri;
                     connectSpotifyRemote(null);
@@ -2205,14 +2617,16 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void connectSpotifyRemote(String clientIdFromJs) {
-        if (!isSpotifyAppInstalledInternal()) {
-            emitSpotifyRemoteState(false, "SPOTIFY_NOT_INSTALLED", null);
-            openPhonePlayStoreListing("com.spotify.music");
-            return;
-        }
         final String clientId = resolveSpotifyClientId(clientIdFromJs);
         if (clientId.isEmpty()) {
+            spotifyConnecting = false;
             emitSpotifyRemoteState(false, "MISSING_CLIENT_ID", null);
+            return;
+        }
+        if (!isSpotifyAppInstalledInternal()) {
+            spotifyConnecting = false;
+            emitSpotifyRemoteState(false, "SPOTIFY_NOT_INSTALLED", null);
+            openPhonePlayStoreListing("com.spotify.music");
             return;
         }
         if (spotifyRemote != null && spotifyRemote.isConnected()) {
@@ -2424,8 +2838,47 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    private boolean shouldShowBlePermissionRationaleInternal() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                return shouldShowRequestPermissionRationale(Manifest.permission.BLUETOOTH_SCAN)
+                    || shouldShowRequestPermissionRationale(Manifest.permission.BLUETOOTH_CONNECT);
+            }
+            return shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void openAppPermissionSettingsInternal() {
+        try {
+            Intent settingsIntent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            settingsIntent.setData(Uri.fromParts("package", getPackageName(), null));
+            settingsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(settingsIntent);
+            android.widget.Toast.makeText(
+                this,
+                "Activa el permiso de dispositivos cercanos en Ajustes",
+                android.widget.Toast.LENGTH_LONG
+            ).show();
+        } catch (Exception ignored) {}
+    }
+
     private void requestBlePermissionsInternal(int nextAction) {
         pendingBleActionAfterPermission = nextAction;
+        int deniedCount = 0;
+        try {
+            deniedCount = getSharedPreferences(BLE_HR_PREFS, MODE_PRIVATE).getInt("ble_perm_denied_count", 0);
+        } catch (Exception ignored) {}
+        if (deniedCount >= 2 && !shouldShowBlePermissionRationaleInternal()) {
+            pendingBleActionAfterPermission = 0;
+            bleHrState = "error";
+            bleHrErrorCode = "PERMISSION_DENIED";
+            emitBleHrStatusToWebView(null);
+            openAppPermissionSettingsInternal();
+            return;
+        }
         if (blePermissionLauncher == null) return;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             blePermissionLauncher.launch(new String[]{
@@ -2472,6 +2925,7 @@ public class MainActivity extends BridgeActivity {
             obj.put("deviceId", bleHrDeviceId != null ? bleHrDeviceId : "");
             obj.put("deviceName", bleHrDeviceName != null ? bleHrDeviceName : "");
             obj.put("errorCode", bleHrErrorCode != null ? bleHrErrorCode : "");
+            obj.put("canOpenSettings", "PERMISSION_DENIED".equals(bleHrErrorCode));
             if (bleBatteryPct != null) {
                 obj.put("batteryPct", bleBatteryPct);
             } else {
@@ -3483,6 +3937,12 @@ public class MainActivity extends BridgeActivity {
             } catch (Exception ignored) {}
             return buildBleHrStatusJsonObject(null).toString();
         }
+
+        @Keep
+        @JavascriptInterface
+        public void openAppSettings() {
+            runOnUiThread(() -> openAppPermissionSettingsInternal());
+        }
     }
 
     @Override
@@ -3500,6 +3960,12 @@ public class MainActivity extends BridgeActivity {
             activeInstanceRef = new WeakReference<>(null);
         }
         isSessionTrackingActive = false;
+        LocationTrackingService.stopSafely(this);
+        try {
+            if (sessionTrackingWakeLock != null && sessionTrackingWakeLock.isHeld()) {
+                sessionTrackingWakeLock.release();
+            }
+        } catch (Exception ignored) {}
         try {
             bleUserRequestedDisconnect = true;
             bleMainHandler.removeCallbacks(bleReconnectRunnable);

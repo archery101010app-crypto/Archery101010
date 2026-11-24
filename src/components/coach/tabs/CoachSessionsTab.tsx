@@ -202,8 +202,8 @@ export default function CoachSessionsTab({ athletes, sessions }: CoachSessionsTa
       navigator.share({ text: fullMessage }).catch(() => {});
       return;
     }
-    const url = `whatsapp://send?text=${encodeURIComponent(fullMessage)}`;
-    window.location.href = url;
+    const url = `https://wa.me/?text=${encodeURIComponent(fullMessage)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   return (

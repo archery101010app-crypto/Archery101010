@@ -46,7 +46,16 @@ export default function BannerWidget({ campaign, onSlideClick, onClose, showClos
     if (target.closest(".close-btn")) return;
 
     onSlideClick(currentSlide.id, currentSlide.linkUrl);
-    window.open(currentSlide.linkUrl, "_blank", "noopener,noreferrer");
+    if (currentSlide.linkUrl && typeof window !== "undefined") {
+      try {
+        const parsed = new URL(currentSlide.linkUrl.trim(), window.location.origin);
+        if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+          window.open(parsed.href, "_blank", "noopener,noreferrer");
+        }
+      } catch {
+        // Ignore malformed or non-HTTP URLs
+      }
+    }
   };
 
   const slideVariants = {

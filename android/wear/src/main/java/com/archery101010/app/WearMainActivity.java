@@ -1,7 +1,6 @@
 package com.archery101010.app;
 
 import android.Manifest;
-import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -24,9 +23,6 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.media.AudioFormat;
-import android.media.AudioRecord;
-import android.media.MediaRecorder;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -38,6 +34,8 @@ import android.view.GestureDetector;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
+import androidx.activity.ComponentActivity;
+import androidx.activity.OnBackPressedCallback;
 import com.google.android.gms.wearable.DataClient;
 import com.google.android.gms.wearable.DataEvent;
 import com.google.android.gms.wearable.DataEventBuffer;
@@ -63,6 +61,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -79,7 +78,7 @@ import java.util.concurrent.Executors;
  *      3: Session Summary & Save Session
  *      4: 6-Digit Cloud Code Pairing
  */
-public class WearMainActivity extends Activity implements SensorEventListener {
+public class WearMainActivity extends ComponentActivity implements SensorEventListener {
     private static volatile WeakReference<WearMainActivity> activeInstanceRef = new WeakReference<>(null);
 
     public static WearMainActivity getActiveInstance() {
@@ -116,10 +115,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private static final String PREFS_NAME = "archery_101010_wear_prefs";
-    private static final int REQ_MIC_AUTO_SHOT = 1010;
     private static final int SENSOR_RATE_100HZ_US = 10_000; // 100 Hz (10,000 us) — no HIGH_SAMPLING_RATE permission needed
-    private static final int AUDIO_SAMPLE_RATE_HZ = 16_000;
-    private static final int AUDIO_FRAME_SAMPLES = 160; // 10 ms real-time transient frame
+    private static final long WAKELOCK_RENEW_TIMEOUT_MS = 30L * 60L * 1000L; // Capped 30-min active session lease
+    private static final int MAX_ANALYSIS_SHOT_JSON_CHARS = 3500;
 
     private SensorManager sensorManager;
     private Sensor accelerometer;
@@ -128,18 +126,15 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private PowerManager.WakeLock wakeLock;
     private boolean isSensorRegistered = false;
     private boolean isSensorHighRateMode = false;
+    private int registeredSensorMode = 0; // 0 = off, 1 = low-power background, 2 = 50Hz foreground, 3 = 100Hz analysis
+    private volatile boolean isWatchSessionActive = false;
+    private volatile boolean isActivityResumed = false;
     private volatile long lastWatchTapMs = 0L;
     private double stepGravityMag = SensorManager.GRAVITY_EARTH;
     private double stepSmoothLin = 0.0;
     private boolean stepArmedForPeak = true;
     private boolean stepPeakSeen = false;
     private double stepLastMeanIv = 580.0;
-
-    // Dual-Key Real-Time Acoustic String-Snap DSP state (100% on-device volatile memory, never recorded/saved)
-    private volatile boolean isAcousticAnalyzerRunning = false;
-    private Thread acousticAnalyzerThread = null;
-    private volatile long lastVerifiedAcousticSnapMs = 0L;
-    private volatile long micDeniedNoticeUntilMs = 0L;
 
     private int screenIndex = 0; // 0..4
     private int arrowCount = 0;
@@ -272,7 +267,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                             || manualAnalysisRecording
                             || !currentSessionId.isEmpty()
                             || (now - lastActivityMs) < 30 * 60_000L;
-                    if (hasPairingCode && pairingCode.length() == 6 && !isEditingCode && activeForCloudHr
+                    if (canSyncWithCloudNow() && activeForCloudHr
                             && (bpm != lastCloudHrPushedBpm || (now - lastCloudHrPushMs) >= HR_CLOUD_PUSH_INTERVAL_MS)) {
                         lastCloudHrPushMs = now;
                         lastCloudHrPushedBpm = bpm;
@@ -333,7 +328,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 sendHeartRateToPhone(bpm, "ok");
                 runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
             }
-            if (hasPairingCode && pairingCode.length() == 6 && !isEditingCode
+            if (canSyncWithCloudNow()
                     && (isFirstReading
                         || (Math.abs(bpm - lastCloudHrPushedBpm) >= 2 && (now - lastCloudHrPushMs) >= 2000L)
                         || (now - lastCloudHrPushMs) >= HR_CLOUD_PUSH_INTERVAL_MS)) {
@@ -519,7 +514,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         } else if (isLocalHeartRateFresh()) {
             lastHrSentMs = now;
             sendHeartRateToPhone(localSensorHrBpm, "ok");
-            if (hasPairingCode && pairingCode.length() == 6 && !isEditingCode) {
+            if (canSyncWithCloudNow()) {
                 lastCloudHrPushMs = now;
                 lastCloudHrPushedBpm = localSensorHrBpm;
                 lastCloudHeartbeatTouchMs = now;
@@ -614,15 +609,31 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private int distanceMeters = 18;
     private float drawWeightLbs = 38f;
 
-    // 6-Digit Cloud Pairing state
+    // 6-Digit Cloud Pairing -> 256-Bit Session Token Handshake state
     private final int[] pairingDigits = new int[]{1, 0, 1, 0, 1, 0};
     private boolean hasPairingCode = false;
     private String pairingCode = "";
+    private String cloudSessionToken = "";
+    private String watchDeviceId = "";
+    private final List<String> pendingCloudCommands = new ArrayList<>();
     private boolean isEditingCode = false;
     private int editDigitPos = 0;
     private volatile boolean isCloudSynced = false;
-    private volatile String cloudLinkStatus = ""; // "" | LINKING | SYNCED | NOT_FOUND | NO_NET
+    // "" | LINKING | SYNCED | EXPIRED_OR_INVALID | NOT_FOUND | NO_NET
+    private volatile String cloudLinkStatus = "";
     private final ExecutorService cloudExecutor = Executors.newSingleThreadExecutor();
+
+    private boolean isValidSessionTokenFormat(String token) {
+        return token != null && token.matches("^[A-Za-z0-9_-]{32,64}$");
+    }
+
+    private boolean isTerminalCloudErrorStatus() {
+        return "EXPIRED_OR_INVALID".equals(cloudLinkStatus) || "NOT_FOUND".equals(cloudLinkStatus);
+    }
+
+    private boolean canSyncWithCloudNow() {
+        return hasPairingCode && pairingCode.length() == 6 && !isEditingCode && !isTerminalCloudErrorStatus();
+    }
 
     // Connection & sync race-condition guards
     private volatile boolean isPhoneConnected = false;
@@ -639,6 +650,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private volatile long pendingCmdSeq = 0L;
     private volatile long lastAckedCmdSeq = 0L;
     private int mPendingUnackedDelta = 0;
+    private volatile int pendingUnackedEnd = 0;
+    private volatile String pendingCloudCmdId = "";
     private long mLastDataItemNonceMs = 0L;
 
     private MessageClient.OnMessageReceivedListener messageListener = null;
@@ -648,11 +661,21 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         @Override
         public void run() {
             long now = System.currentTimeMillis();
+            if (!isActivityResumed && (!isWatchSessionActive || (now - lastActivityMs) >= WAKELOCK_RENEW_TIMEOUT_MS)) {
+                heartbeatHandler.removeCallbacks(heartbeatRunnable);
+                stopHeartRateStreaming();
+                unregisterImuSensors();
+                releaseWakeLockSafely();
+                return;
+            }
+            if (isWatchSessionActive) {
+                acquireOrRenewWakeLockIfNeeded();
+            }
             sendToPhone("{\"type\":\"REQUEST_STATE\"}");
             if (stepsCount > lastSyncedStepsCount) {
                 syncTelemetryToPhone();
             }
-            if (hasPairingCode && pairingCode.length() == 6 && !isEditingCode) {
+            if (canSyncWithCloudNow()) {
                 long cloudIntervalMs = getAdaptiveCloudPollIntervalMs(now);
                 if (lastCloudPollMs == 0L || (now - lastCloudPollMs) >= (cloudIntervalMs - 150L)) {
                     pollFirestoreCloud();
@@ -701,8 +724,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         lastActivityMs = now;
         if (isWriteAction) {
             lastLocalActionTimeMs = now;
-        } else if (hasPairingCode && pairingCode.length() == 6 && !isEditingCode
-                && (now - lastLocalActionTimeMs) >= 3_500L) {
+        } else if (canSyncWithCloudNow() && (now - lastLocalActionTimeMs) >= 3_500L) {
             long targetIntervalMs = getAdaptiveCloudPollIntervalMs(now);
             if (lastCloudPollMs == 0L || (now - lastCloudPollMs) >= targetIntervalMs) {
                 pollFirestoreCloud();
@@ -712,8 +734,15 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private WearCanvasView canvasView;
-    private boolean isBackCallbackRegistered = false;
-    private Object wearBackInvokedCallback = null;
+    private final OnBackPressedCallback wearBackPressedCallback = new OnBackPressedCallback(false) {
+        @Override
+        public void handleOnBackPressed() {
+            if (!handleWatchBackNavigation()) {
+                setEnabled(false);
+                getOnBackPressedDispatcher().onBackPressed();
+            }
+        }
+    };
 
     private final Runnable manualTimerRunnable = new Runnable() {
         @Override
@@ -745,10 +774,13 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         if (!analysisMode) return;
         long now = System.currentTimeMillis();
         if (manualAnalysisRecording) return;
+        isWatchSessionActive = true;
         manualAnalysisRecording = true;
         manualAnalysisStartMs = now;
         pendingShotActive = false;
         analysisPage = 0;
+        acquireOrRenewWakeLockIfNeeded();
+        syncShotDetectionSensors();
         markUserActivity(true);
         triggerHaptic(60);
         heartbeatHandler.removeCallbacks(manualTimerRunnable);
@@ -810,12 +842,18 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private boolean handleWatchBackNavigation() {
         if (isEditingCode) {
             isEditingCode = false;
-        } else if (analysisMode && analysisPage > 0) {
-            analysisPage = 0;
-        } else if (analysisMode && analysisPage == 0) {
-            toggleManualAnalysisFromWatchHardware();
-            return true;
-        } else if (!analysisMode && screenIndex > 0) {
+        } else if (analysisMode) {
+            if (manualAnalysisRecording) {
+                stopManualAnalysisCapture(true);
+                return true;
+            } else if (analysisPage > 0) {
+                analysisPage = 0;
+            } else {
+                analysisMode = false;
+                analysisAutoMode = false;
+                syncShotDetectionSensors();
+            }
+        } else if (screenIndex > 0) {
             screenIndex = screenIndex - 1;
         } else {
             return false;
@@ -823,7 +861,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         markUserActivity(false);
         triggerHaptic(20);
         syncBackNavigationCallback();
-        if (canvasView != null) canvasView.invalidate();
+        if (canvasView != null) {
+            canvasView.requestLayout();
+            canvasView.invalidate();
+        }
         return true;
     }
 
@@ -865,6 +906,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     if (!isEditingCode) {
                         isEditingCode = true;
                         editDigitPos = 0;
+                        syncBackNavigationCallback();
                         markUserActivity(true);
                         triggerHaptic(20);
                         if (canvasView != null) canvasView.invalidate();
@@ -880,21 +922,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 return true;
             }
         }
-        if (keyCode == KeyEvent.KEYCODE_BACK && analysisMode && analysisPage == 0) {
-            toggleManualAnalysisFromWatchHardware();
-            return true;
-        }
         return false;
-    }
-
-    @Override
-    public boolean dispatchKeyEvent(KeyEvent event) {
-        if (event != null && event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
-            if (handlePhysicalWatchKeyAction(event.getKeyCode())) {
-                return true;
-            }
-        }
-        return super.dispatchKeyEvent(event);
     }
 
     @Override
@@ -936,7 +964,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     syncBackNavigationCallback();
                     markUserActivity(false);
                     triggerHaptic(15);
-                    if (canvasView != null) canvasView.invalidate();
+                    if (canvasView != null) {
+                        canvasView.requestLayout();
+                        canvasView.invalidate();
+                    }
                     return true;
                 }
             }
@@ -945,62 +976,82 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private void syncBackNavigationCallback() {
-        if (Build.VERSION.SDK_INT >= 33) {
-            boolean shouldRegister = canHandleWatchBackNavigation();
-            if (shouldRegister && !isBackCallbackRegistered) {
-                try {
-                    if (wearBackInvokedCallback == null) {
-                        wearBackInvokedCallback = (android.window.OnBackInvokedCallback) this::handleWatchBackNavigation;
-                    }
-                    getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
-                            android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
-                            (android.window.OnBackInvokedCallback) wearBackInvokedCallback
-                    );
-                    isBackCallbackRegistered = true;
-                } catch (Throwable ignored) {}
-            } else if (!shouldRegister && isBackCallbackRegistered && wearBackInvokedCallback != null) {
-                try {
-                    getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(
-                            (android.window.OnBackInvokedCallback) wearBackInvokedCallback
-                    );
-                } catch (Throwable ignored) {}
-                isBackCallbackRegistered = false;
-            }
+        wearBackPressedCallback.setEnabled(canHandleWatchBackNavigation());
+    }
+
+    private void acquireOrRenewWakeLockIfNeeded() {
+        if (wakeLock == null) return;
+        try {
+            wakeLock.acquire(WAKELOCK_RENEW_TIMEOUT_MS);
+        } catch (Exception ignored) {}
+    }
+
+    private void releaseWakeLockSafely() {
+        if (wakeLock != null && wakeLock.isHeld()) {
+            try {
+                wakeLock.release();
+            } catch (Exception ignored) {}
         }
     }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public void onBackPressed() {
-        if (handleWatchBackNavigation()) {
-            return;
+    private synchronized void unregisterImuSensors() {
+        if (sensorManager != null && isSensorRegistered) {
+            try {
+                sensorManager.unregisterListener(this);
+            } catch (Exception ignored) {}
         }
-        super.onBackPressed();
+        isSensorRegistered = false;
+        isSensorHighRateMode = false;
+        registeredSensorMode = 0;
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         activeInstanceRef = new WeakReference<>(this);
+        isActivityResumed = true;
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        getOnBackPressedDispatcher().addCallback(this, wearBackPressedCallback);
 
         try {
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
             if (pm != null) {
                 wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Archery101010::WearSessionWakeLock");
                 wakeLock.setReferenceCounted(false);
-                wakeLock.acquire(4 * 60 * 60 * 1000L);
             }
         } catch (Exception ignored) {}
 
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        watchDeviceId = prefs.getString("watchDeviceId", "");
+        if (watchDeviceId == null || watchDeviceId.trim().isEmpty() || watchDeviceId.length() > 80) {
+            watchDeviceId = "WEAR-" + UUID.randomUUID().toString();
+            prefs.edit().putString("watchDeviceId", watchDeviceId).apply();
+        }
         currentSessionId = prefs.getString("currentSessionId", "");
-        String savedCode = prefs.getString("pairingCode", "");
-        if (savedCode != null && savedCode.length() == 6) {
+        String savedCode = prefs.getString("cloudPairingCode", prefs.getString("pairingCode", ""));
+        if (savedCode != null && savedCode.matches("^[0-9]{6}$")) {
             pairingCode = savedCode;
             hasPairingCode = true;
             parsePairingDigitsFromString(savedCode);
         }
+        String savedToken = prefs.getString("cloudSessionToken", "");
+        if (isValidSessionTokenFormat(savedToken)) {
+            cloudSessionToken = savedToken;
+        }
+        try {
+            String rawQueue = prefs.getString("pendingCloudCommandsJson", "[]");
+            JSONArray qArr = new JSONArray(rawQueue);
+            synchronized (pendingCloudCommands) {
+                pendingCloudCommands.clear();
+                for (int i = 0; i < qArr.length() && pendingCloudCommands.size() < 50; i++) {
+                    String item = qArr.optString(i, "");
+                    if (item != null && !item.isEmpty()) {
+                        pendingCloudCommands.add(item);
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
         arrowCount = prefs.getInt("arrowCount", 0);
         totalScore = prefs.getInt("totalScore", 0);
         totalScoredArrows = prefs.getInt("totalScoredArrows", 0);
@@ -1009,6 +1060,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         distanceWalkedM = prefs.getFloat("walkedMeters", 0f);
         syncedArrowsPerEnd = Math.max(1, prefs.getInt("syncedArrowsPerEnd", 6));
         syncedEndsCount = Math.max(1, prefs.getInt("syncedEndsCount", 12));
+        isWatchSessionActive = prefs.getBoolean("sessionActive", !currentSessionId.isEmpty() || arrowCount > 0 || totalScore > 0);
+        if (isWatchSessionActive) {
+            acquireOrRenewWakeLockIfNeeded();
+        }
         autoDetectEnabled = false;
         prefs.edit().putBoolean("autoDetectEnabled_v2", false).apply();
         sensitivityLevel = Math.max(0, Math.min(2, prefs.getInt("sensitivityLevel", 1)));
@@ -1048,6 +1103,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
         if (hasPairingCode && pairingCode.length() == 6) {
             pollFirestoreCloud();
+            flushPendingCloudCommandsAsync();
         }
     }
 
@@ -1062,11 +1118,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 startHeartRateStreaming(false, false);
             }
         }
-    }
-
-    private boolean hasMicPermission() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true;
-        return checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
     }
 
     @Override
@@ -1084,205 +1135,57 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 sendHeartRateToPhone(0, "permission_denied");
             }
             if (canvasView != null) canvasView.invalidate();
-            return;
-        }
-        if (requestCode == REQ_MIC_AUTO_SHOT) {
-            boolean granted = grantResults != null
-                    && grantResults.length > 0
-                    && grantResults[0] == PackageManager.PERMISSION_GRANTED;
-            if (granted && autoDetectEnabled) {
-                micDeniedNoticeUntilMs = 0L;
-                syncShotDetectionSensors();
-            } else {
-                // Dual-Key requires both wrist IMU and real-time string-snap audio; never fall back to motion-only
-                autoDetectEnabled = false;
-                micDeniedNoticeUntilMs = System.currentTimeMillis() + 4500L;
-                syncShotDetectionSensors();
-                saveState();
-                sendToPhone("{\"type\":\"TOGGLE_AUTO_DETECT\",\"enabled\":false,\"sensitivityLevel\":" + sensitivityLevel + "}");
-            }
-            if (canvasView != null) canvasView.invalidate();
-        }
-    }
-
-    private synchronized void startAcousticSnapAnalyzer() {
-        if (isAcousticAnalyzerRunning || !hasMicPermission()) return;
-        isAcousticAnalyzerRunning = true;
-        acousticAnalyzerThread = new Thread(() -> {
-            AudioRecord recorder = null;
-            try {
-                int minBuf = AudioRecord.getMinBufferSize(
-                        AUDIO_SAMPLE_RATE_HZ,
-                        AudioFormat.CHANNEL_IN_MONO,
-                        AudioFormat.ENCODING_PCM_16BIT
-                );
-                if (minBuf <= 0) {
-                    isAcousticAnalyzerRunning = false;
-                    return;
-                }
-                int bufferSizeBytes = Math.max(minBuf * 2, AUDIO_FRAME_SAMPLES * 8);
-                // VOICE_RECOGNITION disables speech AGC/noise-suppression so <25ms bowstring snaps are never attenuated
-                try {
-                    recorder = new AudioRecord(
-                            MediaRecorder.AudioSource.VOICE_RECOGNITION,
-                            AUDIO_SAMPLE_RATE_HZ,
-                            AudioFormat.CHANNEL_IN_MONO,
-                            AudioFormat.ENCODING_PCM_16BIT,
-                            bufferSizeBytes
-                    );
-                } catch (Exception ignored) {}
-                if (recorder == null || recorder.getState() != AudioRecord.STATE_INITIALIZED) {
-                    if (recorder != null) {
-                        try { recorder.release(); } catch (Exception ignored) {}
-                    }
-                    recorder = new AudioRecord(
-                            MediaRecorder.AudioSource.MIC,
-                            AUDIO_SAMPLE_RATE_HZ,
-                            AudioFormat.CHANNEL_IN_MONO,
-                            AudioFormat.ENCODING_PCM_16BIT,
-                            bufferSizeBytes
-                    );
-                }
-                if (recorder.getState() != AudioRecord.STATE_INITIALIZED) {
-                    recorder.release();
-                    isAcousticAnalyzerRunning = false;
-                    return;
-                }
-
-                recorder.startRecording();
-                short[] pcm = new short[AUDIO_FRAME_SAMPLES];
-                float prevSample = 0f;
-                double noiseFloorRms = 45.0;
-                int warmupFrames = 0;
-
-                boolean inCandidate = false;
-                long candidateStartMs = 0L;
-                double candidatePeakRms = 0.0;
-                int candidateSustainedFrames = 0;
-                boolean waitQuietReset = false;
-
-                while (isAcousticAnalyzerRunning && !Thread.currentThread().isInterrupted()) {
-                    int read = recorder.read(pcm, 0, AUDIO_FRAME_SAMPLES);
-                    if (read <= 0) continue;
-
-                    double sumSq = 0.0;
-                    double maxAbs = 0.0;
-                    for (int i = 0; i < read; i++) {
-                        float s = pcm[i];
-                        // First-order high-pass pre-emphasis (>1.6 kHz) strips voices, footsteps, wind & bass music
-                        float hp = s - (0.88f * prevSample);
-                        prevSample = s;
-                        double absHp = Math.abs(hp);
-                        if (absHp > maxAbs) maxAbs = absHp;
-                        sumSq += (double) hp * (double) hp;
-                        pcm[i] = 0; // Immediately zero volatile sample
-                    }
-
-                    double hfRms = Math.sqrt(sumSq / read);
-                    long frameNow = System.currentTimeMillis();
-
-                    if (warmupFrames < 8) {
-                        noiseFloorRms = (warmupFrames == 0)
-                                ? Math.max(20.0, Math.min(2200.0, hfRms))
-                                : (0.75 * noiseFloorRms + 0.25 * Math.max(20.0, Math.min(2200.0, hfRms)));
-                        warmupFrames++;
-                        continue;
-                    }
-
-                    int sens = sensitivityLevel;
-                    double snrMult = (sens == 0) ? 4.6 : ((sens == 2) ? 2.8 : 3.6);
-                    double minAbsRms = (sens == 0) ? 120.0 : ((sens == 2) ? 56.0 : 84.0);
-                    double crestMin = (sens == 0) ? 2.20 : ((sens == 2) ? 1.82 : 2.00);
-
-                    if (waitQuietReset) {
-                        if (hfRms < Math.max(minAbsRms * 0.85, noiseFloorRms * 1.75)) {
-                            waitQuietReset = false;
-                        } else {
-                            noiseFloorRms = Math.max(20.0, Math.min(2800.0, 0.985 * noiseFloorRms + 0.015 * hfRms));
-                            continue;
-                        }
-                    }
-
-                    if (!inCandidate) {
-                        double triggerRms = Math.max(minAbsRms, noiseFloorRms * snrMult);
-                        if (hfRms >= triggerRms && maxAbs >= (hfRms * crestMin)) {
-                            inCandidate = true;
-                            candidateStartMs = frameNow;
-                            candidatePeakRms = hfRms;
-                            candidateSustainedFrames = 1;
-                        } else if (hfRms < noiseFloorRms * 2.1) {
-                            noiseFloorRms = Math.max(20.0, Math.min(2800.0, 0.965 * noiseFloorRms + 0.035 * hfRms));
-                        }
-                    } else {
-                        if (hfRms > candidatePeakRms) {
-                            candidatePeakRms = hfRms;
-                        }
-                        if (hfRms > candidatePeakRms * 0.52) {
-                            candidateSustainedFrames++;
-                            // Reject sustained sounds (> 90ms: shouting, whistles, wind gusts, music)
-                            if (candidateSustainedFrames > 9) {
-                                inCandidate = false;
-                                waitQuietReset = true;
-                            }
-                        } else {
-                            // Crisp < 90ms percussive decay confirmed -> valid bowstring / release snap!
-                            lastVerifiedAcousticSnapMs = candidateStartMs;
-                            inCandidate = false;
-                        }
-                    }
-                }
-            } catch (SecurityException | IllegalStateException ignored) {
-            } finally {
-                if (recorder != null) {
-                    try { recorder.stop(); } catch (Exception ignored) {}
-                    try { recorder.release(); } catch (Exception ignored) {}
-                }
-                isAcousticAnalyzerRunning = false;
-            }
-        }, "ArcheryDualKeyAudioDSP");
-        acousticAnalyzerThread.setDaemon(true);
-        acousticAnalyzerThread.start();
-    }
-
-    private synchronized void stopAcousticSnapAnalyzer() {
-        isAcousticAnalyzerRunning = false;
-        lastVerifiedAcousticSnapMs = 0L;
-        if (acousticAnalyzerThread != null) {
-            try {
-                acousticAnalyzerThread.interrupt();
-            } catch (Exception ignored) {}
-            acousticAnalyzerThread = null;
         }
     }
 
     private synchronized void syncShotDetectionSensors() {
         autoDetectEnabled = false;
-        stopAcousticSnapAnalyzer();
         if (sensorManager == null || accelerometer == null) return;
-        boolean wantHighRate = analysisMode;
-        if (isSensorRegistered && isSensorHighRateMode == wantHighRate) {
+
+        int targetMode;
+        boolean activelyCapturingAnalysis = analysisMode && manualAnalysisRecording;
+        if (!isActivityResumed && !activelyCapturingAnalysis) {
+            boolean activeBgSession = isWatchSessionActive
+                    && (!currentSessionId.isEmpty() || arrowCount > 0 || totalScore > 0)
+                    && (System.currentTimeMillis() - lastActivityMs) < WAKELOCK_RENEW_TIMEOUT_MS;
+            targetMode = activeBgSession ? 1 : 0;
+        } else if (analysisMode) {
+            targetMode = 3;
+        } else {
+            targetMode = 2;
+        }
+
+        if (isSensorRegistered && registeredSensorMode == targetMode) {
             return;
         }
-        if (isSensorRegistered) {
-            try {
-                sensorManager.unregisterListener(this);
-            } catch (Exception ignored) {}
-            isSensorRegistered = false;
+        if (!isSensorRegistered && targetMode == 0) {
+            return;
         }
+
+        unregisterImuSensors();
+        if (targetMode == 0) {
+            pendingShotActive = false;
+            return;
+        }
+
         try {
-            if (wantHighRate) {
+            if (targetMode == 3) {
                 sensorManager.registerListener(this, accelerometer, SENSOR_RATE_100HZ_US);
                 if (gyroscope != null) {
                     sensorManager.registerListener(this, gyroscope, SENSOR_RATE_100HZ_US);
                 }
                 isSensorHighRateMode = true;
-            } else {
+            } else if (targetMode == 2) {
                 pendingShotActive = false;
-                // Keep 50Hz zero-permission accelerometer active so wrist footsteps & walked meters
-                // are accurately recorded even in 100% Manual Counter Mode!
                 sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
                 isSensorHighRateMode = false;
+            } else {
+                pendingShotActive = false;
+                // Screen paused during live session: downgrade IMU to low-power SENSOR_DELAY_NORMAL without gyroscope
+                sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+                isSensorHighRateMode = false;
             }
+            registeredSensorMode = targetMode;
             isSensorRegistered = true;
         } catch (Exception ignored) {}
     }
@@ -1511,18 +1414,35 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             }
             final boolean shouldRescheduleFromPhone = phoneStateChanged;
 
+            String incomingSessionToken = obj.optString("sessionToken", rootObj.optString("sessionToken", "")).trim();
+            boolean hasIncomingValidToken = isValidSessionTokenFormat(incomingSessionToken);
             String earlyPairingCode = obj.optString("pairingCode", rootObj.optString("pairingCode", "")).trim();
-            if (earlyPairingCode.matches("^[1-9][0-9]{5}$")
-                    && (!hasPairingCode || !earlyPairingCode.equals(pairingCode))) {
+            boolean pairingChanged = earlyPairingCode.matches("^[0-9]{6}$")
+                    && (!hasPairingCode || !earlyPairingCode.equals(pairingCode));
+            if (pairingChanged) {
                 pairingCode = earlyPairingCode;
                 hasPairingCode = true;
                 parsePairingDigitsFromString(earlyPairingCode);
+                if (!hasIncomingValidToken) {
+                    cloudSessionToken = "";
+                    isCloudSynced = false;
+                    cloudLinkStatus = "LINKING";
+                }
                 lastCloudHeartbeatTouchMs = 0L;
+            }
+            if (hasIncomingValidToken && !incomingSessionToken.equals(cloudSessionToken)) {
+                cloudSessionToken = incomingSessionToken;
+                isCloudSynced = true;
+                cloudLinkStatus = "SYNCED";
+                saveState();
+                flushPendingCloudCommandsAsync();
+            } else if (pairingChanged) {
                 saveState();
                 pollFirestoreCloud();
             }
 
             if (!sessionActive) {
+                isWatchSessionActive = false;
                 if (analysisMode) {
                     analysisMode = false;
                     syncShotDetectionSensors();
@@ -1532,6 +1452,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 }
                 if ((now - lastLocalActionTimeMs) >= 4000L || incomingArrows <= 0) {
                     resetWatchSessionCounters(true);
+                    if (!isActivityResumed) {
+                        unregisterImuSensors();
+                        releaseWakeLockSafely();
+                    }
                     runOnUiThread(() -> {
                         if (shouldRescheduleFromPhone) scheduleNextHeartbeat();
                         if (canvasView != null) canvasView.invalidate();
@@ -1543,6 +1467,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 }
                 return;
             }
+
+            isWatchSessionActive = true;
+            acquireOrRenewWakeLockIfNeeded();
 
             if (incomingArrows == 0) {
                 lastFinishedSessionId = "";
@@ -1559,17 +1486,21 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     // New session started on phone: reset all previous session counters & steps to zero
                     resetWatchSessionCounters(false);
                     currentSessionId = incomingSessionId;
+                    isWatchSessionActive = true;
                 }
             }
 
             if (obj.has("arrowsCount") && incomingArrows == arrowCount) {
                 mPendingUnackedDelta = 0;
             }
+            if (obj.has("currentEndIndex") && pendingUnackedEnd > 0 && (obj.optInt("currentEndIndex", 0) + 1) >= pendingUnackedEnd) {
+                pendingUnackedEnd = 0;
+            }
 
-            long unackedProtectMs = (mPendingUnackedDelta != 0) ? 20000L : 6000L;
+            long unackedProtectMs = (mPendingUnackedDelta != 0 || pendingUnackedEnd > 0) ? 25000L : 6000L;
             boolean hasUnackedLocalAction =
                 ((now - lastLocalActionTimeMs) < unackedProtectMs) &&
-                (mPendingUnackedDelta != 0 || pendingCmdSeq == 0L || incomingAckSeq < pendingCmdSeq);
+                (mPendingUnackedDelta != 0 || pendingUnackedEnd > 0 || pendingCmdSeq == 0L || incomingAckSeq < pendingCmdSeq);
 
             if (obj.has("arrowsCount")) {
                 if (hasUnackedLocalAction) {
@@ -1599,6 +1530,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     currentEnd = nextEnd;
                     currentEndArrows.clear();
                 }
+                pendingUnackedEnd = 0;
             }
             if (obj.has("currentEndArrows") && !hasUnackedLocalAction) {
                 JSONArray arr = obj.optJSONArray("currentEndArrows");
@@ -1681,16 +1613,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     }
                 } catch (Exception ignored) {}
             }
-            String incomingPairingCode = obj.optString("pairingCode", rootObj.optString("pairingCode", "")).trim();
-            if (incomingPairingCode.matches("^[1-9][0-9]{5}$")
-                    && (!hasPairingCode || !incomingPairingCode.equals(pairingCode))) {
-                pairingCode = incomingPairingCode;
-                hasPairingCode = true;
-                parsePairingDigitsFromString(incomingPairingCode);
-                lastCloudHeartbeatTouchMs = 0L;
-                saveState();
-                pollFirestoreCloud();
-            }
             if (obj.has("analysisMode") || obj.has("practiceType")) {
                 boolean nextAnalysis = obj.optBoolean("analysisMode", "Análisis".equals(obj.optString("practiceType", "")));
                 if (nextAnalysis != analysisMode) {
@@ -1750,6 +1672,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     String cmdType = obj.optString("type", "");
                     if (!"SYNC_TELEMETRY_FROM_WATCH".equals(cmdType)) {
                         pendingCmdSeq = seq;
+                        pendingCloudCmdId = cmdId;
                     }
                     if ("INCREMENT_ARROW".equals(cmdType) || "DECREMENT_ARROW".equals(cmdType)) {
                         isArrowDeltaCmd = true;
@@ -1826,6 +1749,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             pairingDigits[editDigitPos] = (cur + delta + 10) % 10;
         }
         isEditingCode = true;
+        syncBackNavigationCallback();
         markUserActivity(true);
         triggerHaptic(20);
         if (canvasView != null) canvasView.invalidate();
@@ -1836,7 +1760,11 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         for (int i = 0; i < 6; i++) {
             sb.append(pairingDigits[i]);
         }
-        pairingCode = sb.toString();
+        String nextCode = sb.toString();
+        if (!nextCode.equals(pairingCode) || isTerminalCloudErrorStatus()) {
+            clearCloudSessionToken();
+        }
+        pairingCode = nextCode;
         hasPairingCode = true;
         isEditingCode = false;
         isCloudSynced = false;
@@ -1845,161 +1773,489 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         lastCloudHeartbeatTouchMs = 0L;
         lastCloudHrPushMs = 0L;
         lastCloudHrPushedBpm = 0;
+        syncBackNavigationCallback();
         markUserActivity(true);
         saveState();
         triggerHaptic(45);
         long now = System.currentTimeMillis();
         touchWatchHeartbeatInFirestore(pairingCode, now);
         pollFirestoreCloud();
+        flushPendingCloudCommandsAsync();
         if (canvasView != null) canvasView.invalidate();
+    }
+
+    private void clearCloudSessionToken() {
+        cloudSessionToken = "";
+        try {
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .remove("cloudSessionToken")
+                .apply();
+        } catch (Exception ignored) {}
+    }
+
+    private void persistCloudSessionToken(final String token) {
+        if (!isValidSessionTokenFormat(token)) return;
+        cloudSessionToken = token;
+        try {
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putString("cloudSessionToken", token)
+                .putString("pairingCode", pairingCode)
+                .putString("cloudPairingCode", pairingCode)
+                .putString("watchDeviceId", watchDeviceId)
+                .apply();
+        } catch (Exception ignored) {}
+    }
+
+    private void persistPendingCloudCommandsLocked() {
+        try {
+            JSONArray arr = new JSONArray();
+            for (String item : pendingCloudCommands) {
+                if (item != null && !item.isEmpty()) {
+                    arr.put(item);
+                }
+            }
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putString("pendingCloudCommandsJson", arr.toString())
+                .apply();
+        } catch (Exception ignored) {}
+    }
+
+    private boolean hasPendingCloudCommands() {
+        synchronized (pendingCloudCommands) {
+            return !pendingCloudCommands.isEmpty();
+        }
+    }
+
+    static String compactAnalysisShotJson(final String rawJson, final int maxChars) {
+        if (rawJson == null || rawJson.length() <= maxChars) return rawJson != null ? rawJson : "";
+        try {
+            JSONObject obj = new JSONObject(rawJson);
+            for (int pass = 0; pass < 4 && obj.toString().length() > maxChars; pass++) {
+                JSONArray aArr = obj.optJSONArray("a");
+                if (aArr != null && aArr.length() > 4) {
+                    JSONArray decimated = new JSONArray();
+                    for (int i = 0; i < aArr.length(); i += 2) {
+                        JSONArray pt = aArr.optJSONArray(i);
+                        if (pt != null && pt.length() >= 2) {
+                            JSONArray rounded = new JSONArray();
+                            rounded.put(Math.round(pt.optDouble(0, 0.0) * 100.0) / 100.0);
+                            rounded.put(Math.round(pt.optDouble(1, 0.0) * 100.0) / 100.0);
+                            decimated.put(rounded);
+                        }
+                    }
+                    JSONArray lastPt = aArr.optJSONArray(aArr.length() - 1);
+                    if (lastPt != null && decimated.length() > 0) {
+                        decimated.put(lastPt);
+                    }
+                    obj.put("a", decimated);
+                }
+                JSONArray pArr = obj.optJSONArray("p");
+                if (pArr != null && pArr.length() > 3) {
+                    JSONArray decimatedP = new JSONArray();
+                    for (int i = 0; i < pArr.length(); i += 2) {
+                        JSONArray pt = pArr.optJSONArray(i);
+                        if (pt != null && pt.length() >= 2) {
+                            JSONArray rounded = new JSONArray();
+                            rounded.put(Math.round(pt.optDouble(0, 0.0) * 100.0) / 100.0);
+                            rounded.put(Math.round(pt.optDouble(1, 0.0) * 100.0) / 100.0);
+                            decimatedP.put(rounded);
+                        }
+                    }
+                    obj.put("p", decimatedP);
+                }
+            }
+            if (obj.toString().length() > maxChars) {
+                obj.remove("p");
+            }
+            if (obj.toString().length() > maxChars) {
+                obj.remove("a");
+            }
+            String res = obj.toString();
+            return res.length() <= maxChars ? res : res.substring(0, maxChars);
+        } catch (Exception e) {
+            return rawJson.substring(0, maxChars);
+        }
+    }
+
+    /**
+     * Spark-safe single-use 6-digit watch_pairings -> 256-bit watch_sessions token handshake.
+     * Runs strictly on single-threaded cloudExecutor.
+     */
+    private String ensureCloudSessionTokenBlocking(final String code) {
+        if (isValidSessionTokenFormat(cloudSessionToken) && code != null && code.equals(pairingCode)) {
+            return cloudSessionToken;
+        }
+        if (code == null || !code.matches("^[0-9]{6}$")) {
+            return "";
+        }
+        if (isTerminalCloudErrorStatus()) {
+            return "";
+        }
+        if (watchDeviceId == null || watchDeviceId.trim().isEmpty()) {
+            watchDeviceId = "WEAR-" + UUID.randomUUID().toString();
+            saveState();
+        }
+
+        HttpURLConnection getConn = null;
+        HttpURLConnection patchConn = null;
+        try {
+            String getUrl = "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_pairings/" + code;
+            getConn = (HttpURLConnection) new URL(getUrl).openConnection();
+            getConn.setRequestMethod("GET");
+            getConn.setUseCaches(false);
+            getConn.setRequestProperty("Cache-Control", "no-cache");
+            getConn.setConnectTimeout(5500);
+            getConn.setReadTimeout(5500);
+
+            int getRc = getConn.getResponseCode();
+            if (getRc == 404 || getRc == 403 || getRc == 401) {
+                clearCloudSessionToken();
+                isCloudSynced = false;
+                cloudLinkStatus = (getRc == 404) ? "NOT_FOUND" : "EXPIRED_OR_INVALID";
+                runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+                return "";
+            }
+            if (getRc != 200) {
+                isCloudSynced = false;
+                cloudLinkStatus = "NO_NET";
+                runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+                return "";
+            }
+
+            StringBuilder sb = new StringBuilder();
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(getConn.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = br.readLine()) != null) sb.append(line);
+            }
+            JSONObject pairingDoc = new JSONObject(sb.toString());
+            JSONObject pFields = pairingDoc.optJSONObject("fields");
+            JSONObject tokenNode = pFields != null ? pFields.optJSONObject("sessionToken") : null;
+            String fetchedToken = tokenNode != null ? tokenNode.optString("stringValue", "").trim() : "";
+            if (!isValidSessionTokenFormat(fetchedToken)) {
+                clearCloudSessionToken();
+                isCloudSynced = false;
+                cloudLinkStatus = "EXPIRED_OR_INVALID";
+                runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+                return "";
+            }
+
+            JSONObject claimedNode = pFields.optJSONObject("claimed");
+            boolean alreadyClaimed = claimedNode != null && claimedNode.optBoolean("booleanValue", false);
+            JSONObject devNode = pFields.optJSONObject("watchDeviceId");
+            String existingDeviceId = devNode != null ? devNode.optString("stringValue", "") : "";
+            if (alreadyClaimed && watchDeviceId.equals(existingDeviceId)) {
+                persistCloudSessionToken(fetchedToken);
+                return fetchedToken;
+            }
+
+            long nowMs = System.currentTimeMillis();
+            JSONObject claimFields = new JSONObject();
+            claimFields.put("claimed", new JSONObject().put("booleanValue", true));
+            claimFields.put("watchDeviceId", new JSONObject().put("stringValue", watchDeviceId));
+            claimFields.put("watchSource", new JSONObject().put("stringValue", "WEAR_OS"));
+            claimFields.put("updatedAt", new JSONObject().put("integerValue", String.valueOf(nowMs)));
+
+            String claimUrl = "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_pairings/"
+                    + code
+                    + "?updateMask.fieldPaths=claimed"
+                    + "&updateMask.fieldPaths=watchDeviceId"
+                    + "&updateMask.fieldPaths=watchSource"
+                    + "&updateMask.fieldPaths=updatedAt"
+                    + "&currentDocument.exists=true";
+            patchConn = (HttpURLConnection) new URL(claimUrl).openConnection();
+            patchConn.setRequestMethod("POST");
+            patchConn.setUseCaches(false);
+            patchConn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            patchConn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
+            patchConn.setConnectTimeout(5500);
+            patchConn.setReadTimeout(5500);
+            patchConn.setDoOutput(true);
+
+            byte[] claimBody = new JSONObject().put("fields", claimFields).toString().getBytes(StandardCharsets.UTF_8);
+            try (OutputStream os = patchConn.getOutputStream()) {
+                os.write(claimBody);
+            }
+            int claimRc = patchConn.getResponseCode();
+            if (claimRc >= 200 && claimRc < 300) {
+                persistCloudSessionToken(fetchedToken);
+                return fetchedToken;
+            } else if (claimRc == 404) {
+                clearCloudSessionToken();
+                isCloudSynced = false;
+                cloudLinkStatus = "NOT_FOUND";
+            } else if (claimRc == 403 || claimRc == 401 || claimRc == 400) {
+                clearCloudSessionToken();
+                isCloudSynced = false;
+                cloudLinkStatus = "EXPIRED_OR_INVALID";
+            } else {
+                isCloudSynced = false;
+                cloudLinkStatus = "NO_NET";
+            }
+            runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+            return "";
+        } catch (Exception e) {
+            isCloudSynced = false;
+            cloudLinkStatus = "NO_NET";
+            runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+            return "";
+        } finally {
+            if (getConn != null) getConn.disconnect();
+            if (patchConn != null) patchConn.disconnect();
+        }
+    }
+
+    private void handleWatchSessionHttpFailure(final int rc) {
+        isCloudSynced = false;
+        if (rc == 403 || rc == 401) {
+            clearCloudSessionToken();
+            cloudLinkStatus = "EXPIRED_OR_INVALID";
+        } else if (rc == 404) {
+            clearCloudSessionToken();
+            cloudLinkStatus = "NOT_FOUND";
+        } else {
+            cloudLinkStatus = "NO_NET";
+        }
+        runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
     }
 
     private void syncCommandWithFirestoreCloud(final String commandJson) {
         if (!hasPairingCode || pairingCode.length() != 6 || commandJson == null) return;
-        final String code = pairingCode;
-        final int curSteps = stepsCount;
-        final int curWalkM = Math.round(getEffectiveWalkedMeters());
-        final int curKcal = getActiveKcal();
-        final int curScore = totalScore;
-        final boolean curAuto = autoDetectEnabled;
-        final int curSens = sensitivityLevel;
-
-        cloudExecutor.execute(() -> {
-            HttpURLConnection conn = null;
-            try {
-                JSONObject src = new JSONObject(commandJson);
-                String eventType = src.optString("type", "");
-                if (eventType.isEmpty() || "REQUEST_STATE".equals(eventType)) return;
-                long nowMs = System.currentTimeMillis();
-                long seq = src.optLong("_cmdSeq", nowMs % 100000L);
-                String origCmdId = src.optString("_cmdId", "");
-                String cmdId = !origCmdId.isEmpty() ? origCmdId : ("wear-" + nowMs + "-" + seq);
-
-                JSONObject cmdFields = new JSONObject();
-                cmdFields.put("type", new JSONObject().put("stringValue", eventType));
-                cmdFields.put("cmdId", new JSONObject().put("stringValue", cmdId));
-                cmdFields.put("_cmdId", new JSONObject().put("stringValue", cmdId));
-                cmdFields.put("_ts", new JSONObject().put("integerValue", String.valueOf(nowMs)));
-
-                if ("INCREMENT_ARROW".equals(eventType)) {
-                    int cldDelta = Math.max(-20, Math.min(20, src.optInt("delta", 1)));
-                    cmdFields.put("delta", new JSONObject().put("integerValue", String.valueOf(cldDelta)));
-                    cmdFields.put("source", new JSONObject().put("stringValue", src.optString("source", "watch_manual")));
-                } else if ("DECREMENT_ARROW".equals(eventType)) {
-                    int cldDelta = Math.max(-20, Math.min(20, src.optInt("delta", -1)));
-                    cmdFields.put("delta", new JSONObject().put("integerValue", String.valueOf(cldDelta)));
-                    cmdFields.put("source", new JSONObject().put("stringValue", "watch_manual"));
-                    cmdFields.put("totalScore", new JSONObject().put("integerValue", String.valueOf(curScore)));
-                } else if ("SCORE_INPUT".equals(eventType)) {
-                    JSONObject pay = src.optJSONObject("payload");
-                    String val = pay != null ? pay.optString("value", src.optString("value", "")) : src.optString("value", "");
-                    cmdFields.put("value", new JSONObject().put("stringValue", val));
-                    cmdFields.put("totalScore", new JSONObject().put("integerValue", String.valueOf(curScore)));
-                } else if ("UNDO_ARROW".equals(eventType)) {
-                    cmdFields.put("totalScore", new JSONObject().put("integerValue", String.valueOf(curScore)));
-                } else if ("TOGGLE_AUTO_DETECT".equals(eventType)) {
-                    cmdFields.put("enabled", new JSONObject().put("booleanValue", curAuto));
-                    cmdFields.put("sensitivityLevel", new JSONObject().put("integerValue", String.valueOf(curSens)));
-                } else if ("SYNC_TELEMETRY_FROM_WATCH".equals(eventType)) {
-                    cmdFields.put("stepsCount", new JSONObject().put("integerValue", String.valueOf(curSteps)));
-                    cmdFields.put("distanceWalkedM", new JSONObject().put("integerValue", String.valueOf(curWalkM)));
-                    cmdFields.put("activeKcal", new JSONObject().put("integerValue", String.valueOf(curKcal)));
-                    int syncHr = isLocalHeartRateFresh() ? localSensorHrBpm : 0;
-                    if (syncHr >= 30 && syncHr <= 245) {
-                        cmdFields.put("heartRateBpm", new JSONObject().put("integerValue", String.valueOf(syncHr)));
-                    }
-                    if (localAvgHrBpm >= 30 && localAvgHrBpm <= 245) {
-                        cmdFields.put("avgHeartRateBpm", new JSONObject().put("integerValue", String.valueOf(localAvgHrBpm)));
-                    }
-                    if (localMaxHrBpm >= 30 && localMaxHrBpm <= 245) {
-                        cmdFields.put("maxHeartRateBpm", new JSONObject().put("integerValue", String.valueOf(localMaxHrBpm)));
-                    }
-                } else if ("ANALYSIS_MANUAL_START".equals(eventType) || "ANALYSIS_MANUAL_STOP".equals(eventType)) {
-                    long cmdTs = src.optLong("ts", nowMs);
-                    cmdFields.put("ts", new JSONObject().put("integerValue", String.valueOf(cmdTs)));
-                    cmdFields.put("source", new JSONObject().put("stringValue", src.optString("source", "watch_manual")));
-                } else if ("ANALYSIS_SHOT".equals(eventType) || "ANALYSIS_ZERO_VECTOR".equals(eventType)) {
-                    String shotJson = src.optString("analysisShotJson", "");
-                    if (!shotJson.isEmpty()) {
-                        cmdFields.put("analysisShotJson", new JSONObject().put("stringValue", shotJson));
-                    }
-                    int shotHr = src.optInt("heartRateBpm", 0);
-                    if (shotHr >= 30 && shotHr <= 245) {
-                        cmdFields.put("heartRateBpm", new JSONObject().put("integerValue", String.valueOf(shotHr)));
+        try {
+            JSONObject probe = new JSONObject(commandJson);
+            String eventType = probe.optString("type", "");
+            if (eventType.isEmpty() || "REQUEST_STATE".equals(eventType)) return;
+            synchronized (pendingCloudCommands) {
+                if ("SYNC_TELEMETRY_FROM_WATCH".equals(eventType)) {
+                    for (int i = pendingCloudCommands.size() - 1; i >= 0; i--) {
+                        if (pendingCloudCommands.get(i).contains("\"SYNC_TELEMETRY_FROM_WATCH\"")) {
+                            pendingCloudCommands.remove(i);
+                        }
                     }
                 }
-
-                lastCloudHeartbeatTouchMs = nowMs;
-                JSONObject docFields = new JSONObject();
-                docFields.put("lastWatchCmd", new JSONObject().put("mapValue", new JSONObject().put("fields", cmdFields)));
-                docFields.put("lastWatchCmdId", new JSONObject().put("stringValue", cmdId));
-                docFields.put("lastWatchCmdSeq", new JSONObject().put("integerValue", String.valueOf(seq)));
-                docFields.put("watchStepsCount", new JSONObject().put("integerValue", String.valueOf(curSteps)));
-                docFields.put("watchDistanceM", new JSONObject().put("integerValue", String.valueOf(curWalkM)));
-                docFields.put("watchSource", new JSONObject().put("stringValue", "WEAR_OS"));
-                docFields.put("watchHeartbeatAt", new JSONObject().put("integerValue", String.valueOf(nowMs)));
-                docFields.put("updatedAt", new JSONObject().put("integerValue", String.valueOf(nowMs)));
-
-                StringBuilder mask = new StringBuilder();
-                mask.append("updateMask.fieldPaths=lastWatchCmd")
-                    .append("&updateMask.fieldPaths=lastWatchCmdId")
-                    .append("&updateMask.fieldPaths=lastWatchCmdSeq")
-                    .append("&updateMask.fieldPaths=watchStepsCount")
-                    .append("&updateMask.fieldPaths=watchDistanceM")
-                    .append("&updateMask.fieldPaths=watchSource")
-                    .append("&updateMask.fieldPaths=watchHeartbeatAt")
-                    .append("&updateMask.fieldPaths=updatedAt");
-
-                int hrLive = isLocalHeartRateFresh() ? localSensorHrBpm : 0;
-                int hrAvg = localAvgHrBpm;
-                int hrMax = localMaxHrBpm;
-                if (hrLive >= 30 && hrLive <= 245) {
-                    docFields.put("watchHeartRateBpm", new JSONObject().put("integerValue", String.valueOf(hrLive)));
-                    mask.append("&updateMask.fieldPaths=watchHeartRateBpm");
+                while (pendingCloudCommands.size() >= 50) {
+                    pendingCloudCommands.remove(0);
                 }
-                if (hrAvg >= 30 && hrAvg <= 245) {
-                    docFields.put("watchAvgHeartRateBpm", new JSONObject().put("integerValue", String.valueOf(hrAvg)));
-                    mask.append("&updateMask.fieldPaths=watchAvgHeartRateBpm");
-                }
-                if (hrMax >= 30 && hrMax <= 245) {
-                    docFields.put("watchMaxHeartRateBpm", new JSONObject().put("integerValue", String.valueOf(hrMax)));
-                    mask.append("&updateMask.fieldPaths=watchMaxHeartRateBpm");
-                }
-
-                String urlStr = "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/"
-                        + code
-                        + "?" + mask + "&currentDocument.exists=true";
-                conn = (HttpURLConnection) new URL(urlStr).openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-                conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
-                conn.setConnectTimeout(6000);
-                conn.setReadTimeout(6000);
-                conn.setDoOutput(true);
-
-                byte[] body = new JSONObject().put("fields", docFields).toString().getBytes(StandardCharsets.UTF_8);
-                try (OutputStream os = conn.getOutputStream()) {
-                    os.write(body);
-                }
-                int rc = conn.getResponseCode();
-                boolean ok = rc >= 200 && rc < 300;
-                if (ok) {
-                    isCloudSynced = true;
-                    cloudLinkStatus = "SYNCED";
-                } else if (rc == 404 || rc == 401 || rc == 403) {
-                    isCloudSynced = false;
-                    cloudLinkStatus = "NOT_FOUND";
-                }
-                runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
-            } catch (Exception ignored) {
-                if ("LINKING".equals(cloudLinkStatus)) {
-                    cloudLinkStatus = "NO_NET";
-                    runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
-                }
-            } finally {
-                if (conn != null) conn.disconnect();
+                pendingCloudCommands.add(commandJson);
+                persistPendingCloudCommandsLocked();
             }
-        });
+            flushPendingCloudCommandsAsync();
+        } catch (Exception ignored) {}
+    }
+
+    private void flushPendingCloudCommandsAsync() {
+        if (!hasPairingCode || pairingCode.length() != 6) return;
+        final String code = pairingCode;
+        cloudExecutor.execute(() -> drainPendingCloudCommandsBlocking(code));
+    }
+
+    private void drainPendingCloudCommandsBlocking(final String code) {
+        if (!hasPairingCode || code == null || code.length() != 6 || isTerminalCloudErrorStatus()) return;
+        while (true) {
+            final String nextCommandJson;
+            synchronized (pendingCloudCommands) {
+                if (pendingCloudCommands.isEmpty()) return;
+                nextCommandJson = pendingCloudCommands.get(0);
+            }
+
+            String sessionToken = ensureCloudSessionTokenBlocking(code);
+            if (!isValidSessionTokenFormat(sessionToken)) {
+                return;
+            }
+
+            int sendResult = sendSingleCommandPatchBlocking(sessionToken, nextCommandJson);
+            if (sendResult == 1) {
+                synchronized (pendingCloudCommands) {
+                    if (!pendingCloudCommands.isEmpty() && nextCommandJson.equals(pendingCloudCommands.get(0))) {
+                        pendingCloudCommands.remove(0);
+                        persistPendingCloudCommandsLocked();
+                    }
+                }
+            } else {
+                // Stop draining on transient network error or terminal 403/404; queued items remain persisted for retry
+                return;
+            }
+        }
+    }
+
+    /** Returns 1 on HTTP 2xx, -1 on 400..499 terminal error, 0 on transient network/5xx error. */
+    private int sendSingleCommandPatchBlocking(final String sessionToken, final String commandJson) {
+        HttpURLConnection conn = null;
+        try {
+            JSONObject src = new JSONObject(commandJson);
+            String eventType = src.optString("type", "");
+            if (eventType.isEmpty() || "REQUEST_STATE".equals(eventType)) return 1;
+
+            long nowMs = System.currentTimeMillis();
+            long rawSeq = src.optLong("_cmdSeq", nowMs % 100000L);
+            long safeSeq = Math.max(0L, Math.min(1_000_000_000L, rawSeq));
+            String origCmdId = src.optString("_cmdId", "");
+            String cmdId = !origCmdId.isEmpty() ? origCmdId : ("wear-" + nowMs + "-" + safeSeq);
+            if (cmdId.length() > 128) cmdId = cmdId.substring(0, 128);
+
+            int curSteps = Math.max(0, Math.min(1_000_000, stepsCount));
+            int curWalkM = Math.max(0, Math.min(1_000_000, Math.round(getEffectiveWalkedMeters())));
+            int curKcal = Math.max(0, Math.min(100_000, getActiveKcal()));
+            int curScore = Math.max(0, Math.min(100_000, totalScore));
+            int curSens = Math.max(0, Math.min(10, sensitivityLevel));
+
+            JSONObject cmdFields = new JSONObject();
+            cmdFields.put("type", new JSONObject().put("stringValue", eventType));
+            cmdFields.put("cmdId", new JSONObject().put("stringValue", cmdId));
+            cmdFields.put("_cmdId", new JSONObject().put("stringValue", cmdId));
+            cmdFields.put("_cmdSeq", new JSONObject().put("integerValue", String.valueOf(safeSeq)));
+            cmdFields.put("_ts", new JSONObject().put("integerValue", String.valueOf(nowMs)));
+
+            if ("INCREMENT_ARROW".equals(eventType)) {
+                int cldDelta = Math.max(-20, Math.min(20, src.optInt("delta", 1)));
+                cmdFields.put("delta", new JSONObject().put("integerValue", String.valueOf(cldDelta)));
+                cmdFields.put("source", new JSONObject().put("stringValue", src.optString("source", "watch_manual")));
+            } else if ("DECREMENT_ARROW".equals(eventType)) {
+                int cldDelta = Math.max(-20, Math.min(20, src.optInt("delta", -1)));
+                cmdFields.put("delta", new JSONObject().put("integerValue", String.valueOf(cldDelta)));
+                cmdFields.put("source", new JSONObject().put("stringValue", "watch_manual"));
+                cmdFields.put("totalScore", new JSONObject().put("integerValue", String.valueOf(curScore)));
+            } else if ("SCORE_INPUT".equals(eventType)) {
+                JSONObject pay = src.optJSONObject("payload");
+                String val = pay != null ? pay.optString("value", src.optString("value", "")) : src.optString("value", "");
+                int cmdScore = pay != null ? pay.optInt("totalScore", curScore) : src.optInt("totalScore", curScore);
+                cmdScore = Math.max(0, Math.min(100_000, cmdScore));
+                cmdFields.put("value", new JSONObject().put("stringValue", val));
+                cmdFields.put("totalScore", new JSONObject().put("integerValue", String.valueOf(cmdScore)));
+            } else if ("UNDO_ARROW".equals(eventType)) {
+                int cmdScore = Math.max(0, Math.min(100_000, src.optInt("totalScore", curScore)));
+                cmdFields.put("totalScore", new JSONObject().put("integerValue", String.valueOf(cmdScore)));
+            } else if ("TOGGLE_AUTO_DETECT".equals(eventType)) {
+                cmdFields.put("enabled", new JSONObject().put("booleanValue", false));
+                cmdFields.put("sensitivityLevel", new JSONObject().put("integerValue", String.valueOf(curSens)));
+            } else if ("SYNC_TELEMETRY_FROM_WATCH".equals(eventType)) {
+                cmdFields.put("stepsCount", new JSONObject().put("integerValue", String.valueOf(curSteps)));
+                cmdFields.put("distanceWalkedM", new JSONObject().put("integerValue", String.valueOf(curWalkM)));
+                cmdFields.put("activeKcal", new JSONObject().put("integerValue", String.valueOf(curKcal)));
+                int syncHr = isLocalHeartRateFresh() ? localSensorHrBpm : 0;
+                if (syncHr >= 30 && syncHr <= 245) {
+                    cmdFields.put("heartRateBpm", new JSONObject().put("integerValue", String.valueOf(syncHr)));
+                }
+                if (localAvgHrBpm >= 30 && localAvgHrBpm <= 245) {
+                    cmdFields.put("avgHeartRateBpm", new JSONObject().put("integerValue", String.valueOf(localAvgHrBpm)));
+                }
+                if (localMaxHrBpm >= 30 && localMaxHrBpm <= 245) {
+                    cmdFields.put("maxHeartRateBpm", new JSONObject().put("integerValue", String.valueOf(localMaxHrBpm)));
+                }
+            } else if ("ANALYSIS_MANUAL_START".equals(eventType) || "ANALYSIS_MANUAL_STOP".equals(eventType)) {
+                long cmdTs = src.optLong("ts", nowMs);
+                cmdFields.put("ts", new JSONObject().put("integerValue", String.valueOf(cmdTs)));
+                cmdFields.put("source", new JSONObject().put("stringValue", src.optString("source", "watch_manual")));
+            } else if ("ANALYSIS_SHOT".equals(eventType) || "ANALYSIS_ZERO_VECTOR".equals(eventType)) {
+                String shotJson = compactAnalysisShotJson(src.optString("analysisShotJson", ""), MAX_ANALYSIS_SHOT_JSON_CHARS);
+                if (!shotJson.isEmpty()) {
+                    cmdFields.put("analysisShotJson", new JSONObject().put("stringValue", shotJson));
+                }
+                int shotHr = src.optInt("heartRateBpm", 0);
+                if (shotHr >= 30 && shotHr <= 245) {
+                    cmdFields.put("heartRateBpm", new JSONObject().put("integerValue", String.valueOf(shotHr)));
+                }
+            }
+
+            lastCloudHeartbeatTouchMs = nowMs;
+            JSONObject docFields = new JSONObject();
+            docFields.put("lastWatchCmd", new JSONObject().put("mapValue", new JSONObject().put("fields", cmdFields)));
+            docFields.put("lastWatchCmdId", new JSONObject().put("stringValue", cmdId));
+            docFields.put("lastWatchCmdSeq", new JSONObject().put("integerValue", String.valueOf(safeSeq)));
+            docFields.put("watchStepsCount", new JSONObject().put("integerValue", String.valueOf(curSteps)));
+            docFields.put("watchDistanceM", new JSONObject().put("integerValue", String.valueOf(curWalkM)));
+            docFields.put("watchCaloriesKcal", new JSONObject().put("integerValue", String.valueOf(curKcal)));
+            docFields.put("watchSource", new JSONObject().put("stringValue", "WEAR_OS"));
+            docFields.put("watchDeviceId", new JSONObject().put("stringValue", watchDeviceId));
+            docFields.put("watchHeartbeatAt", new JSONObject().put("integerValue", String.valueOf(nowMs)));
+            docFields.put("updatedAt", new JSONObject().put("integerValue", String.valueOf(nowMs)));
+
+            StringBuilder mask = new StringBuilder();
+            mask.append("updateMask.fieldPaths=lastWatchCmd")
+                .append("&updateMask.fieldPaths=lastWatchCmdId")
+                .append("&updateMask.fieldPaths=lastWatchCmdSeq")
+                .append("&updateMask.fieldPaths=watchStepsCount")
+                .append("&updateMask.fieldPaths=watchDistanceM")
+                .append("&updateMask.fieldPaths=watchCaloriesKcal")
+                .append("&updateMask.fieldPaths=watchSource")
+                .append("&updateMask.fieldPaths=watchDeviceId")
+                .append("&updateMask.fieldPaths=watchHeartbeatAt")
+                .append("&updateMask.fieldPaths=updatedAt");
+
+            if ("ANALYSIS_ZERO_VECTOR".equals(eventType) && hasCalZeroVec) {
+                JSONArray zeroValues = new JSONArray();
+                zeroValues.put(new JSONObject().put("doubleValue", calZeroAx));
+                zeroValues.put(new JSONObject().put("doubleValue", calZeroAy));
+                zeroValues.put(new JSONObject().put("doubleValue", calZeroAz));
+                docFields.put("calibrateZeroAt", new JSONObject().put("integerValue", String.valueOf(nowMs)));
+                docFields.put("zeroGravityVec", new JSONObject().put("arrayValue", new JSONObject().put("values", zeroValues)));
+                mask.append("&updateMask.fieldPaths=calibrateZeroAt")
+                    .append("&updateMask.fieldPaths=zeroGravityVec");
+            }
+
+            int hrLive = isLocalHeartRateFresh() ? localSensorHrBpm : 0;
+            int hrAvg = localAvgHrBpm;
+            int hrMax = localMaxHrBpm;
+            if (hrLive >= 30 && hrLive <= 245) {
+                docFields.put("watchHeartRateBpm", new JSONObject().put("integerValue", String.valueOf(hrLive)));
+                mask.append("&updateMask.fieldPaths=watchHeartRateBpm");
+            }
+            if (hrAvg >= 30 && hrAvg <= 245) {
+                docFields.put("watchAvgHeartRateBpm", new JSONObject().put("integerValue", String.valueOf(hrAvg)));
+                mask.append("&updateMask.fieldPaths=watchAvgHeartRateBpm");
+            }
+            if (hrMax >= 30 && hrMax <= 245) {
+                docFields.put("watchMaxHeartRateBpm", new JSONObject().put("integerValue", String.valueOf(hrMax)));
+                mask.append("&updateMask.fieldPaths=watchMaxHeartRateBpm");
+            }
+
+            String urlStr = "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/"
+                    + sessionToken
+                    + "?" + mask + "&currentDocument.exists=true";
+            conn = (HttpURLConnection) new URL(urlStr).openConnection();
+            conn.setRequestMethod("POST");
+            conn.setUseCaches(false);
+            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
+            conn.setConnectTimeout(6000);
+            conn.setReadTimeout(6000);
+            conn.setDoOutput(true);
+
+            byte[] body = new JSONObject().put("fields", docFields).toString().getBytes(StandardCharsets.UTF_8);
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(body);
+            }
+            int rc = conn.getResponseCode();
+            if (rc >= 200 && rc < 300) {
+                isCloudSynced = true;
+                cloudLinkStatus = "SYNCED";
+                runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+                return 1;
+            }
+            if (rc == 403 || rc == 401 || rc == 404) {
+                handleWatchSessionHttpFailure(rc);
+                return -1;
+            }
+            if (rc == 400) {
+                // Malformed payload rejected by rules: drop poison item so queue never blocks
+                return 1;
+            }
+            if ("LINKING".equals(cloudLinkStatus)) {
+                cloudLinkStatus = "NO_NET";
+                runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+            }
+            return 0;
+        } catch (Exception ignored) {
+            if ("LINKING".equals(cloudLinkStatus)) {
+                cloudLinkStatus = "NO_NET";
+                runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+            }
+            return 0;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
     }
 
     private int extractFsInt(JSONObject fields, String key, int fallback) {
@@ -2016,15 +2272,24 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private void pollFirestoreCloud() {
-        if (!hasPairingCode || pairingCode.length() != 6) return;
+        if (!hasPairingCode || pairingCode.length() != 6 || isTerminalCloudErrorStatus()) return;
         lastCloudPollMs = System.currentTimeMillis();
         final String code = pairingCode;
         cloudExecutor.execute(() -> {
+            if (hasPendingCloudCommands()) {
+                drainPendingCloudCommandsBlocking(code);
+            }
+            String sessionToken = ensureCloudSessionTokenBlocking(code);
+            if (!isValidSessionTokenFormat(sessionToken)) {
+                return;
+            }
             HttpURLConnection conn = null;
             try {
-                String urlStr = "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/" + code;
+                String urlStr = "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/" + sessionToken;
                 conn = (HttpURLConnection) new URL(urlStr).openConnection();
                 conn.setRequestMethod("GET");
+                conn.setUseCaches(false);
+                conn.setRequestProperty("Cache-Control", "no-cache");
                 conn.setConnectTimeout(5000);
                 conn.setReadTimeout(5000);
                 int rc = conn.getResponseCode();
@@ -2044,19 +2309,29 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                             lastCloudHeartbeatTouchMs = now;
                             touchWatchHeartbeatInFirestore(code, now);
                         }
-                        long cloudProtectWindowMs = (mPendingUnackedDelta != 0) ? 20000L : 3500L;
-                        boolean recentlyTapped = (now - lastLocalActionTimeMs) < cloudProtectWindowMs;
                         JSONObject activeNode = fields.optJSONObject("sessionActive");
                         boolean sessionActive = activeNode == null || activeNode.optBoolean("booleanValue", true);
                         JSONObject sidNode = fields.optJSONObject("sessionId");
                         String incomingSid = sidNode != null ? sidNode.optString("stringValue", "") : "";
+                        JSONObject lastCmdIdNode = fields.optJSONObject("lastWatchCmdId");
+                        String fsLastCmdId = lastCmdIdNode != null ? lastCmdIdNode.optString("stringValue", "") : "";
 
                         final int fsArrows = extractFsInt(fields, "arrowsCount", arrowCount);
-                        if (fields.has("arrowsCount") && fsArrows == arrowCount) {
-                            mPendingUnackedDelta = 0;
-                        }
                         final int fsScore = extractFsInt(fields, "totalScore", totalScore);
                         final int fsEnd = Math.max(1, extractFsInt(fields, "currentEnd", currentEnd));
+                        boolean queueEmpty = !hasPendingCloudCommands();
+                        boolean cmdAckedByCloud = pendingCloudCmdId.isEmpty() || pendingCloudCmdId.equals(fsLastCmdId);
+                        if (queueEmpty && fields.has("arrowsCount") && fsArrows == arrowCount
+                                && (pendingUnackedEnd == 0 || fsEnd >= pendingUnackedEnd)
+                                && cmdAckedByCloud) {
+                            mPendingUnackedDelta = 0;
+                            pendingUnackedEnd = 0;
+                            pendingCloudCmdId = "";
+                        }
+                        boolean hasUnackedCloudWork = !queueEmpty || mPendingUnackedDelta != 0 || pendingUnackedEnd > 0;
+                        long cloudProtectWindowMs = hasUnackedCloudWork ? 25_000L : 3_500L;
+                        boolean recentlyTapped = (now - lastLocalActionTimeMs) < cloudProtectWindowMs;
+
                         final int fsDistM = extractFsInt(fields, "distanceM", distanceMeters);
                         final int fsPerEnd = Math.max(1, extractFsInt(fields, "arrowsPerEnd", syncedArrowsPerEnd));
                         final int fsEnds = Math.max(1, extractFsInt(fields, "totalEnds", syncedEndsCount));
@@ -2175,6 +2450,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                                 } catch (Exception ignored) {}
                             }
                             if (!sessionActive) {
+                                isWatchSessionActive = false;
                                 if (analysisMode) {
                                     analysisMode = false;
                                     syncShotDetectionSensors();
@@ -2182,18 +2458,26 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                                 if (!recentlyTapped && (arrowCount > 0 || totalScore > 0 || stepsCount > 0 || lastAnalysisShotNum > 0)) {
                                     resetWatchSessionCounters(true);
                                 }
+                                if (!isActivityResumed) {
+                                    unregisterImuSensors();
+                                    releaseWakeLockSafely();
+                                }
                                 if (canvasView != null) canvasView.invalidate();
                                 return;
                             }
+                            isWatchSessionActive = true;
+                            acquireOrRenewWakeLockIfNeeded();
                             if (!incomingSid.isEmpty() && !currentSessionId.isEmpty() && !incomingSid.equals(currentSessionId)) {
                                 resetWatchSessionCounters(false);
                                 currentSessionId = incomingSid;
+                                isWatchSessionActive = true;
                             } else if (!incomingSid.isEmpty()) {
                                 currentSessionId = incomingSid;
                             }
                             if (!recentlyTapped) {
                                 arrowCount = fsArrows;
                                 mPendingUnackedDelta = 0;
+                                pendingUnackedEnd = 0;
                                 totalScore = fsScore;
                                 currentEnd = fsEnd;
                                 if (arrVal != null) {
@@ -2247,9 +2531,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                         });
                     }
                 } else if (rc == 404 || rc == 401 || rc == 403) {
-                    isCloudSynced = false;
-                    cloudLinkStatus = "NOT_FOUND";
-                    runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+                    handleWatchSessionHttpFailure(rc);
                 } else {
                     isCloudSynced = false;
                     cloudLinkStatus = "NO_NET";
@@ -2266,17 +2548,32 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private void touchWatchHeartbeatInFirestore(final String code, final long nowMs) {
-        if (code == null || code.length() != 6) return;
+        if (code == null || code.length() != 6 || isTerminalCloudErrorStatus()) return;
         cloudExecutor.execute(() -> {
+            String sessionToken = ensureCloudSessionTokenBlocking(code);
+            if (!isValidSessionTokenFormat(sessionToken)) return;
+
             HttpURLConnection conn = null;
             try {
+                int curSteps = Math.max(0, Math.min(1_000_000, stepsCount));
+                int curWalkM = Math.max(0, Math.min(1_000_000, Math.round(getEffectiveWalkedMeters())));
+                int curKcal = Math.max(0, Math.min(100_000, getActiveKcal()));
+
                 JSONObject docFields = new JSONObject();
                 docFields.put("watchSource", new JSONObject().put("stringValue", "WEAR_OS"));
+                docFields.put("watchDeviceId", new JSONObject().put("stringValue", watchDeviceId));
+                docFields.put("watchStepsCount", new JSONObject().put("integerValue", String.valueOf(curSteps)));
+                docFields.put("watchDistanceM", new JSONObject().put("integerValue", String.valueOf(curWalkM)));
+                docFields.put("watchCaloriesKcal", new JSONObject().put("integerValue", String.valueOf(curKcal)));
                 docFields.put("watchHeartbeatAt", new JSONObject().put("integerValue", String.valueOf(nowMs)));
                 docFields.put("updatedAt", new JSONObject().put("integerValue", String.valueOf(nowMs)));
 
                 StringBuilder mask = new StringBuilder();
                 mask.append("updateMask.fieldPaths=watchSource")
+                    .append("&updateMask.fieldPaths=watchDeviceId")
+                    .append("&updateMask.fieldPaths=watchStepsCount")
+                    .append("&updateMask.fieldPaths=watchDistanceM")
+                    .append("&updateMask.fieldPaths=watchCaloriesKcal")
                     .append("&updateMask.fieldPaths=watchHeartbeatAt")
                     .append("&updateMask.fieldPaths=updatedAt");
 
@@ -2297,10 +2594,11 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 }
 
                 String urlStr = "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/"
-                        + code
+                        + sessionToken
                         + "?" + mask + "&currentDocument.exists=true";
                 conn = (HttpURLConnection) new URL(urlStr).openConnection();
                 conn.setRequestMethod("POST");
+                conn.setUseCaches(false);
                 conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
                 conn.setRequestProperty("X-HTTP-Method-Override", "PATCH");
                 conn.setConnectTimeout(5500);
@@ -2314,11 +2612,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 if (rc >= 200 && rc < 300) {
                     isCloudSynced = true;
                     cloudLinkStatus = "SYNCED";
+                    runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
                 } else if (rc == 404 || rc == 401 || rc == 403) {
-                    isCloudSynced = false;
-                    cloudLinkStatus = "NOT_FOUND";
+                    handleWatchSessionHttpFailure(rc);
                 }
-                runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
             } catch (Exception ignored) {
                 if ("LINKING".equals(cloudLinkStatus)) {
                     cloudLinkStatus = "NO_NET";
@@ -2399,10 +2696,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     protected void onResume() {
         super.onResume();
         activeInstanceRef = new WeakReference<>(this);
-        if (wakeLock != null && !wakeLock.isHeld()) {
-            try {
-                wakeLock.acquire(4 * 60 * 60 * 1000L);
-            } catch (Exception ignored) {}
+        isActivityResumed = true;
+        if (isWatchSessionActive) {
+            acquireOrRenewWakeLockIfNeeded();
         }
         if (canvasView != null) {
             canvasView.requestFocus();
@@ -2416,60 +2712,43 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             startHeartRateStreaming(true, false);
         }
         sendToPhone("{\"type\":\"REQUEST_STATE\"}");
+        if (canSyncWithCloudNow() && hasPendingCloudCommands()) {
+            flushPendingCloudCommandsAsync();
+        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        isActivityResumed = false;
         saveState();
         long now = System.currentTimeMillis();
-        boolean recentlyActive = (now - lastActivityMs) < 20 * 60_000L;
-        boolean idleNoSession = !analysisMode
-                && !recentlyActive
-                && arrowCount == 0
-                && lastAnalysisShotNum == 0
-                && totalScore == 0
-                && currentSessionId.isEmpty();
-        if (idleNoSession) {
+        boolean activelyCapturingShot = analysisMode && manualAnalysisRecording;
+        boolean hasActiveSession = isWatchSessionActive
+                && (!currentSessionId.isEmpty() || arrowCount > 0 || totalScore > 0 || activelyCapturingShot)
+                && (now - lastActivityMs) < WAKELOCK_RENEW_TIMEOUT_MS;
+
+        if (!hasActiveSession && !activelyCapturingShot) {
             heartbeatHandler.removeCallbacks(heartbeatRunnable);
-            stopAcousticSnapAnalyzer();
             stopHeartRateStreaming();
-            if (sensorManager != null && isSensorRegistered) {
-                try {
-                    sensorManager.unregisterListener(this);
-                    isSensorRegistered = false;
-                } catch (Exception ignored) {}
-            }
-            if (wakeLock != null && wakeLock.isHeld()) {
-                try {
-                    wakeLock.release();
-                } catch (Exception ignored) {}
-            }
+            unregisterImuSensors();
+            releaseWakeLockSafely();
+        } else {
+            acquireOrRenewWakeLockIfNeeded();
+            syncShotDetectionSensors();
         }
     }
 
     @Override
     protected void onDestroy() {
-        if (Build.VERSION.SDK_INT >= 33 && isBackCallbackRegistered && wearBackInvokedCallback != null) {
-            try {
-                getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(
-                        (android.window.OnBackInvokedCallback) wearBackInvokedCallback
-                );
-            } catch (Throwable ignored) {}
-            isBackCallbackRegistered = false;
-        }
+        isActivityResumed = false;
         if (activeInstanceRef != null && activeInstanceRef.get() == this) {
             activeInstanceRef = new WeakReference<>(null);
         }
         heartbeatHandler.removeCallbacks(heartbeatRunnable);
-        stopAcousticSnapAnalyzer();
+        heartbeatHandler.removeCallbacks(manualTimerRunnable);
         stopHeartRateStreaming();
-        if (sensorManager != null && isSensorRegistered) {
-            try {
-                sensorManager.unregisterListener(this);
-                isSensorRegistered = false;
-            } catch (Exception ignored) {}
-        }
+        unregisterImuSensors();
         if (messageListener != null) {
             try {
                 Wearable.getMessageClient(this).removeListener(messageListener);
@@ -2482,11 +2761,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 dataListener = null;
             } catch (Exception ignored) {}
         }
-        if (wakeLock != null && wakeLock.isHeld()) {
-            try {
-                wakeLock.release();
-            } catch (Exception ignored) {}
-        }
+        releaseWakeLockSafely();
         try {
             cloudExecutor.shutdownNow();
         } catch (Exception ignored) {}
@@ -2496,6 +2771,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private void resetWatchSessionCounters(boolean clearSessionId) {
         arrowCount = 0;
         mPendingUnackedDelta = 0;
+        pendingUnackedEnd = 0;
+        pendingCloudCmdId = "";
         syncedArrowsCount = 0;
         totalScoredArrows = 0;
         totalScore = 0;
@@ -2524,13 +2801,15 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         lastAimY = new float[0];
         if (clearSessionId) {
             currentSessionId = "";
+            isWatchSessionActive = false;
             if (analysisMode) {
                 analysisMode = false;
-                syncShotDetectionSensors();
             }
+            syncShotDetectionSensors();
         }
         SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit();
         editor.putString("currentSessionId", currentSessionId);
+        editor.putBoolean("sessionActive", isWatchSessionActive);
         editor.putInt("arrowCount", 0);
         editor.putInt("totalScore", 0);
         editor.putInt("totalScoredArrows", 0);
@@ -2544,8 +2823,16 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private void saveState() {
         SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit();
         editor.putString("currentSessionId", currentSessionId);
+        editor.putBoolean("sessionActive", isWatchSessionActive);
+        if (watchDeviceId != null && !watchDeviceId.isEmpty()) {
+            editor.putString("watchDeviceId", watchDeviceId);
+        }
         if (hasPairingCode && pairingCode.length() == 6) {
             editor.putString("pairingCode", pairingCode);
+            editor.putString("cloudPairingCode", pairingCode);
+        }
+        if (isValidSessionTokenFormat(cloudSessionToken)) {
+            editor.putString("cloudSessionToken", cloudSessionToken);
         }
         editor.putInt("arrowCount", arrowCount);
         editor.putInt("totalScore", totalScore);
@@ -2581,8 +2868,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     }
 
     private boolean isSpanishLocale() {
-        boolean isSpanish = Locale.getDefault().getLanguage().toLowerCase().startsWith("es");
-        return isSpanish;
+        return Locale.getDefault().getLanguage().toLowerCase(Locale.ROOT).startsWith("es");
     }
 
     private boolean isImperialUnits() {
@@ -3755,8 +4041,11 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             rJson.put(Math.round(rX * 1000.0) / 1000.0);
             rJson.put(Math.round(rY * 1000.0) / 1000.0);
 
+            isWatchSessionActive = true;
+            acquireOrRenewWakeLockIfNeeded();
             markUserActivity(true);
             arrowCount++;
+            mPendingUnackedDelta += 1;
             int shotNum = arrowCount;
             lastAnalysisShotNum = shotNum;
             lastPrepSec = prepSec;
@@ -3789,10 +4078,11 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             compact.put("a", aJson);
             compact.put("r", rJson);
 
+            String boundedShotJson = compactAnalysisShotJson(compact.toString(), MAX_ANALYSIS_SHOT_JSON_CHARS);
             JSONObject cmd = new JSONObject();
             cmd.put("type", "ANALYSIS_SHOT");
             cmd.put("source", source);
-            cmd.put("analysisShotJson", compact.toString());
+            cmd.put("analysisShotJson", boundedShotJson);
             if (lastShotHrBpm > 0) {
                 cmd.put("heartRateBpm", lastShotHrBpm);
             }
@@ -3806,6 +4096,23 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             return true;
         } catch (Exception ignored) {}
         return false;
+    }
+
+    static int scorePointsFromLabel(final String raw) {
+        if (raw == null) return 0;
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty() || "-".equals(trimmed) || "—".equals(trimmed) || "M".equalsIgnoreCase(trimmed)) {
+            return 0;
+        }
+        if ("X".equalsIgnoreCase(trimmed) || "10".equals(trimmed)) {
+            return 10;
+        }
+        try {
+            int val = Integer.parseInt(trimmed);
+            return Math.max(0, Math.min(10, val));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     @Override
@@ -3929,7 +4236,15 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
         private void handleHorizontalSwipe(float dx) {
             if (analysisMode) {
-                analysisPage = (dx < 0) ? 1 : 0;
+                if (dx < 0) {
+                    analysisPage = 1;
+                } else if (analysisPage > 0) {
+                    analysisPage = 0;
+                } else if (!manualAnalysisRecording) {
+                    analysisMode = false;
+                    analysisAutoMode = false;
+                    syncShotDetectionSensors();
+                }
             } else if (dx < 0) {
                 isEditingCode = false;
                 screenIndex = (screenIndex + 1) % 5;
@@ -3943,8 +4258,12 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             syncBackNavigationCallback();
             markUserActivity(false);
             triggerHaptic(20);
+            requestLayout();
             invalidate();
         }
+
+        private final Rect gestureExclusionRect = new Rect();
+        private final List<Rect> gestureExclusionList = java.util.Collections.singletonList(gestureExclusionRect);
 
         @Override
         protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
@@ -3954,12 +4273,15 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 int h = bottom - top;
                 if (w > 0 && h > 0) {
                     try {
-                        float density = getResources().getDisplayMetrics().density;
-                        int exclH = Math.min(h, Math.round(200f * density));
-                        int exclTop = Math.max(0, (h - exclH) / 2);
-                        setSystemGestureExclusionRects(
-                                java.util.Collections.singletonList(new Rect(0, exclTop, w, exclTop + exclH))
-                        );
+                        if (canHandleWatchBackNavigation()) {
+                            float density = getResources().getDisplayMetrics().density;
+                            int exclH = Math.min(h, Math.round(160f * density));
+                            int exclTop = Math.max(0, (h - exclH) / 2);
+                            gestureExclusionRect.set(0, exclTop, w, exclTop + exclH);
+                            setSystemGestureExclusionRects(gestureExclusionList);
+                        } else {
+                            setSystemGestureExclusionRects(java.util.Collections.emptyList());
+                        }
                     } catch (Throwable ignored) {}
                 }
             }
@@ -4004,6 +4326,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
 
         private void incrementArrowManually() {
+            isWatchSessionActive = true;
+            acquireOrRenewWakeLockIfNeeded();
             markUserActivity(true);
             arrowCount++;
             mPendingUnackedDelta += 1;
@@ -4020,7 +4344,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 mPendingUnackedDelta -= 1;
                 if (!currentEndArrows.isEmpty()) {
                     String removed = currentEndArrows.remove(currentEndArrows.size() - 1);
-                    int pts = "X".equals(removed) || "10".equals(removed) ? 10 : ("M".equals(removed) ? 0 : Integer.parseInt(removed));
+                    int pts = scorePointsFromLabel(removed);
                     totalScore = Math.max(0, totalScore - pts);
                     totalScoredArrows = Math.max(0, totalScoredArrows - 1);
                 }
@@ -4035,10 +4359,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
         private void handleTap(float x, float y) {
             lastWatchTapMs = System.currentTimeMillis();
-            if (wakeLock != null && !wakeLock.isHeld()) {
-                try {
-                    wakeLock.acquire(4 * 60 * 60 * 1000L);
-                } catch (Exception ignored) {}
+            if (isWatchSessionActive) {
+                acquireOrRenewWakeLockIfNeeded();
             }
             int h = getHeight();
 
@@ -4085,8 +4407,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             if (y > h * 0.90f) {
                 isEditingCode = false;
                 screenIndex = (screenIndex + 1) % 5;
+                syncBackNavigationCallback();
                 markUserActivity(false);
                 triggerHaptic(20);
+                requestLayout();
                 invalidate();
                 return;
             }
@@ -4107,27 +4431,40 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     markUserActivity(false);
                     triggerHaptic(20);
                     screenIndex = 2;
+                    syncBackNavigationCallback();
+                    requestLayout();
                     invalidate();
                     return;
                 }
             } else if (screenIndex == 1) {
                 for (int i = 0; i < 12; i++) {
                     if (scoreButtons[i].contains(x, y)) {
-                        markUserActivity(true);
                         if (currentEndArrows.size() >= syncedArrowsPerEnd) {
                             if (currentEnd < syncedEndsCount) {
                                 currentEndArrows.clear();
                                 currentEnd++;
+                                pendingUnackedEnd = currentEnd;
                             } else {
+                                markUserActivity(false);
+                                triggerDoubleHaptic();
+                                android.widget.Toast.makeText(
+                                    WearMainActivity.this,
+                                    tr("Ronda completada · Guarda en Resumen", "Round complete · Save in Summary"),
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show();
                                 return;
                             }
                         }
+                        isWatchSessionActive = true;
+                        acquireOrRenewWakeLockIfNeeded();
+                        markUserActivity(true);
                         String val = scoreLabels[i];
                         currentEndArrows.add(val);
-                        int pts = "X".equals(val) || "10".equals(val) ? 10 : ("M".equals(val) ? 0 : Integer.parseInt(val));
+                        int pts = scorePointsFromLabel(val);
                         totalScore += pts;
                         totalScoredArrows++;
                         arrowCount = Math.max(arrowCount + 1, totalScoredArrows);
+                        mPendingUnackedDelta += 1;
                         triggerHaptic(35);
                         saveState();
                         sendToPhone("{\"type\":\"SCORE_INPUT\",\"payload\":{\"value\":\"" + val + "\",\"totalScore\":" + totalScore + "}}");
@@ -4139,10 +4476,11 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     if (!currentEndArrows.isEmpty()) {
                         markUserActivity(true);
                         String removed = currentEndArrows.remove(currentEndArrows.size() - 1);
-                        int pts = "X".equals(removed) || "10".equals(removed) ? 10 : ("M".equals(removed) ? 0 : Integer.parseInt(removed));
+                        int pts = scorePointsFromLabel(removed);
                         totalScore = Math.max(0, totalScore - pts);
                         totalScoredArrows = Math.max(0, totalScoredArrows - 1);
                         arrowCount = Math.max(0, arrowCount - 1);
+                        mPendingUnackedDelta -= 1;
                         triggerHaptic(25);
                         saveState();
                         sendToPhone("{\"type\":\"UNDO_ARROW\",\"totalScore\":" + totalScore + "}");
@@ -4157,6 +4495,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                         markUserActivity(true);
                         currentEndArrows.clear();
                         currentEnd = Math.min(syncedEndsCount, currentEnd + 1);
+                        pendingUnackedEnd = currentEnd;
                         triggerHaptic(45);
                         saveState();
                         sendToPhone("{\"type\":\"NEXT_END\"}");
@@ -4181,6 +4520,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     sendToPhone("/archery101010/ping", "{\"type\":\"PING\"}", false);
                     sendToPhone("{\"type\":\"REQUEST_STATE\"}");
                     if (hasPairingCode && pairingCode.length() == 6) {
+                        if (isTerminalCloudErrorStatus()) {
+                            cloudLinkStatus = "LINKING";
+                        }
                         pollFirestoreCloud();
                     }
                     invalidate();
@@ -4195,6 +4537,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     sendToPhone("{\"type\":\"FINISH_SESSION_FROM_WATCH\"}");
                     resetWatchSessionCounters(true);
                     screenIndex = 0;
+                    syncBackNavigationCallback();
+                    requestLayout();
                     invalidate();
                     return;
                 }
@@ -4202,6 +4546,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 for (int di = 0; di < 6; di++) {
                     if (digitBoxes[di].contains(x, y)) {
                         isEditingCode = true;
+                        syncBackNavigationCallback();
                         if (editDigitPos == di) {
                             adjustSelectedCodeDigit(1);
                         } else {
@@ -4219,6 +4564,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 }
                 if (btnCloudMid.contains(x, y)) {
                     isEditingCode = true;
+                    syncBackNavigationCallback();
                     editDigitPos = (editDigitPos + 1) % 6;
                     markUserActivity(true);
                     triggerHaptic(20);
@@ -4351,7 +4697,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
-            syncBackNavigationCallback();
             int w = getWidth();
             int h = getHeight();
             float cx = w / 2f;
@@ -4764,7 +5109,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             } else {
                 paint.setTextSize(9.0f * scale);
                 paint.setColor(Color.parseColor("#94A3B8"));
-                canvas.drawText(tr("MIDIENDO...", "READING..."), right - 10f * scale, r3Top + 22f * scale, paint);
+                canvas.drawText(tr("MIDIENDO", "READING"), right - 10f * scale, r3Top + 22f * scale, paint);
             }
 
             // Footer above dots
@@ -5239,7 +5584,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 paint.setColor(Color.parseColor("#CBD5E1"));
                 String hrWaitStr = "no_contact".equals(hrStatusCode)
                         ? tr("AJUSTA RELOJ", "ADJUST WATCH")
-                        : tr("MIDIENDO...", "MEASURING...");
+                        : tr("MIDIENDO", "MEASURING");
                 canvas.drawText(hrWaitStr, btnHeartRateAction.left + 9f * scale, card3Top + 27.5f * scale, paint);
             }
 
@@ -5365,11 +5710,17 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         private void drawCloudCodeScreen(Canvas canvas, float cx, float scale, boolean isRound, float wMult) {
             String headerPill;
             boolean useYellowPill = false;
+            boolean isErrorState = "EXPIRED_OR_INVALID".equals(cloudLinkStatus)
+                    || "NOT_FOUND".equals(cloudLinkStatus)
+                    || "NO_NET".equals(cloudLinkStatus);
             if (isEditingCode) {
                 headerPill = tr("DÍGITO ", "DIGIT ") + (editDigitPos + 1) + "/6";
                 useYellowPill = true;
             } else if ("LINKING".equals(cloudLinkStatus)) {
-                headerPill = tr("VINCULANDO...", "LINKING...");
+                headerPill = tr("VINCULANDO", "LINKING");
+                useYellowPill = true;
+            } else if ("EXPIRED_OR_INVALID".equals(cloudLinkStatus)) {
+                headerPill = tr("SESIÓN EXPIRADA — RENUEVA CÓDIGO", "SESSION EXPIRED — RENEW CODE");
                 useYellowPill = true;
             } else if ("NOT_FOUND".equals(cloudLinkStatus)) {
                 headerPill = tr("CÓDIGO INVÁLIDO", "INVALID CODE");
@@ -5393,9 +5744,16 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 canvas.drawBitmap(logo, Math.round(cx - logo.getWidth() / 2f), Math.round(24f * scale), paint);
             }
             paint.setTypeface(outfitExtraBold);
-            paint.setTextSize(6.6f * scale);
+            float pillTextSize = 6.6f * scale;
+            paint.setTextSize(pillTextSize);
+            float maxTextWidth = (isRound ? 142f : 186f) * scale;
             float pTxtW = paint.measureText(headerPill);
-            float pW = Math.max(106f * scale, pTxtW + 22f * scale);
+            while (pTxtW > maxTextWidth && pillTextSize > 4.4f * scale) {
+                pillTextSize -= 0.2f * scale;
+                paint.setTextSize(pillTextSize);
+                pTxtW = paint.measureText(headerPill);
+            }
+            float pW = Math.min((isRound ? 158f : 202f) * scale, Math.max(106f * scale, pTxtW + 16f * scale));
             float pH = 15.5f * scale;
             float pTop = 37f * scale;
             btnToggleDetector.set(cx - pW / 2f, pTop, cx + pW / 2f, pTop + pH);
@@ -5404,7 +5762,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             canvas.drawRoundRect(btnToggleDetector, pH / 2f, pH / 2f, paint);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(1.0f * scale);
-            paint.setColor("NOT_FOUND".equals(cloudLinkStatus) || "NO_NET".equals(cloudLinkStatus)
+            paint.setColor(isErrorState
                     ? Color.parseColor("#FF1E1E")
                     : (useYellowPill ? Color.parseColor("#B3FFE500") : Color.parseColor("#8000A8F3")));
             canvas.drawRoundRect(btnToggleDetector, pH / 2f, pH / 2f, paint);
@@ -5498,7 +5856,6 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             float saveY = 152f * scale;
             btnCloudSave.set(cx - saveW / 2f, saveY, cx + saveW / 2f, saveY + saveH);
             paint.setStyle(Paint.Style.FILL);
-            boolean isErrorState = "NOT_FOUND".equals(cloudLinkStatus) || "NO_NET".equals(cloudLinkStatus);
             paint.setColor(isCloudSynced ? Color.parseColor("#051810") : Color.parseColor("#00BFFF"));
             canvas.drawRoundRect(btnCloudSave, saveH / 2f, saveH / 2f, paint);
             paint.setStyle(Paint.Style.STROKE);
@@ -5513,7 +5870,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             paint.setColor(isCloudSynced ? Color.WHITE : Color.BLACK);
             String saveCta;
             if ("LINKING".equals(cloudLinkStatus)) {
-                saveCta = tr("CONECTANDO...", "LINKING...");
+                saveCta = tr("CONECTANDO", "LINKING");
             } else if (isEditingCode) {
                 saveCta = tr("VINCULAR", "LINK NOW");
             } else if (isErrorState) {

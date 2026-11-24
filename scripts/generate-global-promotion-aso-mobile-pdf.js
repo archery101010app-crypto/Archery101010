@@ -529,7 +529,10 @@ async function generateGlobalPromotionAsoMobilePdf() {
 
   const pdfBytes = await pdfDoc.save();
 
-  const artifactDir = 'C:/Users/Archery 101010/.gemini/antigravity/brain/6a327e3e-d87f-4993-ab10-ae63666eaeeb';
+  const artifactDir =
+    process.env.ARCHERY_ARTIFACTS_DIR ||
+    process.argv[2] ||
+    path.resolve(__dirname, '../artifacts');
   const fileName = 'Guia_Promocion_Global_ASO_Archery101010_Movil.pdf';
   const outPaths = [
     path.join(artifactDir, fileName),

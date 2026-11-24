@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { getLoggedUser, UserProfile, isLinkedToExternalCoach, CoachLinkNotification, markLocalUserWrite, hasRecentLocalUserWrite } from "@/lib/authService";
 import LoginView from "@/components/auth/LoginView";
@@ -1002,6 +1002,7 @@ export default function Home() {
   }, [user?.uid, user?.role, user?.isClubCreator, user?.clubId, user?.coachId]);
 
   // Check active ad campaigns on screen, user, or local database change
+  const lastRecordedBannerImpKeyRef = useRef<string>("");
   useEffect(() => {
     async function checkAds() {
       if (!user || (user.plan === "PRO" && user.role !== "superadmin") || currentScreen === "ADMIN") {
@@ -1011,14 +1012,27 @@ export default function Home() {
         return;
       }
       try {
-        const { getNextPopup, getActiveBannerCampaign, getActiveNotificationBar } = await import("@/lib/adManager");
+        const {
+          getNextPopup,
+          getActiveBannerCampaign,
+          getActiveNotificationBar,
+          recordImpression
+        } = await import("@/lib/adManager");
         const popup = await getNextPopup(currentScreen, user.role, user.plan);
         const banner = await getActiveBannerCampaign(currentScreen, user.role, user.plan);
         const notif = await getActiveNotificationBar(currentScreen, user.role, user.plan);
 
-         setActivePopup(popup);
-         setActiveBanner(banner);
-         setActiveNotification(notif);
+        setActivePopup(popup);
+        setActiveBanner(banner);
+        setActiveNotification(notif);
+
+        if (banner) {
+          const impKey = `${banner.id}:${currentScreen}`;
+          if (lastRecordedBannerImpKeyRef.current !== impKey) {
+            lastRecordedBannerImpKeyRef.current = impKey;
+            void recordImpression(banner.id, user.uid || "visitor");
+          }
+        }
       } catch (err) {
         console.error("Error checking active ads:", err);
       }
@@ -1582,7 +1596,11 @@ export default function Home() {
         {activeBanner && (
           <BannerWidget 
             campaign={activeBanner} 
-            onSlideClick={() => {}} 
+            onSlideClick={(slideId) => {
+              import("@/lib/adManager")
+                .then(({ recordClick }) => recordClick(activeBanner.id, slideId))
+                .catch(() => {});
+            }} 
             onClose={() => setActiveBanner(null)} 
             showCloseButton={user?.plan === "PRO" && (user.role === "superadmin" || (user.proExpiresAt ?? 0) > Date.now())}
           />

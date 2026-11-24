@@ -143,21 +143,20 @@ export async function getActiveNotificationBar(
 
 async function syncAdMetricsToCloud(
   campaignId: string,
-  nextImpressions: number,
-  nextClicks: number,
+  metricKind: "impression" | "click",
   nowMs: number
 ): Promise<void> {
   if (campaignId.startsWith("AD-DEMO-")) {
-    // Local-only demo campaigns may not exist in Firestore; attempt silent updateDoc only if online
+    // Local-only demo campaigns may not exist in Firestore; attempt silent atomic increment(1) only if online
     try {
-      const { doc, updateDoc } = await import("firebase/firestore");
+      const { doc, updateDoc, increment } = await import("firebase/firestore");
       const { db, auth } = await import("@/lib/firebase");
       if (typeof navigator !== "undefined" && navigator.onLine && auth.currentUser) {
-        await updateDoc(doc(db, "ad_campaigns", campaignId), {
-          impressions: nextImpressions,
-          clicks: nextClicks,
-          updatedAt: nowMs
-        }).catch(() => {});
+        const atomicPatch =
+          metricKind === "click"
+            ? { clicks: increment(1), totalClicks: increment(1), updatedAt: nowMs }
+            : { impressions: increment(1), totalImpressions: increment(1), updatedAt: nowMs };
+        await updateDoc(doc(db, "ad_campaigns", campaignId), atomicPatch).catch(() => {});
       }
     } catch {
       // ignore
@@ -166,14 +165,14 @@ async function syncAdMetricsToCloud(
   }
 
   try {
-    const { doc, updateDoc } = await import("firebase/firestore");
+    const { doc, updateDoc, increment } = await import("firebase/firestore");
     const { db, auth } = await import("@/lib/firebase");
     if (typeof navigator !== "undefined" && navigator.onLine && auth.currentUser) {
-      await updateDoc(doc(db, "ad_campaigns", campaignId), {
-        impressions: nextImpressions,
-        clicks: nextClicks,
-        updatedAt: nowMs
-      });
+      const atomicPatch =
+        metricKind === "click"
+          ? { clicks: increment(1), totalClicks: increment(1), updatedAt: nowMs }
+          : { impressions: increment(1), totalImpressions: increment(1), updatedAt: nowMs };
+      await updateDoc(doc(db, "ad_campaigns", campaignId), atomicPatch);
       return;
     }
   } catch (err: any) {
@@ -192,8 +191,7 @@ async function syncAdMetricsToCloud(
     payloadId: campaignId,
     payload: {
       id: campaignId,
-      impressions: nextImpressions,
-      clicks: nextClicks,
+      metricKind,
       updatedAt: nowMs
     },
     timestamp: nowMs
@@ -241,7 +239,7 @@ export async function recordImpression(campaignId: string, visitorId: string): P
         updatedAt: new Date(now).toISOString()
       };
       await adCampaignsStore.setItem(campaignId, updatedCampaign);
-      await syncAdMetricsToCloud(campaignId, nextImpressions, nextClicks, now);
+      await syncAdMetricsToCloud(campaignId, "impression", now);
     }
   } catch (error) {
     console.error("Error recording ad impression:", error);
@@ -272,7 +270,7 @@ export async function recordClick(campaignId: string, _slideId: string): Promise
         updatedAt: new Date(now).toISOString()
       };
       await adCampaignsStore.setItem(campaignId, updatedCampaign);
-      await syncAdMetricsToCloud(campaignId, nextImpressions, nextClicks, now);
+      await syncAdMetricsToCloud(campaignId, "click", now);
     }
   } catch (error) {
     console.error("Error recording ad click:", error);
@@ -305,7 +303,7 @@ function getDefaultDemoCampaigns(): AdCampaign[] {
           imageUrl: "https://images.unsplash.com/photo-1511379938547-c1f69419868d?q=80&w=600&auto=format&fit=crop",
           title: "Equipamiento de Alto Rendimiento 101010",
           subtitle: "Registra cada flecha, analiza tu agrupación y sincroniza con tu Smartwatch Deportivo.",
-          linkUrl: "https://archery101010-c0bb4.web.app",
+          linkUrl: "https://archery101010-c0bb4.firebaseapp.com",
           backgroundColor: "#0F0F11"
         }
       ]
@@ -333,21 +331,21 @@ function getDefaultDemoCampaigns(): AdCampaign[] {
           imageUrl: "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?q=80&w=800&auto=format&fit=crop",
           title: "Flechas de Carbono de Competición",
           subtitle: "Precisión milimétrica para sesiones de control y eliminatorias 1 vs 1.",
-          linkUrl: "https://archery101010-c0bb4.web.app"
+          linkUrl: "https://archery101010-c0bb4.firebaseapp.com"
         },
         {
           id: "SLIDE-BANNER-2",
           imageUrl: "https://images.unsplash.com/photo-1608248597481-496100c8c836?q=80&w=800&auto=format&fit=crop",
           title: "ARCHERY 101010 · Plataforma Oficial de Entrenamiento",
           subtitle: "Monitoreo en vivo para arqueros y entrenadores en todo momento.",
-          linkUrl: "https://archery101010-c0bb4.web.app"
+          linkUrl: "https://archery101010-c0bb4.firebaseapp.com"
         },
         {
           id: "SLIDE-BANNER-3",
           imageUrl: "https://images.unsplash.com/photo-1506126613408-eca07ce68773?q=80&w=800&auto=format&fit=crop",
           title: "Diana Digital 101010 Pro",
           subtitle: "Mejora tu agrupación y ajuste de mira en cada tanda.",
-          linkUrl: "https://archery101010-c0bb4.web.app"
+          linkUrl: "https://archery101010-c0bb4.firebaseapp.com"
         }
       ]
     },
@@ -373,7 +371,7 @@ function getDefaultDemoCampaigns(): AdCampaign[] {
           id: "SLIDE-BAR-1",
           imageUrl: "",
           title: "Seminario de Técnica Olímpica con Coach Invitado · Reserva tu lugar en ARCHERY 101010",
-          linkUrl: "https://archery101010-c0bb4.web.app",
+          linkUrl: "https://archery101010-c0bb4.firebaseapp.com",
           backgroundColor: "#00BFFF"
         }
       ]
@@ -420,9 +418,16 @@ export async function seedDemoAdCampaigns(): Promise<void> {
             const cleanedTitle = (s.title || "")
               .replace(/[\p{Extended_Pictographic}\u2600-\u27BF]/gu, "")
               .trim();
-            if (cleanedTitle !== s.title) {
+            const migratedLink =
+              k.startsWith("AD-DEMO-") && typeof s.linkUrl === "string"
+                ? s.linkUrl.replace(
+                    "https://archery101010-c0bb4.web.app",
+                    "https://archery101010-c0bb4.firebaseapp.com"
+                  )
+                : s.linkUrl;
+            if (cleanedTitle !== s.title || migratedLink !== s.linkUrl) {
               modified = true;
-              return { ...s, title: cleanedTitle };
+              return { ...s, title: cleanedTitle, linkUrl: migratedLink };
             }
             return s;
           });

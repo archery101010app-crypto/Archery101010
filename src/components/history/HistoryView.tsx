@@ -26,6 +26,7 @@ import StravaShareModal from "../scoring/StravaShareModal";
 import { isVolumeSession, isAnalysisOnlySession, getSessionArrows, getSessionScore, getSessionMaxScore, hasRealScore } from "@/lib/scoring/sessionMetrics";
 import { AnalysisHistoryListSection } from "../analysis/AnalysisInspectorShared";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
+import { downloadOrShareFile } from "@/lib/fileDownload";
 
 interface HistoryViewProps {
   user: UserProfile;
@@ -349,36 +350,16 @@ export default function HistoryView({
     });
 
     const csvContent =
-      "\uFEFF" +
       [headers, ...rows].map((row) => row.map(escapeCsvField).join(",")).join("\r\n");
     const fileName = `Archery101010-${getLocalISODate(new Date())}.csv`;
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
 
-    if (
-      typeof window !== "undefined" &&
-      window.ArcheryNativeShare &&
-      typeof navigator !== "undefined" &&
-      navigator.canShare
-    ) {
-      try {
-        const csvFile = new File([blob], fileName, { type: "text/csv" });
-        if (navigator.canShare({ files: [csvFile] })) {
-          await navigator.share({ files: [csvFile], title: fileName });
-          return;
-        }
-      } catch (err: any) {
-        if (err?.name === "AbortError") return;
-      }
-    }
-
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", fileName);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    await downloadOrShareFile({
+      fileName,
+      mimeType: "text/csv;charset=utf-8",
+      data: csvContent,
+      addUtf8Bom: true,
+      shareTitle: fileName
+    });
   };
 
   const loadSessions = async () => {
@@ -485,10 +466,13 @@ export default function HistoryView({
 
   useEffect(() => {
     loadSessions();
+    let cancelled = false;
+    let unsubAuth: (() => void) | null = null;
 
     // Pull user's own (or club's, in Coach mode) sessions from Firestore for 100% cloud-to-history consistency
     async function syncOwnSessionsFromCloud() {
       if (
+        cancelled ||
         typeof navigator === "undefined" ||
         !navigator.onLine ||
         !user?.uid ||
@@ -497,9 +481,25 @@ export default function HistoryView({
         return;
       }
       try {
-        const { collection, query, where, limit, getDocs } = await import("firebase/firestore");
-        const { db, auth } = await import("@/lib/firebase");
-        if (!auth.currentUser) return;
+        const [{ collection, query, where, limit, getDocs }, { onAuthStateChanged }, { db, auth }] =
+          await Promise.all([
+            import("firebase/firestore"),
+            import("firebase/auth"),
+            import("@/lib/firebase")
+          ]);
+        if (cancelled) return;
+        if (!auth.currentUser) {
+          if (!unsubAuth) {
+            unsubAuth = onAuthStateChanged(auth, (fbUser) => {
+              if (!cancelled && fbUser && fbUser.uid === user.uid) {
+                unsubAuth?.();
+                unsubAuth = null;
+                void syncOwnSessionsFromCloud();
+              }
+            });
+          }
+          return;
+        }
 
         const queries = [query(collection(db, "sessions"), where("userId", "==", user.uid), limit(250))];
         if (isCoachResultsView) {
@@ -531,7 +531,7 @@ export default function HistoryView({
             }
           }
         }
-        if (changed) {
+        if (changed && !cancelled) {
           loadSessions();
         }
       } catch (err) {
@@ -551,7 +551,11 @@ export default function HistoryView({
       }
     };
     window.addEventListener("local-db-change", handleDbChange);
-    return () => window.removeEventListener("local-db-change", handleDbChange);
+    return () => {
+      cancelled = true;
+      unsubAuth?.();
+      window.removeEventListener("local-db-change", handleDbChange);
+    };
   }, [user?.uid, user?.clubId, coachViewMode, isCoachResultsView]);
 
   // Filter application trigger (only scored sessions for Puntuaciones tab)
@@ -1388,7 +1392,7 @@ export default function HistoryView({
                     </div>
                     {e.note && (
                       <p className="text-[11.6px] text-white italic mt-1 ps-1">
-                        "{e.note}"
+                        &ldquo;{e.note}&rdquo;
                       </p>
                     )}
                   </div>
@@ -1544,7 +1548,7 @@ export default function HistoryView({
                   {tx("Notas de la Sesión", "Session Notes")}
                 </span>
                 <p className="text-xs text-white leading-relaxed italic">
-                  "{selectedSession.sessionNote}"
+                  &ldquo;{selectedSession.sessionNote}&rdquo;
                 </p>
               </div>
             )}

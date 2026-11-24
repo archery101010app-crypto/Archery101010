@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $EnvFile = Join-Path $ProjectRoot ".env.local"
 $CliBin = Join-Path $PSScriptRoot "tools\connect-iq-sdk-manager.exe"
@@ -36,7 +36,7 @@ Write-Host "1/4 Aceptando acuerdo oficial Connect IQ SDK..."
 Write-Host "2/4 Iniciando sesion en servidor oficial de desarrolladores..."
 & $CliBin login
 
-Write-Host "3/4 Descargando Connect IQ SDK 9.3.0 y los 35 modelos de reloj..."
+Write-Host "3/4 Descargando Connect IQ SDK 9.3.0 y los 53 modelos (87 variantes) de reloj..."
 & $CliBin sdk set "^9.0.0"
 & $CliBin device download --include-fonts --manifest="$ManifestFile"
 

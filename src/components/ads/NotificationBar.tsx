@@ -56,8 +56,15 @@ export default function NotificationBar({ campaign, onClose }: NotificationBarPr
     });
 
     // Open target link
-    if (currentSlide.linkUrl) {
-      window.open(currentSlide.linkUrl, "_blank", "noopener,noreferrer");
+    if (currentSlide.linkUrl && typeof window !== "undefined") {
+      try {
+        const parsed = new URL(currentSlide.linkUrl.trim(), window.location.origin);
+        if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+          window.open(parsed.href, "_blank", "noopener,noreferrer");
+        }
+      } catch {
+        // Ignore malformed or non-HTTP URLs
+      }
     }
     
     // Close immediately
@@ -77,11 +84,11 @@ export default function NotificationBar({ campaign, onClose }: NotificationBarPr
   // Default color is the branding color (cyan-neon) if solid and no custom color
   const defaultBg = "#00BFFF"; // Cyan oficial
 
-  let styleObj: React.CSSProperties = {
-    height: `${heightVal}px`,
+  const styleObj: React.CSSProperties = {
+    minHeight: `${heightVal}px`,
   };
 
-  let classNameVal = "max-w-xs sm:max-w-md md:max-w-xl h-full shadow-[0_4px_20px_rgba(0,0,0,0.5)] flex items-center justify-between px-4 cursor-pointer rounded-full border transition duration-200 ";
+  let classNameVal = "max-w-[calc(100vw-1.5rem)] sm:max-w-md md:max-w-xl py-1.5 shadow-[0_4px_20px_rgba(0,0,0,0.5)] flex items-center justify-between px-3.5 sm:px-4 cursor-pointer rounded-2xl sm:rounded-full border transition duration-200 ";
 
   if (pillStyle === "glass") {
     classNameVal += "bg-neutral-950/75 backdrop-blur-md border-white/10 text-white hover:bg-neutral-900/80";
@@ -112,7 +119,7 @@ export default function NotificationBar({ campaign, onClose }: NotificationBarPr
           onClick={handleBarClick}
         >
           {/* Main content - slide transition */}
-          <div className="flex-1 overflow-hidden relative h-full flex items-center pr-2">
+          <div className="flex-1 min-w-0 relative flex items-center pr-2">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeSlideIndex}

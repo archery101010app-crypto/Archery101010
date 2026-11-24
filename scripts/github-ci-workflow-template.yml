@@ -4,29 +4,51 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify-and-build:
+    name: Verify, Lint, Test & Static Export
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 24
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: "22"
           cache: "npm"
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
 
-      - name: Install dependencies
+      - name: Install root dependencies
         run: npm ci
+
+      - name: Install Cloud Functions dependencies
+        run: npm --prefix functions ci
+
+      - name: Run Zero-Regression AST Guard
+        run: node scripts/verify-no-regressions.js
 
       - name: Run TypeScript static check
         run: npx tsc --noEmit
 
+      - name: Run ESLint
+        run: npm run lint
+
       - name: Run unit tests
         run: npm test
+
+      - name: Run Cloud Functions unit tests
+        run: npm --prefix functions test
 
       - name: Build static Next.js production bundle
         run: npm run build

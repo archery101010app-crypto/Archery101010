@@ -168,11 +168,29 @@ export function yardsToMeters(yards: number): number {
 
 export function formatShootingDistance(
   distanceMeters: number,
-  _unitSystem: UnitSystem = "metric",
-  _distanceUnitOverride?: "m" | "yd",
-  _distanceValueOverride?: number
+  unitSystem: UnitSystem = "metric",
+  distanceUnitOverride?: "m" | "yd",
+  distanceValueOverride?: number
 ): string {
-  return `${Math.round(distanceMeters * 10) / 10}m`;
+  const safeMeters = Number(distanceMeters) || 0;
+  if (distanceUnitOverride === "yd") {
+    const ydVal =
+      typeof distanceValueOverride === "number" && distanceValueOverride > 0
+        ? distanceValueOverride
+        : Math.round(metersToYards(safeMeters));
+    return `${Math.round(ydVal * 10) / 10}yd`;
+  }
+  if (distanceUnitOverride === "m") {
+    const mVal =
+      typeof distanceValueOverride === "number" && distanceValueOverride > 0
+        ? distanceValueOverride
+        : safeMeters;
+    return `${Math.round(mVal * 10) / 10}m`;
+  }
+  if (unitSystem === "imperial") {
+    return `${Math.round(metersToYards(safeMeters))}yd`;
+  }
+  return `${Math.round(safeMeters * 10) / 10}m`;
 }
 
 export function formatWalkedDistanceRegional(meters: number, unitSystem: UnitSystem = "metric"): string {

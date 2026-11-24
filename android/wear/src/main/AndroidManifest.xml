@@ -6,7 +6,6 @@
     <uses-feature android:name="android.hardware.type.watch" android:required="true" />
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
     <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false" />
-    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.sensor.heartrate" android:required="false" />
     <!-- Avoid implicit Play Store device filters (faketouch is implied as REQUIRED by default for every APK) -->
     <uses-feature android:name="android.hardware.faketouch" android:required="false" />

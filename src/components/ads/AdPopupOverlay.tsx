@@ -15,7 +15,7 @@ interface AdPopupOverlayProps {
 export default function AdPopupOverlay({ campaign, onClose, userId }: AdPopupOverlayProps) {
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [closeSecondsLeft, setCloseSecondsLeft] = useState(3);
-  const [canClose, setCanClose] = useState(false);
+  const canClose = closeSecondsLeft <= 0;
 
   useEffect(() => {
     if (!campaign) return;
@@ -25,13 +25,11 @@ export default function AdPopupOverlay({ campaign, onClose, userId }: AdPopupOve
 
     // Block close button for 3 seconds
     setCloseSecondsLeft(3);
-    setCanClose(false);
 
     const interval = setInterval(() => {
       setCloseSecondsLeft((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
-          setCanClose(true);
           return 0;
         }
         return prev - 1;
@@ -60,7 +58,16 @@ export default function AdPopupOverlay({ campaign, onClose, userId }: AdPopupOve
 
   const handleAdClick = () => {
     recordClick(campaign.id, currentSlide.id);
-    window.open(currentSlide.linkUrl, "_blank", "noopener,noreferrer");
+    if (currentSlide.linkUrl && typeof window !== "undefined") {
+      try {
+        const parsed = new URL(currentSlide.linkUrl.trim(), window.location.origin);
+        if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+          window.open(parsed.href, "_blank", "noopener,noreferrer");
+        }
+      } catch {
+        // Ignore malformed or non-HTTP URLs
+      }
+    }
   };
 
   return (

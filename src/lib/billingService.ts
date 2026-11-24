@@ -166,18 +166,78 @@ export function getCoachStoreProducts(): StoreProduct[] {
   return COACH_STORE_PRODUCTS;
 }
 
+export interface StoreReceiptVerificationPayload {
+  platform?: "google_play" | "app_store" | "android" | "ios";
+  purchaseToken?: string;
+  receiptData?: string;
+}
+
+async function persistServerVerifiedCoachUser(
+  baseUser: UserProfile,
+  updatedFields: Record<string, unknown>,
+  auditLogEntry?: Record<string, unknown> | null
+): Promise<UserProfile> {
+  const { getLocalSetting, saveLocalSetting } = await import("@/lib/db/indexedDB");
+  const { markLocalUserWrite } = await import("@/lib/authService");
+
+  const mergedUser: UserProfile = {
+    ...baseUser,
+    ...(updatedFields as Partial<UserProfile>),
+    uid: baseUser.uid,
+    profileSetupCompleted: true
+  };
+
+  markLocalUserWrite(baseUser.uid, Number(mergedUser.updatedAt || Date.now()));
+  await saveLocalSetting("current_user", mergedUser);
+
+  const usersList = await getLocalSetting<UserProfile[]>("simulated_users", []);
+  const idx = usersList.findIndex((u) => u.uid === baseUser.uid);
+  if (idx !== -1) {
+    usersList[idx] = mergedUser;
+  } else {
+    usersList.push(mergedUser);
+  }
+  await saveLocalSetting("simulated_users", usersList);
+
+  if (auditLogEntry && typeof auditLogEntry.id === "string") {
+    const auditLogs = await getLocalSetting<Record<string, unknown>[]>("sub_audit_logs", []);
+    const deduped = auditLogs.filter((entry) => entry?.id !== auditLogEntry.id);
+    await saveLocalSetting("sub_audit_logs", [auditLogEntry, ...deduped]);
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("current-user-updated", { detail: { user: mergedUser } })
+    );
+  }
+
+  return mergedUser;
+}
+
+function isFunctionsUnavailableError(err: unknown): boolean {
+  const code = String((err as { code?: string })?.code || "").toLowerCase();
+  const msg = String((err as { message?: string })?.message || "").toLowerCase();
+  return (
+    code.includes("not-found") ||
+    code.includes("unavailable") ||
+    code.includes("unimplemented") ||
+    (code.includes("internal") && (msg.includes("cors") || msg.includes("failed to fetch") || msg === "internal"))
+  );
+}
+
 /**
- * Activa la suscripción Coach PRO bonificada 100% por lanzamiento
- * Otorga 365 días para coach_pro_annual y 30 días para coach_pro_monthly.
+ * Activa la suscripción Coach PRO bonificada 100% por lanzamiento o verificada con recibo de tienda.
+ * Otorga 365 días para coach_pro_annual y 30 días para coach_pro_monthly a través de Cloud Functions (`verifyStoreSubscription`).
  */
 export async function activateCoachLaunchPromo(
   user: UserProfile,
-  productSku: string = "coach_pro_monthly"
+  productSku: string = "coach_pro_monthly",
+  receiptPayload?: StoreReceiptVerificationPayload
 ): Promise<{ success: boolean; updatedUser: UserProfile }> {
   try {
     const [
       { getLocalSetting, saveLocalSetting, generateResilientId, addToSyncQueue },
-      { updateProfile, generateClubInviteCode, isLinkedToExternalCoach, calculateAgeFromBirthDate },
+      { updateProfile, generateUniqueClubInviteCode, isLinkedToExternalCoach, calculateAgeFromBirthDate },
       { getLocalISODate }
     ] = await Promise.all([
       import("@/lib/db/indexedDB"),
@@ -185,13 +245,22 @@ export async function activateCoachLaunchPromo(
       import("@/lib/i18n/regionalUtils")
     ]);
 
-    if (user.role !== "superadmin" && user.birthDate && user.birthDate.trim()) {
-      const age = calculateAgeFromBirthDate(user.birthDate);
+    if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") {
+      throw new Error(
+        txBilling(
+          "Inicia sesión con tu cuenta para activar Coach PRO.",
+          "Sign in to your account to activate Coach PRO."
+        )
+      );
+    }
+
+    if (user.role !== "superadmin") {
+      const age = user.birthDate && user.birthDate.trim() ? calculateAgeFromBirthDate(user.birthDate) : null;
       if (age === null || age < 18) {
         throw new Error(
           txBilling(
-            "Debes ser mayor de 18 años para activar una cuenta de Entrenador.",
-            "You must be at least 18 years old to activate a Coach account."
+            "Debes ser mayor de 18 años y tener tu fecha de nacimiento configurada para activar una cuenta de Entrenador.",
+            "You must be at least 18 years old with a valid birth date configured to activate a Coach account."
           )
         );
       }
@@ -202,13 +271,119 @@ export async function activateCoachLaunchPromo(
       productSku === "coach_pro_annual" ||
       productSku === "archery101010_coach_pro_annual" ||
       normalizedSku.includes("annual");
+    const canonicalSku = isAnnual ? "coach_pro_annual" : "coach_pro_monthly";
+
+    // Non-superadmin clients MUST verify/activate via Cloud Function (`verifyStoreSubscription`)
+    // and NEVER enqueue `subscription_audit_logs` or `plan: "PRO"` / `role: "coach"` writes into `cola_sincronizacion`.
+    if (user.role !== "superadmin") {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        throw new Error(
+          txBilling(
+            "Se requiere conexión a internet para activar y verificar tu suscripción Coach PRO.",
+            "An internet connection is required to activate and verify your Coach PRO subscription."
+          )
+        );
+      }
+
+      const [{ getFunctions, httpsCallable }, { app, auth, db }, { doc, getDoc }] = await Promise.all([
+        import("firebase/functions"),
+        import("@/lib/firebase"),
+        import("firebase/firestore")
+      ]);
+
+      if (!auth.currentUser || auth.currentUser.uid !== user.uid) {
+        throw new Error(
+          txBilling(
+            "Tu sesión requiere reautenticación antes de activar Coach PRO.",
+            "Your session requires re-authentication before activating Coach PRO."
+          )
+        );
+      }
+
+      try {
+        const verifyFn = httpsCallable<
+          Record<string, unknown>,
+          {
+            ok?: boolean;
+            updatedFields?: Record<string, unknown>;
+            auditLog?: Record<string, unknown>;
+          }
+        >(getFunctions(app), "verifyStoreSubscription", { timeout: 20000 });
+
+        const callableRes = await verifyFn({
+          sku: canonicalSku,
+          ...(receiptPayload || {})
+        });
+
+        const data = callableRes.data;
+        if (!data?.ok || !data.updatedFields) {
+          throw new Error(
+            txBilling(
+              "No se pudo verificar la suscripción en el servidor.",
+              "Could not verify subscription on the server."
+            )
+          );
+        }
+
+        const updatedUser = await persistServerVerifiedCoachUser(
+          user,
+          data.updatedFields,
+          data.auditLog || null
+        );
+        return { success: true, updatedUser };
+      } catch (fnErr: unknown) {
+        if (isFunctionsUnavailableError(fnErr)) {
+          // Spark fallback check: if server already granted PRO (e.g. via SuperAdmin), sync down cleanly without poisoning syncQueue
+          const snap = await getDoc(doc(db, "users", user.uid)).catch(() => null);
+          const remoteData = snap && snap.exists() ? (snap.data() as Record<string, unknown>) : null;
+          if (
+            remoteData &&
+            remoteData.plan === "PRO" &&
+            typeof remoteData.proExpiresAt === "number" &&
+            remoteData.proExpiresAt > Date.now()
+          ) {
+            const updatedUser = await persistServerVerifiedCoachUser(user, remoteData, null);
+            return { success: true, updatedUser };
+          }
+          throw new Error(
+            txBilling(
+              "El servicio de activación en la nube no está disponible en este momento. Inténtalo de nuevo más tarde.",
+              "The cloud subscription activation service is unavailable right now. Please try again later."
+            )
+          );
+        }
+
+        const code = String((fnErr as { code?: string })?.code || "").toLowerCase();
+        if (code.includes("resource-exhausted")) {
+          throw new Error(
+            txBilling(
+              "Has alcanzado el límite diario de activaciones promocionales. Inténtalo mañana.",
+              "Daily promotional activation limit reached. Please try again tomorrow."
+            )
+          );
+        }
+        if (code.includes("failed-precondition")) {
+          throw new Error(
+            txBilling(
+              "Tu cuenta no cumple los requisitos para activar Coach PRO (edad mínima 18 años o recibo vigente).",
+              "Your account does not meet the requirements to activate Coach PRO (minimum age 18 or active store receipt)."
+            )
+          );
+        }
+        throw fnErr instanceof Error
+          ? fnErr
+          : new Error(txBilling("Error al verificar suscripción.", "Subscription verification error."));
+      }
+    }
+
+    // SuperAdmin path (permitted directly by Firestore security rules)
     const periodMs = isAnnual ? COACH_PRO_ANNUAL_PERIOD_MS : COACH_PRO_PERIOD_MS;
     const now = Date.now();
     const expiresAt = now + periodMs;
 
     const linkedToExternal = isLinkedToExternalCoach(user);
     const existingCode = user.clubInviteCode ? user.clubInviteCode.trim() : "";
-    const validCode = /^\d{6}$/.test(existingCode) ? existingCode : generateClubInviteCode();
+    const validCode = /^\d{6}$/.test(existingCode) ? existingCode : await generateUniqueClubInviteCode();
     const canonicalCoachClubId = "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
     const resolvedClubId =
       user.isClubCreator && user.clubId ? user.clubId : canonicalCoachClubId;
@@ -221,7 +396,7 @@ export async function activateCoachLaunchPromo(
       : {
           plan: "PRO",
           proExpiresAt: expiresAt,
-          role: user.role === "archer" ? "coach" : user.role,
+          role: "superadmin",
           clubId: resolvedClubId,
           clubInviteCode: validCode,
           isClubCreator: true
@@ -232,18 +407,34 @@ export async function activateCoachLaunchPromo(
     const newLog = {
       id: generateResilientId("SUB"),
       userId: user.uid,
-      userName: user.fullName || user.email,
+      userName: (user.fullName || user.email || user.uid).slice(0, 128),
       previousPlan: user.plan || "FREE",
       newPlan: "PRO" as const,
-      sku: isAnnual ? "coach_pro_annual" : "coach_pro_monthly",
+      sku: canonicalSku,
       expiresAt,
       createdAt: now,
+      updatedAt: now,
       timestamp: getLocalISODate(now),
+      source: "superadmin_promo",
       reason: `Activación Bonificada de Lanzamiento (${isAnnual ? "Anual 365d" : "Mensual 30d"})`
     };
 
-    // Queue subscription audit log for offline-first resilience
-    if (user.uid !== "USR-GUEST-OFFLINE") {
+    try {
+      const { doc, setDoc } = await import("firebase/firestore");
+      const { db, auth } = await import("@/lib/firebase");
+      if (auth.currentUser) {
+        await setDoc(doc(db, "subscription_audit_logs", newLog.id), newLog);
+      } else {
+        await addToSyncQueue({
+          id: generateResilientId("TXN"),
+          collection: "subscription_audit_logs",
+          operation: "INSERT",
+          payloadId: newLog.id,
+          payload: newLog,
+          timestamp: now
+        });
+      }
+    } catch {
       await addToSyncQueue({
         id: generateResilientId("TXN"),
         collection: "subscription_audit_logs",
@@ -254,25 +445,9 @@ export async function activateCoachLaunchPromo(
       }).catch(() => {});
     }
 
-    // Confirm the coach code and audit log reach the cloud immediately when online
-    try {
-      const { doc, setDoc } = await import("firebase/firestore");
-      const { db, auth } = await import("@/lib/firebase");
-      if (auth.currentUser && user.uid !== "USR-GUEST-OFFLINE") {
-        await setDoc(doc(db, "users", user.uid), updatedUser, { merge: true });
-        await setDoc(doc(db, "subscription_audit_logs", newLog.id), newLog).catch(
-          () => {}
-        );
-      }
-    } catch (cloudErr) {
-      console.warn("Coach activation saved locally; cloud sync pending:", cloudErr);
-    }
-
-    // Register real subscription audit log in IndexedDB
-    const auditLogs = await getLocalSetting<any[]>("sub_audit_logs", []);
+    const auditLogs = await getLocalSetting<Record<string, unknown>[]>("sub_audit_logs", []);
     await saveLocalSetting("sub_audit_logs", [newLog, ...auditLogs]);
 
-    // Notify components
     if (typeof window !== "undefined") {
       window.dispatchEvent(
         new CustomEvent("current-user-updated", { detail: { user: updatedUser } })
@@ -287,9 +462,8 @@ export async function activateCoachLaunchPromo(
 }
 
 /**
- * Restaura compras previas de Google Play Store / Apple App Store.
- * Consulta subscription_audit_logs en Firestore para userId == user.uid con expiresAt > Date.now()
- * antes de restaurar PRO — nunca otorga un periodo PRO gratuito nuevo si el usuario no tenía uno vigente.
+ * Restaura compras previas de Google Play Store / Apple App Store mediante Cloud Functions (`restoreStoreSubscription`)
+ * con respaldo de lectura de `users/{uid}` y `subscription_audit_logs` autorizados por el servidor.
  */
 export async function restoreCoachStorePurchases(
   user: UserProfile
@@ -306,51 +480,90 @@ export async function restoreCoachStorePurchases(
 
   const [
     { getLocalSetting },
-    { updateProfile, generateClubInviteCode, isLinkedToExternalCoach }
+    { updateProfile, generateUniqueClubInviteCode, isLinkedToExternalCoach }
   ] = await Promise.all([import("@/lib/db/indexedDB"), import("@/lib/authService")]);
 
   const now = Date.now();
-  let validExpiresAt = 0;
 
-  // 1. Query subscription_audit_logs in Firestore for userId == user.uid where expiresAt > Date.now()
+  // 1. Primary path: invoke `restoreStoreSubscription` Cloud Function so server restores `users/{uid}` atomically
+  if (typeof navigator === "undefined" || navigator.onLine) {
+    try {
+      const [{ getFunctions, httpsCallable }, { app, auth }] = await Promise.all([
+        import("firebase/functions"),
+        import("@/lib/firebase")
+      ]);
+      if (auth.currentUser && auth.currentUser.uid === user.uid) {
+        const restoreFn = httpsCallable<
+          Record<string, never>,
+          {
+            ok?: boolean;
+            restored?: boolean;
+            code?: string;
+            updatedFields?: Record<string, unknown>;
+          }
+        >(getFunctions(app), "restoreStoreSubscription", { timeout: 20000 });
+
+        const res = await restoreFn({});
+        if (res.data?.ok && res.data.restored && res.data.updatedFields) {
+          const updatedUser = await persistServerVerifiedCoachUser(user, res.data.updatedFields, null);
+          return {
+            success: true,
+            message: txBilling(
+              "¡Acceso Coach PRO restaurado y validado con éxito!",
+              "Coach PRO access restored and verified!"
+            ),
+            updatedUser
+          };
+        }
+      }
+    } catch (fnErr) {
+      if (!isFunctionsUnavailableError(fnErr)) {
+        console.warn("restoreStoreSubscription callable warning, trying server document read:", fnErr);
+      }
+    }
+  }
+
+  // 2. Fallback read: inspect remote `users/{uid}` and server-authored `subscription_audit_logs`
+  let validExpiresAt = 0;
+  let remoteServerProfile: Record<string, unknown> | null = null;
+
   try {
     const { collection, query, where, getDocs, doc, getDoc, limit } = await import("firebase/firestore");
     const { db, auth } = await import("@/lib/firebase");
 
-    if (auth.currentUser) {
-      try {
+    if (auth.currentUser && auth.currentUser.uid === user.uid) {
+      const userSnap = await getDoc(doc(db, "users", user.uid)).catch(() => null);
+      if (userSnap && userSnap.exists()) {
+        const uData = userSnap.data() as Record<string, unknown>;
+        remoteServerProfile = uData;
+        const remoteExp = Number(uData?.proExpiresAt) || 0;
+        if (uData?.plan === "PRO" && remoteExp > now) {
+          validExpiresAt = remoteExp;
+        }
+      }
+
+      if (validExpiresAt <= now) {
         const q = query(
           collection(db, "subscription_audit_logs"),
           where("userId", "==", user.uid),
           limit(100)
         );
-        const snap = await getDocs(q);
-        snap.forEach((docSnap) => {
+        const snap = await getDocs(q).catch(() => null);
+        snap?.forEach((docSnap) => {
           const data = docSnap.data();
           const exp = Number(data?.expiresAt) || 0;
-          if ((data?.newPlan === "PRO" || !data?.newPlan) && exp > now && exp > validExpiresAt) {
+          if ((data?.newPlan === "PRO" || data?.plan === "PRO") && exp > now && exp > validExpiresAt) {
             validExpiresAt = exp;
           }
         });
-      } catch {
-        // Fallback if audit log read is restricted: check remote users/{uid}.proExpiresAt without granting new PRO
-        const userSnap = await getDoc(doc(db, "users", user.uid));
-        if (userSnap.exists()) {
-          const uData = userSnap.data();
-          const remoteExp = Number(uData?.proExpiresAt) || 0;
-          if (uData?.plan === "PRO" && remoteExp > now) {
-            validExpiresAt = remoteExp;
-          }
-        }
       }
     }
   } catch (err) {
-    console.warn("Could not query cloud subscription_audit_logs:", err);
+    console.warn("Could not query cloud subscription records:", err);
   }
 
-  // 2. Offline fallback against local IndexedDB sub_audit_logs (only unexpired entries for this user)
-  if (validExpiresAt <= now) {
-    const localLogs = await getLocalSetting<any[]>("sub_audit_logs", []);
+  if (validExpiresAt <= now && user.role === "superadmin") {
+    const localLogs = await getLocalSetting<Record<string, unknown>[]>("sub_audit_logs", []);
     for (const entry of localLogs) {
       const exp = Number(entry?.expiresAt) || 0;
       if (
@@ -374,9 +587,37 @@ export async function restoreCoachStorePurchases(
     };
   }
 
+  // If server `users/{uid}` already carries active PRO, sync down locally without queueing client writes
+  if (
+    remoteServerProfile &&
+    remoteServerProfile.plan === "PRO" &&
+    Number(remoteServerProfile.proExpiresAt) > now
+  ) {
+    const updatedUser = await persistServerVerifiedCoachUser(user, remoteServerProfile, null);
+    return {
+      success: true,
+      message: txBilling(
+        "¡Acceso Coach PRO restaurado y validado con éxito!",
+        "Coach PRO access restored and verified!"
+      ),
+      updatedUser
+    };
+  }
+
+  // Non-superadmin cannot write `plan: "PRO"` directly when Cloud Functions is unreachable
+  if (user.role !== "superadmin") {
+    return {
+      success: false,
+      message: txBilling(
+        "Se encontró un registro previo, pero el servidor de restauración no está disponible en este momento. Inténtalo más tarde.",
+        "A previous subscription record was found, but the restoration service is currently unavailable. Please try again later."
+      )
+    };
+  }
+
   const linkedToExternal = isLinkedToExternalCoach(user);
   const existingCode = user.clubInviteCode ? user.clubInviteCode.trim() : "";
-  const validCode = /^\d{6}$/.test(existingCode) ? existingCode : generateClubInviteCode();
+  const validCode = /^\d{6}$/.test(existingCode) ? existingCode : await generateUniqueClubInviteCode();
   const canonicalCoachClubId = "CLB-" + (user.uid ? user.uid.replace("USR-", "") : "DIRECTOR");
   const resolvedClubId =
     user.isClubCreator && user.clubId ? user.clubId : canonicalCoachClubId;
@@ -389,7 +630,7 @@ export async function restoreCoachStorePurchases(
     : {
         plan: "PRO",
         proExpiresAt: validExpiresAt,
-        role: user.role === "archer" ? "coach" : user.role,
+        role: "superadmin",
         clubId: resolvedClubId,
         clubInviteCode: validCode,
         isClubCreator: true

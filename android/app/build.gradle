@@ -13,23 +13,24 @@ android {
         applicationId "com.archery101010.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 55900
-        versionName "2.159"
+        versionCode 56000
+        versionName "2.160"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
-            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~:!*.apk:!*.aab:!*.zip'
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~:!*.apk:!*.aab:!*.zip:!*.iq:!*.pdf:!*.mp4:!demos:!garmin-store:!store-assets'
         }
     }
     signingConfigs {
         release {
-            def ksPath = keystoreProps.getProperty("storeFile") ?: System.getenv("ARCHERY_KEYSTORE_PATH")
-            def ksPass = keystoreProps.getProperty("storePassword") ?: System.getenv("ARCHERY_KEYSTORE_PASSWORD")
-            def ksAlias = keystoreProps.getProperty("keyAlias") ?: System.getenv("ARCHERY_KEY_ALIAS")
-            def ksKeyPass = keystoreProps.getProperty("keyPassword") ?: System.getenv("ARCHERY_KEY_PASSWORD")
+            def ksPath = System.getenv("ARCHERY_KEYSTORE_FILE") ?: System.getenv("ARCHERY_KEYSTORE_PATH") ?: keystoreProps.getProperty("storeFile")
+            def ksPass = System.getenv("ARCHERY_KEYSTORE_PASSWORD") ?: keystoreProps.getProperty("storePassword")
+            def ksAlias = System.getenv("ARCHERY_KEY_ALIAS") ?: keystoreProps.getProperty("keyAlias")
+            def ksKeyPass = System.getenv("ARCHERY_KEY_PASSWORD") ?: keystoreProps.getProperty("keyPassword")
             if (ksPath) {
-                def resolvedKsFile = file(ksPath).exists() ? file(ksPath) : rootProject.file(ksPath)
+                def directKsFile = new File(ksPath)
+                def resolvedKsFile = directKsFile.isAbsolute() ? directKsFile : (file(ksPath).exists() ? file(ksPath) : rootProject.file(ksPath))
                 if (resolvedKsFile.exists() && ksPass && ksAlias && ksKeyPass) {
                     storeFile resolvedKsFile
                     storePassword ksPass

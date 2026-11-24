@@ -20,7 +20,9 @@ import {
   installAppOnWatch,
   calculateActiveKcal,
   getOrCreatePhoneWatchPairingCode,
+  refreshPhoneWatchPairingWindow,
   connectWatchClientToPairingCode,
+  pauseWatchClientSubscription,
   disconnectWatchClientPairingCode,
   getActiveWatchClientPairingCode,
   subscribeCloudWatchPairingStatus
@@ -60,6 +62,765 @@ function scorePointsForKey(val: string): number {
   const n = parseInt(val, 10);
   return Number.isFinite(n) && n >= 1 && n <= 9 ? n : 0;
 }
+
+interface WatchBrandHeaderProps {
+  pillText: string;
+  pillColor?: "cyan" | "yellow" | "red" | "muted";
+  compact?: boolean;
+  isSquare: boolean;
+  onClickPill?: () => void;
+}
+
+const WatchBrandHeader = React.memo(function WatchBrandHeader({
+  pillText,
+  pillColor = "cyan",
+  compact = false,
+  isSquare,
+  onClickPill
+}: WatchBrandHeaderProps) {
+  const borderClass =
+    pillColor === "yellow"
+      ? "border-[#FFE500]/45 bg-[#101006]"
+      : pillColor === "red"
+      ? "border-[#FF1E1E]/45 bg-[#160708]"
+      : pillColor === "muted"
+      ? "border-white/15 bg-[#0A0D13]"
+      : "border-[#00A8F3]/40 bg-[#040B12]";
+  const dotClass =
+    pillColor === "yellow"
+      ? "bg-[#FFE500]"
+      : pillColor === "red"
+      ? "bg-[#FF1E1E]"
+      : pillColor === "muted"
+      ? "bg-[#6E7785]"
+      : "bg-[#00A8F3]";
+
+  return (
+    <div className={`flex flex-col items-center ${compact ? "gap-[3px]" : "gap-[5px]"} z-10`}>
+      <img
+        src="/images/brand_logo_header.png"
+        srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
+        alt="ARCHERY 101010"
+        className={`${
+          compact ? "h-[8px]" : isSquare ? "h-[10px]" : "h-[9.2px]"
+        } w-auto object-contain select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]`}
+        draggable={false}
+      />
+      <button
+        type="button"
+        onClick={onClickPill}
+        className={`inline-flex items-center justify-center gap-[5px] border ${borderClass} ${
+          compact ? "px-[8px] py-[1.5px] text-[7.5px]" : "px-[10px] py-[2.5px] text-[8px]"
+        } rounded-full font-extrabold tracking-[0.08em] uppercase text-white whitespace-nowrap transition active:scale-95 cursor-pointer tabular-nums`}
+      >
+        <span className={`w-[5px] h-[5px] rounded-full shrink-0 ${dotClass}`} />
+        <span>{pillText}</span>
+      </button>
+    </div>
+  );
+});
+
+interface WatchCounterChassisProps {
+  isSquare: boolean;
+  digits: string[];
+  volumeLabel: string;
+  highlightGold?: boolean;
+}
+
+const WatchCounterChassis = React.memo(function WatchCounterChassis({
+  isSquare,
+  digits,
+  volumeLabel,
+  highlightGold = false
+}: WatchCounterChassisProps) {
+  return (
+    <div
+      className={`${
+        isSquare ? "w-[214px]" : "w-[192px]"
+      } bg-[#07090E] rounded-[13px] pt-[6px] pb-[7px] px-[8px] border transition-all ${
+        highlightGold ? "border-[#FFE500]/65" : "border-white/10"
+      }`}
+    >
+      <div className="text-center text-[7px] font-bold tracking-[0.14em] text-[#8E96A4] uppercase mb-[4px] whitespace-nowrap tabular-nums">
+        {volumeLabel}
+      </div>
+
+      <div className="grid grid-cols-4 gap-[5px] bg-[#030407] p-[4px] rounded-[9px] border border-white/[0.06]">
+        {digits.map((digitStr, i) => {
+          const isUnits = i === 3;
+          return (
+            <div
+              key={i}
+              className={`h-[38px] rounded-[6px] bg-[#0B0E15] flex items-center justify-center relative overflow-hidden select-none border ${
+                isUnits ? "border-[#FFE500] bg-[#101008]" : "border-white/[0.11]"
+              }`}
+            >
+              <AnimatePresence mode="popLayout">
+                <motion.span
+                  key={`${i}-${digitStr}`}
+                  initial={{ y: 10, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: -10, opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 450, damping: 28 }}
+                  className={`font-sans text-[23.5px] font-extrabold leading-none tabular-nums ${
+                    isUnits ? "text-[#FFE500]" : "text-white"
+                  }`}
+                >
+                  {digitStr}
+                </motion.span>
+              </AnimatePresence>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
+interface WatchFaceContentProps {
+  isAnalysisWatchMode: boolean;
+  isSquare: boolean;
+  isEs: boolean;
+  isSpanish: boolean;
+  analysisPage: 0 | 1;
+  setAnalysisPage: React.Dispatch<React.SetStateAction<0 | 1>>;
+  screenIdx: number;
+  setScreenIdx: React.Dispatch<React.SetStateAction<number>>;
+  lastAnalysisShot: AnalysisShotRecord | null;
+  activeState: BiometricSessionSnapshot;
+  manualAnalysisStartMs: number | null;
+  manualElapsedSec: number;
+  justDetectedShot: boolean;
+  liveAnalysisHr?: number;
+  watchBowLabel: string;
+  isWatchConnected: boolean;
+  digits: string[];
+  walkedPrimaryStr: string;
+  walkedDualStr: string;
+  currentTanda: number;
+  visibleSlotsCount: number;
+  endArrowsList: string[];
+  bleHrStatus: BleHeartRateStatus;
+  tx: (esText: string, enText: string) => string;
+  triggerHaptic: (pattern?: number | number[]) => void;
+  handlePhysicalWatchButton: () => void;
+  handleWheel: (e: React.WheelEvent) => void;
+  handleWatchTouchStart: (e: React.TouchEvent) => void;
+  handleWatchTouchEnd: (e: React.TouchEvent) => void;
+  handleWatchPointerDown: (e: React.PointerEvent) => void;
+  handleWatchPointerUp: (e: React.PointerEvent) => void;
+  handleArrowDelta: (delta: number, source: "watch_manual" | "watch_auto") => void;
+  handleScoreKeyPress: (val: string) => void;
+  handleUndoScore: () => void;
+  handleNextEnd: () => void;
+  handleFinishSession: () => void;
+}
+
+const WatchFaceContent = React.memo(function WatchFaceContent({
+  isAnalysisWatchMode,
+  isSquare,
+  isEs,
+  isSpanish,
+  analysisPage,
+  setAnalysisPage,
+  screenIdx,
+  setScreenIdx,
+  lastAnalysisShot,
+  activeState,
+  manualAnalysisStartMs,
+  manualElapsedSec,
+  justDetectedShot,
+  liveAnalysisHr,
+  watchBowLabel,
+  isWatchConnected,
+  digits,
+  walkedPrimaryStr,
+  walkedDualStr,
+  currentTanda,
+  visibleSlotsCount,
+  endArrowsList,
+  bleHrStatus,
+  tx,
+  triggerHaptic,
+  handlePhysicalWatchButton,
+  handleWheel,
+  handleWatchTouchStart,
+  handleWatchTouchEnd,
+  handleWatchPointerDown,
+  handleWatchPointerUp,
+  handleArrowDelta,
+  handleScoreKeyPress,
+  handleUndoScore,
+  handleNextEnd,
+  handleFinishSession
+}: WatchFaceContentProps) {
+  if (isAnalysisWatchMode) {
+    const shotNum = lastAnalysisShot?.shotNumber || activeState.arrowsCount || 0;
+    return (
+      <div
+        dir="ltr"
+        onTouchStart={handleWatchTouchStart}
+        onTouchEnd={handleWatchTouchEnd}
+        onPointerDown={handleWatchPointerDown}
+        onPointerUp={handleWatchPointerUp}
+        className={`relative w-[284px] h-[284px] bg-[#020305] border border-white/10 flex flex-col items-center justify-between touch-pan-y overscroll-x-none ${
+          analysisPage === 0 ? "pt-[21px] pb-[11px] px-[14px]" : "pt-[19px] pb-[12px] px-[16px]"
+        } overflow-hidden select-none transition-all ${
+          isSquare ? "rounded-[48px]" : "rounded-full"
+        }`}
+      >
+        <div
+          className={`absolute inset-[4px] border border-white/[0.04] pointer-events-none ${
+            isSquare ? "rounded-[44px]" : "rounded-full"
+          }`}
+        />
+
+        {analysisPage === 0 ? (
+          <>
+            <div className="flex flex-col items-center gap-[3px] z-10 shrink-0">
+              <img
+                src="/images/brand_logo_header.png"
+                srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
+                alt="ARCHERY 101010"
+                className={`${isEs ? "h-[9.5px]" : "h-[9px]"} w-auto object-contain select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]`}
+                draggable={false}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic(15);
+                  setAnalysisPage(1);
+                }}
+                className={`inline-flex items-center gap-[4px] rounded-full px-[9px] py-[2px] text-[8px] font-extrabold tracking-[0.07em] text-white uppercase whitespace-nowrap tabular-nums border cursor-pointer active:scale-95 transition ${
+                  manualAnalysisStartMs
+                    ? "bg-[#151105] border-[#FFE500]/75"
+                    : "bg-[#080B10] border-white/[0.14]"
+                }`}
+              >
+                <span
+                  className={`w-[5px] h-[5px] rounded-full shrink-0 ${
+                    manualAnalysisStartMs
+                      ? "bg-[#FFE500] animate-pulse"
+                      : justDetectedShot
+                      ? "bg-[#FFE500]"
+                      : "bg-[#00BFFF]"
+                  }`}
+                />
+                <span>
+                  {manualAnalysisStartMs
+                    ? `${tx("Grabando", "Rec")} · ${manualElapsedSec.toFixed(1)}s`
+                    : shotNum > 0
+                    ? `${tx("Tiro", "Shot")} ${shotNum} · ${activeState.distanceM}m`
+                    : `${tx("Listo", "Ready")} · ${activeState.distanceM}m`}
+                </span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={handlePhysicalWatchButton}
+              aria-label={
+                manualAnalysisStartMs
+                  ? tx("Finalizar tiro", "End shot")
+                  : tx("Iniciar tiro", "Start shot")
+              }
+              className="flex-1 flex items-center justify-center z-[5] my-[1px] cursor-pointer active:scale-[0.98] transition"
+            >
+              <AnalysisDianaSvg shot={lastAnalysisShot} sizePx={124} compactWatchMode />
+            </button>
+
+            <div className="flex flex-col items-center gap-[5px] z-10 shrink-0 w-full">
+              <button
+                type="button"
+                onClick={handlePhysicalWatchButton}
+                className={`w-[184px] h-[44px] rounded-full text-[14px] font-black uppercase tracking-[0.07em] flex items-center justify-center gap-[6px] cursor-pointer active:scale-95 transition tabular-nums border ${
+                  manualAnalysisStartMs
+                    ? "bg-[#FF1E1E] text-white border-white/35"
+                    : "bg-[#00BFFF] text-black border-white/20"
+                }`}
+              >
+                <span>{manualAnalysisStartMs ? "■" : "▶"}</span>
+                <span>{manualAnalysisStartMs ? tx("Final", "End") : tx("Inicio", "Start")}</span>
+              </button>
+
+              <div className="flex items-center gap-[5px]">
+                {[0, 1].map((idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic(15);
+                      setAnalysisPage(idx as 0 | 1);
+                    }}
+                    aria-label={tx(`Pantalla ${idx + 1}`, `Screen ${idx + 1}`)}
+                    className={`h-[4px] rounded-full transition-all cursor-pointer ${
+                      analysisPage === idx ? "w-[13px] bg-[#00BFFF]" : "w-[4px] bg-white/22"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex flex-col items-center gap-[4px] z-10 shrink-0">
+              <img
+                src="/images/brand_logo_header.png"
+                srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
+                alt="ARCHERY 101010"
+                className="h-[9.5px] w-auto object-contain select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]"
+                draggable={false}
+              />
+              <div className="inline-flex items-center gap-[5px] bg-[#080B10] border border-white/[0.13] rounded-full px-[10px] py-[2px] text-[8.3px] font-extrabold tracking-[0.08em] text-white uppercase whitespace-nowrap tabular-nums">
+                <span className="w-[5px] h-[5px] rounded-full bg-[#00BFFF] shrink-0" />
+                <span>
+                  {shotNum > 0
+                    ? `${tx("Datos · Tiro", "Data · Shot")} ${shotNum}`
+                    : tx("Datos · En Espera", "Data · Standby")}
+                </span>
+              </div>
+            </div>
+
+            <div className="w-[200px] flex flex-col gap-[5.5px] z-10">
+              <div className="h-[45px] bg-[#0A0D14] border border-white/[0.10] rounded-[13px] px-[12px] flex items-center justify-between">
+                <div className="flex flex-col gap-[0.5px]">
+                  <span className="text-[8.8px] font-extrabold tracking-[0.08em] text-white uppercase">
+                    {tx("Estabilidad", "Stability")}
+                  </span>
+                  <span className="text-[8.3px] font-semibold text-white tabular-nums">
+                    {lastAnalysisShot ? `±${lastAnalysisShot.swayRadiusCm.toFixed(1)} cm` : "—"}
+                  </span>
+                </div>
+                <span className="text-[20px] font-black text-white tracking-[-0.02em] leading-none tabular-nums">
+                  {lastAnalysisShot ? (
+                    <>
+                      {lastAnalysisShot.stabilityPct}
+                      <span className="text-[10.5px] font-bold ml-[2px]">%</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-[5.5px]">
+                <div className="h-[50px] bg-[#0A0D14] border border-white/[0.10] rounded-[13px] py-[6px] px-[9px] flex flex-col justify-between min-w-0">
+                  <div className={`flex items-center gap-[4.5px]${isEs ? "" : " min-w-0"}`}>
+                    <span className="w-[9px] h-0 border-t-2 border-dashed border-white shrink-0" />
+                    <span
+                      className={`text-[7.5px] font-black tracking-[0.04em] text-white uppercase ${
+                        isEs ? "whitespace-nowrap" : "break-words leading-tight"
+                      }`}
+                    >
+                      {tx("Preparatorio", "Preparatory")}
+                    </span>
+                  </div>
+                  <span className="text-[19px] font-black text-white tracking-[-0.02em] leading-none tabular-nums">
+                    {lastAnalysisShot ? (
+                      <>
+                        {lastAnalysisShot.prepSeconds.toFixed(1)}
+                        <span className="text-[10.5px] font-bold ml-[2px]">s</span>
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </span>
+                </div>
+
+                <div className="h-[50px] bg-[#0A0D14] border border-white/[0.10] rounded-[13px] py-[6px] px-[9px] flex flex-col justify-between">
+                  <div className="flex items-center gap-[4.5px]">
+                    <span className="w-[9px] h-[2.5px] rounded-full bg-[#00BFFF] shrink-0" />
+                    <span className="text-[7.5px] font-black tracking-[0.04em] text-white uppercase whitespace-nowrap">
+                      {tx("Apuntado", "Aiming")}
+                    </span>
+                  </div>
+                  <span className="text-[19px] font-black text-white tracking-[-0.02em] leading-none tabular-nums">
+                    {lastAnalysisShot ? (
+                      <>
+                        {lastAnalysisShot.aimSeconds.toFixed(1)}
+                        <span className="text-[10.5px] font-bold ml-[2px]">s</span>
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </span>
+                </div>
+              </div>
+
+              <div className="h-[45px] bg-[#0A0D14] border border-white/[0.10] rounded-[13px] px-[12px] flex items-center justify-between">
+                <div className="flex flex-col gap-[0.5px]">
+                  <span className="text-[8.8px] font-extrabold tracking-[0.08em] text-white uppercase">
+                    {tx("Pulsaciones", "Heart Rate")}
+                  </span>
+                  <span className="text-[8.3px] font-semibold text-white">
+                    {tx("En disparo", "At release")}
+                  </span>
+                </div>
+                <span className="text-[20px] font-black text-white tracking-[-0.02em] leading-none tabular-nums">
+                  {liveAnalysisHr ? (
+                    <>
+                      {liveAnalysisHr}
+                      <span className="text-[10.5px] font-bold ml-[2px]">BPM</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center gap-[4px] z-10 shrink-0">
+              <span
+                className={`text-[7.8px] font-extrabold tracking-[0.09em] text-white uppercase tabular-nums${
+                  isEs ? "" : " max-w-[144px] break-words leading-tight"
+                }`}
+              >
+                {activeState.distanceM}m · {watchBowLabel}
+              </span>
+              <div className="flex items-center gap-[5px]">
+                {[0, 1].map((idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic(15);
+                      setAnalysisPage(idx as 0 | 1);
+                    }}
+                    aria-label={tx(`Pantalla ${idx + 1}`, `Screen ${idx + 1}`)}
+                    className={`h-[4px] rounded-full transition-all cursor-pointer ${
+                      analysisPage === idx ? "w-[13px] bg-[#00BFFF]" : "w-[4px] bg-white/22"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      dir="ltr"
+      onWheel={handleWheel}
+      onTouchStart={handleWatchTouchStart}
+      onTouchEnd={handleWatchTouchEnd}
+      onPointerDown={handleWatchPointerDown}
+      onPointerUp={handleWatchPointerUp}
+      className={`relative w-[284px] h-[284px] bg-[#020305] border border-white/10 flex flex-col items-center justify-center px-[16px] overflow-hidden select-none touch-pan-y overscroll-x-none transition-all ${
+        isSquare ? "rounded-[48px]" : "rounded-full"
+      }`}
+    >
+      <div
+        className={`absolute inset-[4px] border border-white/[0.04] pointer-events-none ${
+          isSquare ? "rounded-[44px]" : "rounded-full"
+        }`}
+      />
+
+      <div
+        className={`w-full flex flex-col items-center justify-center ${
+          screenIdx === 1
+            ? "gap-[4.5px] mb-[11px]"
+            : screenIdx === 0
+            ? "gap-[7px] mb-[8px]"
+            : "gap-[10px] mb-[6px]"
+        } z-10`}
+      >
+        {screenIdx === 0 && (
+          <>
+            <WatchBrandHeader
+              isSquare={isSquare}
+              pillText={isWatchConnected ? tx("CONECTADO", "CONNECTED") : tx("MANUAL", "MANUAL")}
+              pillColor={isWatchConnected ? "cyan" : "muted"}
+            />
+
+            <WatchCounterChassis
+              isSquare={isSquare}
+              digits={digits}
+              volumeLabel={tx("VOLUMEN · FLECHAS", "VOLUME · ARROWS")}
+            />
+
+            <div className={`${isSquare ? "w-[214px]" : "w-[192px]"} grid grid-cols-2 gap-[8px]`}>
+              <button
+                type="button"
+                onClick={() => activeState.arrowsCount > 0 && handleArrowDelta(-1, "watch_manual")}
+                aria-label={tx("−1 flecha", "−1 arrow")}
+                className="h-[40px] rounded-[12px] bg-[#180709] border-[1.5px] border-[#FF1E1E]/75 text-white text-[16.5px] font-extrabold flex items-center justify-center active:scale-95 transition cursor-pointer tabular-nums"
+              >
+                −1
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleArrowDelta(1, "watch_manual")}
+                aria-label={tx("+1 flecha", "+1 arrow")}
+                className="h-[40px] rounded-[12px] bg-[#061523] border-[1.5px] border-[#00A8F3] text-white text-[16.5px] font-extrabold flex items-center justify-center active:scale-95 transition cursor-pointer tabular-nums"
+              >
+                +1
+              </button>
+            </div>
+
+            <div
+              onClick={() => setScreenIdx(2)}
+              className="flex flex-col items-center cursor-pointer text-center leading-tight"
+            >
+              <div className="text-[10px] font-extrabold text-white tracking-[0.01em] whitespace-nowrap tabular-nums">
+                {walkedPrimaryStr} · {activeState.activeKcal} kcal
+              </div>
+              <span className="text-[7.8px] font-bold text-[#8E96A4] tracking-[0.09em] uppercase whitespace-nowrap tabular-nums mt-[1px]">
+                {tx("TANDA", "END")} {currentTanda} · {activeState.distanceM} M
+              </span>
+            </div>
+          </>
+        )}
+
+        {screenIdx === 1 && (
+          <>
+            <img
+              src="/images/brand_logo_header.png"
+              srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
+              alt="ARCHERY 101010"
+              className={`${
+                isSquare ? "h-[10px]" : "h-[9px]"
+              } w-auto object-contain select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]`}
+              draggable={false}
+            />
+
+            <div
+              className={`flex items-center justify-between gap-[4px] ${
+                isSquare ? "w-[218px]" : "w-[172px]"
+              }`}
+            >
+              <div className="h-[18px] px-[7px] rounded-full bg-[#050D17] border border-[#00A8F3] text-white text-[9px] font-extrabold tracking-[0.03em] tabular-nums flex items-center justify-center whitespace-nowrap shrink-0">
+                {tx("T", "E")}
+                {currentTanda}·{activeState.totalScore || 0}P
+              </div>
+
+              <div className="flex items-center justify-end gap-[2.5px] flex-1 min-w-0">
+                {Array.from({ length: visibleSlotsCount }).map((_, idx) => {
+                  const val = endArrowsList[idx] || "";
+                  const isGold = val === "X" || val === "10" || val === "9";
+                  const isRed = val === "8" || val === "7";
+                  const isBlue = val === "6" || val === "5";
+                  return (
+                    <div
+                      key={idx}
+                      className={`flex-1 max-w-[22px] h-[17px] rounded-[4px] flex items-center justify-center text-[8.5px] font-extrabold tabular-nums border ${
+                        !val
+                          ? "bg-[#07090E] border-[#334155] text-[#64748B]"
+                          : isGold
+                          ? "bg-[#121107] border-[#FFE500] text-[#FFE500]"
+                          : isRed
+                          ? "bg-[#160708] border-[#FF1E1E] text-white"
+                          : isBlue
+                          ? "bg-[#061320] border-[#00A8F3] text-white"
+                          : "bg-[#0B0E15] border-[#64748B] text-white"
+                      }`}
+                    >
+                      {val || "-"}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div
+              className={`${
+                isSquare ? "w-[236px]" : "w-[216px]"
+              } grid grid-cols-4 gap-[4px]`}
+            >
+              {SCORE_KEYS.map((key) => {
+                const isGold = key === "X" || key === "10" || key === "9";
+                const isRed = key === "8" || key === "7";
+                const isBlue = key === "6" || key === "5";
+                const isMiss = key === "M";
+
+                const keyStyle = isGold
+                  ? "bg-[#121107] border-[#FFE500] text-[#FFE500]"
+                  : isRed
+                  ? "bg-[#160708] border-[#FF1E1E] text-white"
+                  : isBlue
+                  ? "bg-[#061320] border-[#00A8F3] text-white"
+                  : isMiss
+                  ? "bg-[#0B0E15] border-[#475569] text-[#CBD5E1]"
+                  : "bg-[#0B0E15] border-[#475569] text-white";
+
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => handleScoreKeyPress(key)}
+                    className={`${
+                      isSquare ? "h-[41px] text-[18.5px]" : "h-[39px] text-[17.5px]"
+                    } rounded-[8px] border-[1.5px] font-sans font-extrabold tabular-nums flex items-center justify-center active:scale-95 transition cursor-pointer ${keyStyle}`}
+                  >
+                    {key}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div
+              className={`${
+                isSquare ? "w-[212px]" : "w-[172px]"
+              } grid grid-cols-2 gap-[6px]`}
+            >
+              <button
+                type="button"
+                onClick={handleUndoScore}
+                className="h-[27px] rounded-full bg-[#0B0E15] border-[1.5px] border-[#475569] text-white text-[9.5px] font-extrabold tracking-[0.04em] uppercase active:scale-95 transition cursor-pointer"
+              >
+                {tx("BORRAR", "DEL")}
+              </button>
+              <button
+                type="button"
+                onClick={handleNextEnd}
+                className="h-[27px] rounded-full bg-[#061523] border-[1.5px] border-[#00A8F3] text-white text-[9.5px] font-extrabold tracking-[0.04em] uppercase active:scale-95 transition cursor-pointer"
+              >
+                {tx("SIG. TANDA", "NEXT END")}
+              </button>
+            </div>
+          </>
+        )}
+
+        {screenIdx === 2 && (
+          <>
+            <WatchBrandHeader
+              isSquare={isSquare}
+              pillText={tx("BIOMETRÍA · PASOS", "BIOMETRICS · STEPS")}
+              pillColor="yellow"
+            />
+
+            <div className={`${isSquare ? "w-[214px]" : "w-[196px]"} flex flex-col gap-1.5`}>
+              <div className="bg-[#07090E] border border-[#00A8F3]/45 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div
+                    className={`text-[7.5px] font-bold tracking-[0.12em] text-[#8E96A4] uppercase ${
+                      isEs ? "whitespace-nowrap" : "min-w-0 break-words leading-tight"
+                    }`}
+                  >
+                    {tx("DISTANCIA RECORRIDA", "WALKED DISTANCE")}
+                  </div>
+                  <div
+                    className={`text-[13.5px] font-extrabold text-white tracking-tight leading-tight mt-0.5 tabular-nums ${
+                      isEs ? "whitespace-nowrap" : "min-w-0 break-words leading-tight"
+                    }`}
+                  >
+                    {walkedDualStr}
+                  </div>
+                </div>
+                <span className="text-[7px] font-extrabold text-white border border-[#00A8F3]/50 bg-[#04101C] px-1.5 py-0.5 rounded uppercase shrink-0 tabular-nums">
+                  {activeState.stepsCount ? `${activeState.stepsCount} ` : ""}
+                  {tx("PASOS", "STEPS")}
+                </span>
+              </div>
+
+              <div className="bg-[#07090E] border border-[#FF1E1E]/45 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[7.5px] font-bold tracking-[0.12em] text-[#8E96A4] uppercase whitespace-nowrap">
+                    {tx("GASTO ENERGÉTICO", "ACTIVE ENERGY")}
+                  </div>
+                  <div className="text-[15.5px] font-extrabold text-white tracking-tight leading-tight mt-0.5 whitespace-nowrap tabular-nums">
+                    {activeState.activeKcal}{" "}
+                    <span className="text-[9.5px] font-bold text-[#8E96A4]">kcal</span>
+                  </div>
+                </div>
+                <span className="text-[7px] font-extrabold text-[#FFE500] border border-[#FFE500]/50 bg-[#101008] px-1.5 py-0.5 rounded uppercase shrink-0 tabular-nums">
+                  {bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
+                    ? `${bleHrStatus.currentBpm} BPM`
+                    : activeState.heartRateBpm && activeState.heartRateBpm >= 30
+                    ? `${activeState.heartRateBpm} BPM`
+                    : tx("ACTIVA", "ACTIVE")}
+                </span>
+              </div>
+            </div>
+
+            <div className="text-[8px] font-bold text-[#8E96A4] tracking-[0.09em] uppercase whitespace-nowrap tabular-nums">
+              {activeState.arrowsCount} {tx("FLECHAS", "ARROWS")} · {activeState.bowPoundageLbs} LBS
+            </div>
+          </>
+        )}
+
+        {screenIdx === 3 && (
+          <>
+            <WatchBrandHeader
+              isSquare={isSquare}
+              pillText={
+                isWatchConnected
+                  ? tx("RELOJ CONECTADO", "WATCH SYNCED")
+                  : tx("RESUMEN", "SUMMARY")
+              }
+              pillColor={isWatchConnected ? "cyan" : "muted"}
+            />
+
+            <div className={`${isSquare ? "w-[214px]" : "w-[196px]"} grid grid-cols-2 gap-1.5`}>
+              <div className="bg-[#07090E] border border-[#00A8F3]/45 rounded-xl p-1.5 text-center">
+                <div className="text-[7px] font-bold text-[#8E96A4] tracking-wider uppercase">
+                  {tx("FLECHAS", "ARROWS")}
+                </div>
+                <div className="text-[14.5px] font-extrabold text-white leading-tight mt-0.5 tabular-nums whitespace-nowrap">
+                  {activeState.arrowsCount}{" "}
+                  <span className="text-[9px] text-[#8E96A4]">{isSpanish ? "FL" : "AR"}</span>
+                </div>
+              </div>
+
+              <div className="bg-[#07090E] border border-[#FF1E1E]/45 rounded-xl p-1.5 text-center">
+                <div className="text-[7px] font-bold text-[#8E96A4] tracking-wider uppercase">
+                  {tx("PUNTAJE / KCAL", "SCORE / KCAL")}
+                </div>
+                <div className="text-[13.5px] font-extrabold text-white leading-tight mt-0.5 tabular-nums whitespace-nowrap">
+                  {activeState.totalScore || 0}
+                  <span className="text-[8.5px] text-[#8E96A4]"> pts · </span>
+                  {activeState.activeKcal}
+                </div>
+              </div>
+
+              <div className="col-span-2 bg-[#07090E] border border-[#FFE500]/45 rounded-xl p-1.5 text-center">
+                <div className="text-[7px] font-bold text-[#8E96A4] tracking-wider uppercase">
+                  {tx("DISTANCIA TOTAL", "TOTAL DISTANCE")}
+                </div>
+                <div className="text-[13px] font-extrabold text-white leading-tight mt-0.5 tabular-nums whitespace-nowrap">
+                  {walkedDualStr}
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleFinishSession}
+              className={`${
+                isSquare ? "w-[198px]" : "w-[184px]"
+              } py-1.5 rounded-full bg-[#061523] border border-[#00A8F3] text-white text-[8px] font-extrabold tracking-[0.08em] uppercase active:scale-95 transition cursor-pointer whitespace-nowrap`}
+            >
+              {tx("GUARDAR SESIÓN", "SAVE")}
+            </button>
+          </>
+        )}
+      </div>
+
+      <div className="absolute bottom-[12px] left-0 right-0 flex items-center justify-center gap-[5px] z-10">
+        {[0, 1, 2, 3].map((idx) => {
+          const isCurrent = screenIdx === idx;
+          return (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => {
+                triggerHaptic(15);
+                setScreenIdx(idx);
+              }}
+              className={`h-[4px] rounded-full transition-all cursor-pointer ${
+                isCurrent ? "w-[13px] bg-[#00A8F3]" : "w-[4px] bg-white/20"
+              }`}
+              aria-label={tx(`Pantalla ${idx + 1}`, `Screen ${idx + 1}`)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+});
 
 export default function SmartwatchMiniApp({
   isOpen = true,
@@ -152,6 +913,146 @@ export default function SmartwatchMiniApp({
   const lastHandledManualCaptureAtRef = useRef<number>(0);
   const lastHandledManualStartAtRef = useRef<number>(0);
   const lastHandledManualStopAtRef = useRef<number>(0);
+
+  const triggerHaptic = useCallback((pattern: number | number[] = 45) => {
+    try {
+      if (typeof navigator !== "undefined" && navigator.vibrate) {
+        navigator.vibrate(pattern);
+      }
+    } catch {}
+  }, []);
+
+  // Dual-Key Biomechanical + High-Frequency Acoustic String-Snap Detector (Standalone /watch only)
+  const lastShotRef = useRef<number>(0);
+  const lastAcousticSnapRef = useRef<number>(0);
+  const micActiveRef = useRef<boolean>(false);
+  const motionBufRef = useRef<
+    Array<{
+      t: number;
+      ax: number;
+      ay: number;
+      az: number;
+      gx?: number;
+      gy?: number;
+      gz?: number;
+      mag: number;
+      lin: number;
+      gyro: number;
+    }>
+  >([]);
+  const peakTimesRef = useRef<number[]>([]);
+  const walkLockUntilRef = useRef<number>(0);
+  const prevDynRef = useRef<[number, number]>([0, 0]);
+  const smoothedMagRef = useRef<number>(9.81);
+  const pendingShotRef = useRef<{
+    active: boolean;
+    startMs: number;
+    followN: number;
+    sumLin: number;
+    sumAx: number;
+    sumGyro: number;
+    gyroN: number;
+  }>({ active: false, startMs: 0, followN: 0, sumLin: 0, sumAx: 0, sumGyro: 0, gyroN: 0 });
+
+  const emitAnalysisShotRef = useRef<
+    (releaseTs: number, source: "watch_auto" | "watch_manual", manualStartTs?: number) => void
+  >(() => {});
+
+  useEffect(() => {
+    emitAnalysisShotRef.current = (
+      releaseTs: number,
+      _source: "watch_auto" | "watch_manual",
+      manualStartTs?: number
+    ) => {
+      const calibration: AnalysisCalibrationProfile = {
+        bowType:
+          activeState.bowType === "Compound" ||
+          activeState.bowType === "Recurve" ||
+          activeState.bowType === "Barebow"
+            ? activeState.bowType
+            : "Barebow",
+        bowWrist: "LEFT",
+        distanceM: activeState.distanceM || 18,
+        zeroGravityVec: [0, 0, 9.81],
+        calibratedAt: Date.now()
+      };
+      if (activeState.analysisCalibrationJson) {
+        try {
+          const parsed = JSON.parse(activeState.analysisCalibrationJson);
+          if (parsed && typeof parsed === "object") {
+            if (
+              parsed.bowType === "Compound" ||
+              parsed.bowType === "Recurve" ||
+              parsed.bowType === "Barebow"
+            ) {
+              calibration.bowType = parsed.bowType;
+            }
+            if (parsed.bowWrist === "LEFT" || parsed.bowWrist === "RIGHT") {
+              calibration.bowWrist = parsed.bowWrist;
+            }
+            if (typeof parsed.distanceM === "number" && parsed.distanceM >= 5) {
+              calibration.distanceM = parsed.distanceM;
+            }
+            if (Array.isArray(parsed.zeroGravityVec) && parsed.zeroGravityVec.length === 3) {
+              calibration.zeroGravityVec = parsed.zeroGravityVec as [number, number, number];
+            }
+          }
+        } catch {}
+      }
+
+      const liveHr =
+        bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
+          ? bleHrStatus.currentBpm
+          : activeState.heartRateBpm && activeState.heartRateBpm >= 30
+          ? activeState.heartRateBpm
+          : undefined;
+
+      const nextShotNum = Math.max(1, (activeState.arrowsCount || 0) + 1);
+      const analyzed = analyzeImuShotWindow({
+        samples: motionBufRef.current,
+        releaseTimestampMs: releaseTs,
+        ...(manualStartTs && manualStartTs > 0 ? { manualStartTimestampMs: manualStartTs } : {}),
+        shotNumber: nextShotNum,
+        distanceM: calibration.distanceM || activeState.distanceM || 18,
+        bowType: calibration.bowType || "Barebow",
+        bowWrist: calibration.bowWrist || "LEFT",
+        zeroGravityVec: calibration.zeroGravityVec,
+        heartRateBpm: liveHr
+      });
+
+      if (!analyzed) return;
+
+      triggerHaptic([45, 35, 65]);
+      setLastAnalysisShot(analyzed);
+      setJustDetectedShot(true);
+      window.setTimeout(() => setJustDetectedShot(false), 3200);
+
+      sendWatchCommand({
+        type: "ANALYSIS_SHOT",
+        analysisShotJson: encodeCompactShotAnalysis(analyzed),
+        ...(liveHr ? { heartRateBpm: liveHr } : {})
+      });
+
+      if (!liveSnapshot) {
+        setInternalSnapshot((prev) => ({
+          ...prev,
+          arrowsCount: Math.max(prev.arrowsCount + 1, analyzed.shotNumber),
+          lastShotTimestamp: releaseTs,
+          updatedAt: Date.now()
+        }));
+      }
+    };
+  }, [
+    activeState.arrowsCount,
+    activeState.analysisCalibrationJson,
+    activeState.bowType,
+    activeState.distanceM,
+    activeState.heartRateBpm,
+    bleHrStatus.currentBpm,
+    bleHrStatus.state,
+    liveSnapshot,
+    triggerHaptic
+  ]);
 
   useEffect(() => {
     manualAnalysisStartRef.current = manualAnalysisStartMs;
@@ -290,24 +1191,33 @@ export default function SmartwatchMiniApp({
     }
   }, []);
 
+  const [connEvalTs, setConnEvalTs] = useState<number>(() => Date.now());
+
   useEffect(() => {
     if (!isOpen || !isPageVisible) return;
     const unsubConn = subscribeWatchConnectionStatus((status) => {
       setWatchConnStatus(status);
+      setConnEvalTs(Date.now());
     });
     const unsubCloud = subscribeCloudWatchPairingStatus((st) => {
       setCloudStatus(st);
+      setConnEvalTs(Date.now());
       if (st.pairingCode) {
         setPairingCode(st.pairingCode);
       }
+      if (isStandalone && st.cloudSyncError === "SESSION_EXPIRED") {
+        setShowStandaloneLinkPanel(true);
+      }
     });
+    const tick = window.setInterval(() => setConnEvalTs(Date.now()), 15_000);
     return () => {
+      window.clearInterval(tick);
       unsubConn();
       unsubCloud();
     };
-  }, [isOpen, isPageVisible]);
+  }, [isOpen, isPageVisible, isStandalone]);
 
-  // Phone mode: load or generate the archer's 6-digit Cloud Pairing Code
+  // Phone mode: load or generate the archer's 6-digit Cloud Pairing Code and keep the 120s claim window fresh while open
   useEffect(() => {
     if (!isOpen || isStandalone) return;
     let cancelled = false;
@@ -317,6 +1227,7 @@ export default function SmartwatchMiniApp({
       const code = await getOrCreatePhoneWatchPairingCode(uid);
       if (!cancelled && code) {
         setPairingCode(code);
+        refreshPhoneWatchPairingWindow(uid, true).catch(() => {});
       }
     };
 
@@ -329,13 +1240,26 @@ export default function SmartwatchMiniApp({
       }
     });
 
+    const refreshInterval = window.setInterval(() => {
+      if (!isPageVisible) return;
+      const curUid = auth.currentUser?.uid || "";
+      if (curUid) {
+        refreshPhoneWatchPairingWindow(curUid, false)
+          .then((nextCode) => {
+            if (!cancelled && nextCode) setPairingCode(nextCode);
+          })
+          .catch(() => {});
+      }
+    }, 60_000);
+
     return () => {
       cancelled = true;
+      window.clearInterval(refreshInterval);
       unsubAuth();
     };
-  }, [isOpen, isStandalone]);
+  }, [isOpen, isStandalone, isPageVisible]);
 
-  // Standalone /watch mode: attach real-time Firestore onSnapshot when visible, pause cleanly when hidden
+  // Standalone /watch mode: attach real-time Firestore onSnapshot when visible, pause subscription WITHOUT unlinking when hidden
   useEffect(() => {
     if (!isStandalone || !isPageVisible) return;
     let cancelled = false;
@@ -360,14 +1284,7 @@ export default function SmartwatchMiniApp({
 
     return () => {
       cancelled = true;
-      const activeCode = getActiveWatchClientPairingCode() || pausedStandaloneCodeRef.current;
-      if (activeCode) {
-        pausedStandaloneCodeRef.current = activeCode;
-        disconnectWatchClientPairingCode();
-        try {
-          localStorage.setItem("archery_watch_client_pairing_code", activeCode);
-        } catch {}
-      }
+      pauseWatchClientSubscription();
     };
   }, [isStandalone, isPageVisible]);
 
@@ -445,14 +1362,6 @@ export default function SmartwatchMiniApp({
     sendWatchCommand({ type: "REQUEST_STATE" });
     return unsub;
   }, [liveSnapshot, isOpen, isPageVisible, isStandalone]);
-
-  const triggerHaptic = useCallback((pattern: number | number[] = 45) => {
-    try {
-      if (typeof navigator !== "undefined" && navigator.vibrate) {
-        navigator.vibrate(pattern);
-      }
-    } catch {}
-  }, []);
 
   const handleArrowDelta = useCallback(
     (delta: number, source: "watch_manual" | "watch_auto") => {
@@ -583,7 +1492,7 @@ export default function SmartwatchMiniApp({
 
   // Honest Watch Connection State: true when native companion watch is connected (CapabilityClient
   // OR active Bluetooth PONG/message in the last 3m) OR 6-Digit Cloud Watch session is linked!
-  const nowConnMs = Date.now();
+  const nowConnMs = connEvalTs;
   const hasRecentNativeActivity =
     watchConnStatus.bridgeReady &&
     ((watchConnStatus.lastPongAt > 0 && nowConnMs - watchConnStatus.lastPongAt <= 3 * 60 * 1000) ||
@@ -599,127 +1508,6 @@ export default function SmartwatchMiniApp({
     cloudStatus.lastWatchSeenAt > 0 &&
     nowConnMs - cloudStatus.lastWatchSeenAt <= 10 * 60 * 1000;
   const isWatchConnected = hasNativeWatchAppConnected || hasCloudWatchLinked;
-
-  // Dual-Key Biomechanical + High-Frequency Acoustic String-Snap Detector (Standalone /watch only)
-  const lastShotRef = useRef<number>(0);
-  const lastAcousticSnapRef = useRef<number>(0);
-  const micActiveRef = useRef<boolean>(false);
-  const [micDeniedNotice, setMicDeniedNotice] = useState(false);
-  const motionBufRef = useRef<
-    Array<{
-      t: number;
-      ax: number;
-      ay: number;
-      az: number;
-      gx?: number;
-      gy?: number;
-      gz?: number;
-      mag: number;
-      lin: number;
-      gyro: number;
-    }>
-  >([]);
-  const peakTimesRef = useRef<number[]>([]);
-  const walkLockUntilRef = useRef<number>(0);
-  const prevDynRef = useRef<[number, number]>([0, 0]);
-  const smoothedMagRef = useRef<number>(9.81);
-  const pendingShotRef = useRef<{
-    active: boolean;
-    startMs: number;
-    followN: number;
-    sumLin: number;
-    sumAx: number;
-    sumGyro: number;
-    gyroN: number;
-  }>({ active: false, startMs: 0, followN: 0, sumLin: 0, sumAx: 0, sumGyro: 0, gyroN: 0 });
-
-  const emitAnalysisShotRef = useRef<
-    (releaseTs: number, source: "watch_auto" | "watch_manual", manualStartTs?: number) => void
-  >(() => {});
-
-  emitAnalysisShotRef.current = (
-    releaseTs: number,
-    source: "watch_auto" | "watch_manual",
-    manualStartTs?: number
-  ) => {
-    let calibration: AnalysisCalibrationProfile = {
-      bowType:
-        activeState.bowType === "Compound" ||
-        activeState.bowType === "Recurve" ||
-        activeState.bowType === "Barebow"
-          ? activeState.bowType
-          : "Barebow",
-      bowWrist: "LEFT",
-      distanceM: activeState.distanceM || 18,
-      zeroGravityVec: [0, 0, 9.81],
-      calibratedAt: Date.now()
-    };
-    if (activeState.analysisCalibrationJson) {
-      try {
-        const parsed = JSON.parse(activeState.analysisCalibrationJson);
-        if (parsed && typeof parsed === "object") {
-          if (
-            parsed.bowType === "Compound" ||
-            parsed.bowType === "Recurve" ||
-            parsed.bowType === "Barebow"
-          ) {
-            calibration.bowType = parsed.bowType;
-          }
-          if (parsed.bowWrist === "LEFT" || parsed.bowWrist === "RIGHT") {
-            calibration.bowWrist = parsed.bowWrist;
-          }
-          if (typeof parsed.distanceM === "number" && parsed.distanceM >= 5) {
-            calibration.distanceM = parsed.distanceM;
-          }
-          if (Array.isArray(parsed.zeroGravityVec) && parsed.zeroGravityVec.length === 3) {
-            calibration.zeroGravityVec = parsed.zeroGravityVec as [number, number, number];
-          }
-        }
-      } catch {}
-    }
-
-    const liveHr =
-      bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
-        ? bleHrStatus.currentBpm
-        : activeState.heartRateBpm && activeState.heartRateBpm >= 30
-        ? activeState.heartRateBpm
-        : undefined;
-
-    const nextShotNum = Math.max(1, (activeState.arrowsCount || 0) + 1);
-    const analyzed = analyzeImuShotWindow({
-      samples: motionBufRef.current,
-      releaseTimestampMs: releaseTs,
-      ...(manualStartTs && manualStartTs > 0 ? { manualStartTimestampMs: manualStartTs } : {}),
-      shotNumber: nextShotNum,
-      distanceM: calibration.distanceM || activeState.distanceM || 18,
-      bowType: calibration.bowType || "Barebow",
-      bowWrist: calibration.bowWrist || "LEFT",
-      zeroGravityVec: calibration.zeroGravityVec,
-      heartRateBpm: liveHr
-    });
-
-    if (!analyzed) return;
-
-    triggerHaptic([45, 35, 65]);
-    setLastAnalysisShot(analyzed);
-    setJustDetectedShot(true);
-    window.setTimeout(() => setJustDetectedShot(false), 3200);
-
-    sendWatchCommand({
-      type: "ANALYSIS_SHOT",
-      analysisShotJson: encodeCompactShotAnalysis(analyzed),
-      ...(liveHr ? { heartRateBpm: liveHr } : {})
-    });
-
-    if (!liveSnapshot) {
-      setInternalSnapshot((prev) => ({
-        ...prev,
-        arrowsCount: Math.max(prev.arrowsCount + 1, analyzed.shotNumber),
-        lastShotTimestamp: releaseTs,
-        updatedAt: Date.now()
-      }));
-    }
-  };
 
   // Manual-only watch counter: microphone acoustic auto-shot is permanently disabled
   useEffect(() => {
@@ -1025,29 +1813,6 @@ export default function SmartwatchMiniApp({
     sendWatchCommand({ type: "SET_SENSITIVITY", sensitivityLevel: level });
   }, [sensitivity]);
 
-  const handleToggleAuto = () => {
-    triggerHaptic(30);
-    requestMotionPermissionFromUserGesture();
-    if (!activeState.autoDetectEnabled) {
-      setSensitivity("MEDIA");
-      if (onToggleAutoDetect) onToggleAutoDetect(true);
-      else {
-        sendWatchCommand({ type: "TOGGLE_AUTO_DETECT", enabled: true });
-        setInternalSnapshot((prev) => ({ ...prev, autoDetectEnabled: true }));
-      }
-    } else if (sensitivity === "MEDIA") {
-      setSensitivity("BAJA");
-    } else if (sensitivity === "BAJA") {
-      setSensitivity("ALTA");
-    } else {
-      if (onToggleAutoDetect) onToggleAutoDetect(false);
-      else {
-        sendWatchCommand({ type: "TOGGLE_AUTO_DETECT", enabled: false });
-        setInternalSnapshot((prev) => ({ ...prev, autoDetectEnabled: false }));
-      }
-    }
-  };
-
   const handleFinishSession = () => {
     triggerHaptic([60, 40, 80]);
     if (onFinishAndSendToCoach) {
@@ -1181,12 +1946,6 @@ export default function SmartwatchMiniApp({
     unitSystem === "imperial"
       ? `${walkedImperialStr} · ${walkedMetricStr}`
       : `${walkedMetricStr} · ${walkedImperialStr}`;
-  const sensitivityDisplay =
-    sensitivity === "BAJA"
-      ? tx("BAJA", "LOW")
-      : sensitivity === "ALTA"
-      ? tx("ALTA", "HIGH")
-      : tx("MEDIA", "MED");
   const perEndCount = Math.max(1, activeState.arrowsPerEnd || 6);
   const currentTanda =
     typeof activeState.currentEndIndex === "number"
@@ -1197,102 +1956,6 @@ export default function SmartwatchMiniApp({
     : [];
   const visibleSlotsCount = Math.min(6, perEndCount);
   const isSquare = watchShape === "SQUARE";
-
-  const WatchBrandHeader = ({
-    pillText,
-    pillColor = "cyan",
-    compact = false,
-    onClickPill
-  }: {
-    pillText: string;
-    pillColor?: "cyan" | "yellow" | "red" | "muted";
-    compact?: boolean;
-    onClickPill?: () => void;
-  }) => {
-    const borderClass =
-      pillColor === "yellow"
-        ? "border-[#FFE500]/45 bg-[#101006]"
-        : pillColor === "red"
-        ? "border-[#FF1E1E]/45 bg-[#160708]"
-        : pillColor === "muted"
-        ? "border-white/15 bg-[#0A0D13]"
-        : "border-[#00A8F3]/40 bg-[#040B12]";
-    const dotClass =
-      pillColor === "yellow"
-        ? "bg-[#FFE500]"
-        : pillColor === "red"
-        ? "bg-[#FF1E1E]"
-        : pillColor === "muted"
-        ? "bg-[#6E7785]"
-        : "bg-[#00A8F3]";
-
-    return (
-      <div className={`flex flex-col items-center ${compact ? "gap-[3px]" : "gap-[5px]"} z-10`}>
-        <img
-          src="/images/brand_logo_header.png"
-          srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
-          alt="ARCHERY 101010"
-          className={`${
-            compact ? "h-[8px]" : isSquare ? "h-[10px]" : "h-[9.2px]"
-          } w-auto object-contain select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]`}
-          draggable={false}
-        />
-        <button
-          type="button"
-          onClick={onClickPill}
-          className={`inline-flex items-center justify-center gap-[5px] border ${borderClass} ${
-            compact ? "px-[8px] py-[1.5px] text-[7.5px]" : "px-[10px] py-[2.5px] text-[8px]"
-          } rounded-full font-extrabold tracking-[0.08em] uppercase text-white whitespace-nowrap transition active:scale-95 cursor-pointer tabular-nums`}
-        >
-          <span className={`w-[5px] h-[5px] rounded-full shrink-0 ${dotClass}`} />
-          <span>{pillText}</span>
-        </button>
-      </div>
-    );
-  };
-
-  const WatchCounterChassis = ({ highlightGold = false }: { highlightGold?: boolean }) => (
-    <div
-      className={`${
-        isSquare ? "w-[214px]" : "w-[192px]"
-      } bg-[#07090E] rounded-[13px] pt-[6px] pb-[7px] px-[8px] border transition-all ${
-        highlightGold ? "border-[#FFE500]/65" : "border-white/10"
-      }`}
-    >
-      <div className="text-center text-[7px] font-bold tracking-[0.14em] text-[#8E96A4] uppercase mb-[4px] whitespace-nowrap tabular-nums">
-        {tx("VOLUMEN · FLECHAS", "VOLUME · ARROWS")}
-      </div>
-
-      <div className="grid grid-cols-4 gap-[5px] bg-[#030407] p-[4px] rounded-[9px] border border-white/[0.06]">
-        {digits.map((digitStr, i) => {
-          const isUnits = i === 3;
-          return (
-            <div
-              key={i}
-              className={`h-[38px] rounded-[6px] bg-[#0B0E15] flex items-center justify-center relative overflow-hidden select-none border ${
-                isUnits ? "border-[#FFE500] bg-[#101008]" : "border-white/[0.11]"
-              }`}
-            >
-              <AnimatePresence mode="popLayout">
-                <motion.span
-                  key={`${i}-${digitStr}`}
-                  initial={{ y: 10, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: -10, opacity: 0 }}
-                  transition={{ type: "spring", stiffness: 450, damping: 28 }}
-                  className={`font-sans text-[23.5px] font-extrabold leading-none tabular-nums ${
-                    isUnits ? "text-[#FFE500]" : "text-white"
-                  }`}
-                >
-                  {digitStr}
-                </motion.span>
-              </AnimatePresence>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
 
   const handleWatchTouchStart = (e: React.TouchEvent) => {
     if (e.touches && e.touches.length === 1) {
@@ -1353,581 +2016,43 @@ export default function SmartwatchMiniApp({
       : undefined) ||
     activeState.heartRateBpm;
 
-  const WatchFaceContent = () => {
-    if (isAnalysisWatchMode) {
-      const shotNum = lastAnalysisShot?.shotNumber || activeState.arrowsCount || 0;
-      return (
-        <div
-          dir="ltr"
-          onTouchStart={handleWatchTouchStart}
-          onTouchEnd={handleWatchTouchEnd}
-          onPointerDown={handleWatchPointerDown}
-          onPointerUp={handleWatchPointerUp}
-          className={`relative w-[284px] h-[284px] bg-[#020305] border border-white/10 flex flex-col items-center justify-between touch-pan-y overscroll-x-none ${
-            analysisPage === 0 ? "pt-[21px] pb-[11px] px-[14px]" : "pt-[19px] pb-[12px] px-[16px]"
-          } overflow-hidden select-none transition-all ${
-            isSquare ? "rounded-[48px]" : "rounded-full"
-          }`}
-        >
-          <div
-            className={`absolute inset-[4px] border border-white/[0.04] pointer-events-none ${
-              isSquare ? "rounded-[44px]" : "rounded-full"
-            }`}
-          />
-
-          {analysisPage === 0 ? (
-            <>
-              <div className="flex flex-col items-center gap-[3px] z-10 shrink-0">
-                <img
-                  src="/images/brand_logo_header.png"
-                  srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
-                  alt="ARCHERY 101010"
-                  className={`${isEs ? "h-[9.5px]" : "h-[9px]"} w-auto object-contain select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]`}
-                  draggable={false}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    triggerHaptic(15);
-                    setAnalysisPage(1);
-                  }}
-                  className={`inline-flex items-center gap-[4px] rounded-full px-[9px] py-[2px] text-[8px] font-extrabold tracking-[0.07em] text-white uppercase whitespace-nowrap tabular-nums border cursor-pointer active:scale-95 transition ${
-                    manualAnalysisStartMs
-                      ? "bg-[#151105] border-[#FFE500]/75"
-                      : "bg-[#080B10] border-white/[0.14]"
-                  }`}
-                >
-                  <span
-                    className={`w-[5px] h-[5px] rounded-full shrink-0 ${
-                      manualAnalysisStartMs
-                        ? "bg-[#FFE500] animate-pulse"
-                        : justDetectedShot
-                        ? "bg-[#FFE500]"
-                        : "bg-[#00BFFF]"
-                    }`}
-                  />
-                  <span>
-                    {manualAnalysisStartMs
-                      ? `${tx("Grabando", "Rec")} · ${manualElapsedSec.toFixed(1)}s`
-                      : shotNum > 0
-                      ? `${tx("Tiro", "Shot")} ${shotNum} · ${activeState.distanceM}m`
-                      : `${tx("Listo", "Ready")} · ${activeState.distanceM}m`}
-                  </span>
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={handlePhysicalWatchButton}
-                aria-label={
-                  manualAnalysisStartMs
-                    ? tx("Finalizar tiro", "End shot")
-                    : tx("Iniciar tiro", "Start shot")
-                }
-                className="flex-1 flex items-center justify-center z-[5] my-[1px] cursor-pointer active:scale-[0.98] transition"
-              >
-                <AnalysisDianaSvg shot={lastAnalysisShot} sizePx={124} compactWatchMode />
-              </button>
-
-              <div className="flex flex-col items-center gap-[5px] z-10 shrink-0 w-full">
-                <button
-                  type="button"
-                  onClick={handlePhysicalWatchButton}
-                  className={`w-[184px] h-[44px] rounded-full text-[14px] font-black uppercase tracking-[0.07em] flex items-center justify-center gap-[6px] cursor-pointer active:scale-95 transition tabular-nums border ${
-                    manualAnalysisStartMs
-                      ? "bg-[#FF1E1E] text-white border-white/35"
-                      : "bg-[#00BFFF] text-black border-white/20"
-                  }`}
-                >
-                  <span>{manualAnalysisStartMs ? "■" : "▶"}</span>
-                  <span>
-                    {manualAnalysisStartMs ? tx("Final", "End") : tx("Inicio", "Start")}
-                  </span>
-                </button>
-
-                <div className="flex items-center gap-[5px]">
-                  {[0, 1].map((idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => {
-                        triggerHaptic(15);
-                        setAnalysisPage(idx as 0 | 1);
-                      }}
-                      aria-label={tx(`Pantalla ${idx + 1}`, `Screen ${idx + 1}`)}
-                      className={`h-[4px] rounded-full transition-all cursor-pointer ${
-                        analysisPage === idx ? "w-[13px] bg-[#00BFFF]" : "w-[4px] bg-white/22"
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="flex flex-col items-center gap-[4px] z-10 shrink-0">
-                <img
-                  src="/images/brand_logo_header.png"
-                  srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
-                  alt="ARCHERY 101010"
-                  className="h-[9.5px] w-auto object-contain select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]"
-                  draggable={false}
-                />
-                <div className="inline-flex items-center gap-[5px] bg-[#080B10] border border-white/[0.13] rounded-full px-[10px] py-[2px] text-[8.3px] font-extrabold tracking-[0.08em] text-white uppercase whitespace-nowrap tabular-nums">
-                  <span className="w-[5px] h-[5px] rounded-full bg-[#00BFFF] shrink-0" />
-                  <span>
-                    {shotNum > 0
-                      ? `${tx("Datos · Tiro", "Data · Shot")} ${shotNum}`
-                      : tx("Datos · En Espera", "Data · Standby")}
-                  </span>
-                </div>
-              </div>
-
-              <div className="w-[200px] flex flex-col gap-[5.5px] z-10">
-                <div className="h-[45px] bg-[#0A0D14] border border-white/[0.10] rounded-[13px] px-[12px] flex items-center justify-between">
-                  <div className="flex flex-col gap-[0.5px]">
-                    <span className="text-[8.8px] font-extrabold tracking-[0.08em] text-white uppercase">
-                      {tx("Estabilidad", "Stability")}
-                    </span>
-                    <span className="text-[8.3px] font-semibold text-white tabular-nums">
-                      {lastAnalysisShot ? `±${lastAnalysisShot.swayRadiusCm.toFixed(1)} cm` : "—"}
-                    </span>
-                  </div>
-                  <span className="text-[20px] font-black text-white tracking-[-0.02em] leading-none tabular-nums">
-                    {lastAnalysisShot ? (
-                      <>
-                        {lastAnalysisShot.stabilityPct}
-                        <span className="text-[10.5px] font-bold ml-[2px]">%</span>
-                      </>
-                    ) : (
-                      "—"
-                    )}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-[5.5px]">
-                  <div className="h-[50px] bg-[#0A0D14] border border-white/[0.10] rounded-[13px] py-[6px] px-[9px] flex flex-col justify-between min-w-0">
-                    <div className={`flex items-center gap-[4.5px]${isEs ? "" : " min-w-0"}`}>
-                      <span className="w-[9px] h-0 border-t-2 border-dashed border-white shrink-0" />
-                      <span
-                        className={`text-[7.5px] font-black tracking-[0.04em] text-white uppercase ${
-                          isEs ? "whitespace-nowrap" : "break-words leading-tight"
-                        }`}
-                      >
-                        {tx("Preparatorio", "Preparatory")}
-                      </span>
-                    </div>
-                    <span className="text-[19px] font-black text-white tracking-[-0.02em] leading-none tabular-nums">
-                      {lastAnalysisShot ? (
-                        <>
-                          {lastAnalysisShot.prepSeconds.toFixed(1)}
-                          <span className="text-[10.5px] font-bold ml-[2px]">s</span>
-                        </>
-                      ) : (
-                        "—"
-                      )}
-                    </span>
-                  </div>
-
-                  <div className="h-[50px] bg-[#0A0D14] border border-white/[0.10] rounded-[13px] py-[6px] px-[9px] flex flex-col justify-between">
-                    <div className="flex items-center gap-[4.5px]">
-                      <span className="w-[9px] h-[2.5px] rounded-full bg-[#00BFFF] shrink-0" />
-                      <span className="text-[7.5px] font-black tracking-[0.04em] text-white uppercase whitespace-nowrap">
-                        {tx("Apuntado", "Aiming")}
-                      </span>
-                    </div>
-                    <span className="text-[19px] font-black text-white tracking-[-0.02em] leading-none tabular-nums">
-                      {lastAnalysisShot ? (
-                        <>
-                          {lastAnalysisShot.aimSeconds.toFixed(1)}
-                          <span className="text-[10.5px] font-bold ml-[2px]">s</span>
-                        </>
-                      ) : (
-                        "—"
-                      )}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="h-[45px] bg-[#0A0D14] border border-white/[0.10] rounded-[13px] px-[12px] flex items-center justify-between">
-                  <div className="flex flex-col gap-[0.5px]">
-                    <span className="text-[8.8px] font-extrabold tracking-[0.08em] text-white uppercase">
-                      {tx("Pulsaciones", "Heart Rate")}
-                    </span>
-                    <span className="text-[8.3px] font-semibold text-white">
-                      {tx("En disparo", "At release")}
-                    </span>
-                  </div>
-                  <span className="text-[20px] font-black text-white tracking-[-0.02em] leading-none tabular-nums">
-                    {liveAnalysisHr ? (
-                      <>
-                        {liveAnalysisHr}
-                        <span className="text-[10.5px] font-bold ml-[2px]">BPM</span>
-                      </>
-                    ) : (
-                      "—"
-                    )}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex flex-col items-center gap-[4px] z-10 shrink-0">
-                <span
-                  className={`text-[7.8px] font-extrabold tracking-[0.09em] text-white uppercase tabular-nums${
-                    isEs ? "" : " max-w-[144px] break-words leading-tight"
-                  }`}
-                >
-                  {activeState.distanceM}m · {watchBowLabel}
-                </span>
-                <div className="flex items-center gap-[5px]">
-                  {[0, 1].map((idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => {
-                        triggerHaptic(15);
-                        setAnalysisPage(idx as 0 | 1);
-                      }}
-                      aria-label={tx(`Pantalla ${idx + 1}`, `Screen ${idx + 1}`)}
-                      className={`h-[4px] rounded-full transition-all cursor-pointer ${
-                        analysisPage === idx ? "w-[13px] bg-[#00BFFF]" : "w-[4px] bg-white/22"
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      );
-    }
-
-    return (
-      <div
-        dir="ltr"
-        onWheel={handleWheel}
-        onTouchStart={handleWatchTouchStart}
-        onTouchEnd={handleWatchTouchEnd}
-        onPointerDown={handleWatchPointerDown}
-        onPointerUp={handleWatchPointerUp}
-        className={`relative w-[284px] h-[284px] bg-[#020305] border border-white/10 flex flex-col items-center justify-center px-[16px] overflow-hidden select-none touch-pan-y overscroll-x-none transition-all ${
-          isSquare ? "rounded-[48px]" : "rounded-full"
-        }`}
-      >
-      {/* Subtle 1px inner safe ring */}
-      <div
-        className={`absolute inset-[4px] border border-white/[0.04] pointer-events-none ${
-          isSquare ? "rounded-[44px]" : "rounded-full"
-        }`}
-      />
-
-      <div
-        className={`w-full flex flex-col items-center justify-center ${
-          screenIdx === 1 ? "gap-[4.5px] mb-[11px]" : screenIdx === 0 ? "gap-[7px] mb-[8px]" : "gap-[10px] mb-[6px]"
-        } z-10`}
-      >
-        {/* SCREEN 00: MANUAL COUNTER WITH XL −1 / +1 BUTTONS */}
-        {screenIdx === 0 && (
-          <>
-            <WatchBrandHeader
-              pillText={
-                isWatchConnected
-                  ? tx("CONECTADO", "CONNECTED")
-                  : tx("MANUAL", "MANUAL")
-              }
-              pillColor={isWatchConnected ? "cyan" : "muted"}
-            />
-
-            <WatchCounterChassis />
-
-            <div
-              className={`${
-                isSquare ? "w-[214px]" : "w-[192px]"
-              } grid grid-cols-2 gap-[8px]`}
-            >
-              <button
-                type="button"
-                onClick={() => activeState.arrowsCount > 0 && handleArrowDelta(-1, "watch_manual")}
-                aria-label={tx("−1 flecha", "−1 arrow")}
-                className="h-[40px] rounded-[12px] bg-[#180709] border-[1.5px] border-[#FF1E1E]/75 text-white text-[16.5px] font-extrabold flex items-center justify-center active:scale-95 transition cursor-pointer tabular-nums"
-              >
-                −1
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleArrowDelta(1, "watch_manual")}
-                aria-label={tx("+1 flecha", "+1 arrow")}
-                className="h-[40px] rounded-[12px] bg-[#061523] border-[1.5px] border-[#00A8F3] text-white text-[16.5px] font-extrabold flex items-center justify-center active:scale-95 transition cursor-pointer tabular-nums"
-              >
-                +1
-              </button>
-            </div>
-
-            <div
-              onClick={() => setScreenIdx(2)}
-              className="flex flex-col items-center cursor-pointer text-center leading-tight"
-            >
-              <div className="text-[10px] font-extrabold text-white tracking-[0.01em] whitespace-nowrap tabular-nums">
-                {walkedPrimaryStr} · {activeState.activeKcal} kcal
-              </div>
-              <span className="text-[7.8px] font-bold text-[#8E96A4] tracking-[0.09em] uppercase whitespace-nowrap tabular-nums mt-[1px]">
-                {tx("TANDA", "END")} {currentTanda} · {activeState.distanceM} M
-              </span>
-            </div>
-          </>
-        )}
-
-        {/* SCREEN 01: TECLADO XL DE PUNTUACIÓN (OPCIÓN A — 12 TECLAS XL 2x ÁREA TÁCTIL) */}
-        {screenIdx === 1 && (
-          <>
-            <img
-              src="/images/brand_logo_header.png"
-              srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
-              alt="ARCHERY 101010"
-              className={`${
-                isSquare ? "h-[10px]" : "h-[9px]"
-              } w-auto object-contain select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]`}
-              draggable={false}
-            />
-
-            {/* Unified Compact Telemetry + End Arrow Slots Row */}
-            <div
-              className={`flex items-center justify-between gap-[4px] ${
-                isSquare ? "w-[218px]" : "w-[172px]"
-              }`}
-            >
-              <div className="h-[18px] px-[7px] rounded-full bg-[#050D17] border border-[#00A8F3] text-white text-[9px] font-extrabold tracking-[0.03em] tabular-nums flex items-center justify-center whitespace-nowrap shrink-0">
-                {tx("T", "E")}
-                {currentTanda}·{activeState.totalScore || 0}P
-              </div>
-
-              <div className="flex items-center justify-end gap-[2.5px] flex-1 min-w-0">
-                {Array.from({ length: visibleSlotsCount }).map((_, idx) => {
-                  const val = endArrowsList[idx] || "";
-                  const isGold = val === "X" || val === "10" || val === "9";
-                  const isRed = val === "8" || val === "7";
-                  const isBlue = val === "6" || val === "5";
-                  return (
-                    <div
-                      key={idx}
-                      className={`flex-1 max-w-[22px] h-[17px] rounded-[4px] flex items-center justify-center text-[8.5px] font-extrabold tabular-nums border ${
-                        !val
-                          ? "bg-[#07090E] border-[#334155] text-[#64748B]"
-                          : isGold
-                          ? "bg-[#121107] border-[#FFE500] text-[#FFE500]"
-                          : isRed
-                          ? "bg-[#160708] border-[#FF1E1E] text-white"
-                          : isBlue
-                          ? "bg-[#061320] border-[#00A8F3] text-white"
-                          : "bg-[#0B0E15] border-[#64748B] text-white"
-                      }`}
-                    >
-                      {val || "-"}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* 4x3 XL Score Grid (X, 10..1, M) — ~2x Tactile Area mathematically contained inside round & square bezels */}
-            <div
-              className={`${
-                isSquare ? "w-[236px]" : "w-[216px]"
-              } grid grid-cols-4 gap-[4px]`}
-            >
-              {SCORE_KEYS.map((key) => {
-                const isGold = key === "X" || key === "10" || key === "9";
-                const isRed = key === "8" || key === "7";
-                const isBlue = key === "6" || key === "5";
-                const isMiss = key === "M";
-
-                const keyStyle = isGold
-                  ? "bg-[#121107] border-[#FFE500] text-[#FFE500]"
-                  : isRed
-                  ? "bg-[#160708] border-[#FF1E1E] text-white"
-                  : isBlue
-                  ? "bg-[#061320] border-[#00A8F3] text-white"
-                  : isMiss
-                  ? "bg-[#0B0E15] border-[#475569] text-[#CBD5E1]"
-                  : "bg-[#0B0E15] border-[#475569] text-white";
-
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => handleScoreKeyPress(key)}
-                    className={`${
-                      isSquare ? "h-[41px] text-[18.5px]" : "h-[39px] text-[17.5px]"
-                    } rounded-[8px] border-[1.5px] font-sans font-extrabold tabular-nums flex items-center justify-center active:scale-95 transition cursor-pointer ${keyStyle}`}
-                  >
-                    {key}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Bottom Actions: BORRAR / DEL | SIG. TANDA / NEXT END */}
-            <div
-              className={`${
-                isSquare ? "w-[212px]" : "w-[172px]"
-              } grid grid-cols-2 gap-[6px]`}
-            >
-              <button
-                type="button"
-                onClick={handleUndoScore}
-                className="h-[27px] rounded-full bg-[#0B0E15] border-[1.5px] border-[#475569] text-white text-[9.5px] font-extrabold tracking-[0.04em] uppercase active:scale-95 transition cursor-pointer"
-              >
-                {tx("BORRAR", "DEL")}
-              </button>
-              <button
-                type="button"
-                onClick={handleNextEnd}
-                className="h-[27px] rounded-full bg-[#061523] border-[1.5px] border-[#00A8F3] text-white text-[9.5px] font-extrabold tracking-[0.04em] uppercase active:scale-95 transition cursor-pointer"
-              >
-                {tx("SIG. TANDA", "NEXT END")}
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* SCREEN 02: BIOMETRICS (DISTANCE + STEPS + KCAL) */}
-        {screenIdx === 2 && (
-          <>
-            <WatchBrandHeader
-              pillText={tx("BIOMETRÍA · PASOS", "BIOMETRICS · STEPS")}
-              pillColor="yellow"
-            />
-
-            <div className={`${isSquare ? "w-[214px]" : "w-[196px]"} flex flex-col gap-1.5`}>
-              <div className="bg-[#07090E] border border-[#00A8F3]/45 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div
-                    className={`text-[7.5px] font-bold tracking-[0.12em] text-[#8E96A4] uppercase ${
-                      isEs ? "whitespace-nowrap" : "min-w-0 break-words leading-tight"
-                    }`}
-                  >
-                    {tx("DISTANCIA RECORRIDA", "WALKED DISTANCE")}
-                  </div>
-                  <div
-                    className={`text-[13.5px] font-extrabold text-white tracking-tight leading-tight mt-0.5 tabular-nums ${
-                      isEs ? "whitespace-nowrap" : "min-w-0 break-words leading-tight"
-                    }`}
-                  >
-                    {walkedDualStr}
-                  </div>
-                </div>
-                <span className="text-[7px] font-extrabold text-white border border-[#00A8F3]/50 bg-[#04101C] px-1.5 py-0.5 rounded uppercase shrink-0 tabular-nums">
-                  {activeState.stepsCount ? `${activeState.stepsCount} ` : ""}
-                  {tx("PASOS", "STEPS")}
-                </span>
-              </div>
-
-              <div className="bg-[#07090E] border border-[#FF1E1E]/45 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-[7.5px] font-bold tracking-[0.12em] text-[#8E96A4] uppercase whitespace-nowrap">
-                    {tx("GASTO ENERGÉTICO", "ACTIVE ENERGY")}
-                  </div>
-                  <div className="text-[15.5px] font-extrabold text-white tracking-tight leading-tight mt-0.5 whitespace-nowrap tabular-nums">
-                    {activeState.activeKcal}{" "}
-                    <span className="text-[9.5px] font-bold text-[#8E96A4]">kcal</span>
-                  </div>
-                </div>
-                <span className="text-[7px] font-extrabold text-[#FFE500] border border-[#FFE500]/50 bg-[#101008] px-1.5 py-0.5 rounded uppercase shrink-0 tabular-nums">
-                  {bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
-                    ? `${bleHrStatus.currentBpm} BPM`
-                    : activeState.heartRateBpm && activeState.heartRateBpm >= 30
-                    ? `${activeState.heartRateBpm} BPM`
-                    : tx("ACTIVA", "ACTIVE")}
-                </span>
-              </div>
-            </div>
-
-            <div className="text-[8px] font-bold text-[#8E96A4] tracking-[0.09em] uppercase whitespace-nowrap tabular-nums">
-              {activeState.arrowsCount} {tx("FLECHAS", "ARROWS")} · {activeState.bowPoundageLbs} LBS
-            </div>
-          </>
-        )}
-
-        {/* SCREEN 03: SUMMARY & SAVE */}
-        {screenIdx === 3 && (
-          <>
-            <WatchBrandHeader
-              pillText={
-                isWatchConnected
-                  ? tx("RELOJ CONECTADO", "WATCH SYNCED")
-                  : tx("RESUMEN", "SUMMARY")
-              }
-              pillColor={isWatchConnected ? "cyan" : "muted"}
-            />
-
-            <div className={`${isSquare ? "w-[214px]" : "w-[196px]"} grid grid-cols-2 gap-1.5`}>
-              <div className="bg-[#07090E] border border-[#00A8F3]/45 rounded-xl p-1.5 text-center">
-                <div className="text-[7px] font-bold text-[#8E96A4] tracking-wider uppercase">
-                  {tx("FLECHAS", "ARROWS")}
-                </div>
-                <div className="text-[14.5px] font-extrabold text-white leading-tight mt-0.5 tabular-nums whitespace-nowrap">
-                  {activeState.arrowsCount}{" "}
-                  <span className="text-[9px] text-[#8E96A4]">{isSpanish ? "FL" : "AR"}</span>
-                </div>
-              </div>
-
-              <div className="bg-[#07090E] border border-[#FF1E1E]/45 rounded-xl p-1.5 text-center">
-                <div className="text-[7px] font-bold text-[#8E96A4] tracking-wider uppercase">
-                  {tx("PUNTAJE / KCAL", "SCORE / KCAL")}
-                </div>
-                <div className="text-[13.5px] font-extrabold text-white leading-tight mt-0.5 tabular-nums whitespace-nowrap">
-                  {activeState.totalScore || 0}
-                  <span className="text-[8.5px] text-[#8E96A4]"> pts · </span>
-                  {activeState.activeKcal}
-                </div>
-              </div>
-
-              <div className="col-span-2 bg-[#07090E] border border-[#FFE500]/45 rounded-xl p-1.5 text-center">
-                <div className="text-[7px] font-bold text-[#8E96A4] tracking-wider uppercase">
-                  {tx("DISTANCIA TOTAL", "TOTAL DISTANCE")}
-                </div>
-                <div className="text-[13px] font-extrabold text-white leading-tight mt-0.5 tabular-nums whitespace-nowrap">
-                  {walkedDualStr}
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleFinishSession}
-              className={`${
-                isSquare ? "w-[198px]" : "w-[184px]"
-              } py-1.5 rounded-full bg-[#061523] border border-[#00A8F3] text-white text-[8px] font-extrabold tracking-[0.08em] uppercase active:scale-95 transition cursor-pointer whitespace-nowrap`}
-            >
-              {tx("GUARDAR SESIÓN", "SAVE")}
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* Bottom Pinned Pager Dots */}
-      <div className="absolute bottom-[12px] left-0 right-0 flex items-center justify-center gap-[5px] z-10">
-        {[0, 1, 2, 3].map((idx) => {
-          const isCurrent = screenIdx === idx;
-          return (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => {
-                triggerHaptic(15);
-                setScreenIdx(idx);
-              }}
-              className={`h-[4px] rounded-full transition-all cursor-pointer ${
-                isCurrent ? "w-[13px] bg-[#00A8F3]" : "w-[4px] bg-white/20"
-              }`}
-              aria-label={tx(`Pantalla ${idx + 1}`, `Screen ${idx + 1}`)}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
+  const watchFaceProps: WatchFaceContentProps = {
+    isAnalysisWatchMode,
+    isSquare,
+    isEs,
+    isSpanish,
+    analysisPage,
+    setAnalysisPage,
+    screenIdx,
+    setScreenIdx,
+    lastAnalysisShot,
+    activeState,
+    manualAnalysisStartMs,
+    manualElapsedSec,
+    justDetectedShot,
+    liveAnalysisHr,
+    watchBowLabel,
+    isWatchConnected,
+    digits,
+    walkedPrimaryStr,
+    walkedDualStr,
+    currentTanda,
+    visibleSlotsCount,
+    endArrowsList,
+    bleHrStatus,
+    tx,
+    triggerHaptic,
+    handlePhysicalWatchButton,
+    handleWheel,
+    handleWatchTouchStart,
+    handleWatchTouchEnd,
+    handleWatchPointerDown,
+    handleWatchPointerUp,
+    handleArrowDelta,
+    handleScoreKeyPress,
+    handleUndoScore,
+    handleNextEnd,
+    handleFinishSession
   };
 
   // If opened directly on a Smartwatch / Secondary Device browser (/watch)
@@ -2030,7 +2155,7 @@ export default function SmartwatchMiniApp({
                 <Link2 size={10} aria-hidden="true" />
                 <span>
                   {standaloneLinking
-                    ? tx("VINCULANDO...", "LINKING...")
+                    ? tx("VINCULANDO", "LINKING")
                     : tx("VINCULAR", "LINK")}
                 </span>
               </button>
@@ -2058,7 +2183,7 @@ export default function SmartwatchMiniApp({
                 : "bg-[#1F242E] border-[#343B48]"
             }`}
           />
-          <WatchFaceContent />
+          <WatchFaceContent {...watchFaceProps} />
         </div>
 
         <div className="flex items-center gap-3">
@@ -2081,12 +2206,19 @@ export default function SmartwatchMiniApp({
     );
   }
 
-  // Show install CTA on native Android when no paired watch reports the companion app yet
+  const isIosPlatform =
+    Boolean(watchConnStatus.isNativeIos) ||
+    (typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent || ""));
+
+  // Show install CTA on native Android or iOS when no paired watch reports the companion app yet
   const showInstallOnWatch =
-    watchConnStatus.isNativeAndroid &&
-    watchConnStatus.bridgeReady &&
-    typeof watchConnStatus.watchAppInstalledCount === "number" &&
-    watchConnStatus.watchAppInstalledCount === 0;
+    (watchConnStatus.isNativeAndroid &&
+      watchConnStatus.bridgeReady &&
+      typeof watchConnStatus.watchAppInstalledCount === "number" &&
+      watchConnStatus.watchAppInstalledCount === 0) ||
+    (Boolean(watchConnStatus.isNativeIos) &&
+      watchConnStatus.bridgeReady &&
+      !isWatchConnected);
 
   return (
     <AnimatePresence>
@@ -2117,7 +2249,7 @@ export default function SmartwatchMiniApp({
 
           {/* Compact Single-Line Header: Official Brand Logo + Honest Connection Pill + Sync + Close */}
           <div className="w-full flex items-center justify-between gap-[6px]">
-            <div className={`flex items-center gap-[8px] min-w-0${isEs ? "" : " overflow-hidden"}`}>
+            <div className="flex items-center gap-[8px] min-w-0">
               <img
                 src="/images/brand_logo_header.png"
                 srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
@@ -2173,7 +2305,7 @@ export default function SmartwatchMiniApp({
                   requestWatchAppHeartRate();
                   const curUid = auth.currentUser?.uid || "";
                   if (curUid) {
-                    getOrCreatePhoneWatchPairingCode(curUid, false)
+                    refreshPhoneWatchPairingWindow(curUid, true)
                       .then((c) => {
                         if (c) setPairingCode(c);
                       })
@@ -2201,74 +2333,90 @@ export default function SmartwatchMiniApp({
           </div>
 
           {/* 6-Digit Cloud Watch Pairing Bar (links Sports Smartwatch or /watch in 5 seconds) */}
-          <div className="w-full bg-[#07090E] border border-white/10 rounded-[13px] px-3 py-2 flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <div className="text-[7.5px] font-extrabold tracking-[0.11em] text-[#8E96A4] uppercase whitespace-nowrap">
-                {tx("CÓDIGO NUBE · RELOJ DEPORTIVO", "CLOUD CODE · SPORTS WATCH")}
-              </div>
-              <div
-                className={`text-[9.5px] font-bold break-words leading-tight ${
-                  hasCloudWatchLinked
-                    ? "text-[#00C853]"
+          <div className="w-full bg-[#07090E] border border-white/10 rounded-[13px] px-3 py-2 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-[7.5px] font-extrabold tracking-[0.11em] text-[#8E96A4] uppercase leading-tight break-words">
+                  {tx("CÓDIGO NUBE · RELOJ DEPORTIVO", "CLOUD CODE · SPORTS WATCH")}
+                </div>
+                <div
+                  className={`text-[9.5px] font-bold break-words leading-tight ${
+                    hasCloudWatchLinked
+                      ? "text-[#00C853]"
+                      : cloudStatus.cloudSyncError
+                      ? "text-[#FFE500]"
+                      : "text-white/85"
+                  }`}
+                >
+                  {hasCloudWatchLinked
+                    ? tx("● Reloj vinculado en vivo", "● Watch linked live")
+                    : cloudStatus.cloudSyncError === "AUTH_REQUIRED"
+                    ? tx(
+                        "Inicia sesión para activar el código en nube",
+                        "Sign in to enable the cloud code"
+                      )
                     : cloudStatus.cloudSyncError
-                    ? "text-[#FFE500]"
-                    : "text-white/85"
-                }`}
-              >
-                {hasCloudWatchLinked
-                  ? tx("● Reloj vinculado en vivo", "● Watch linked live")
-                  : cloudStatus.cloudSyncError === "AUTH_REQUIRED"
-                  ? tx(
-                      "Inicia sesión para activar el código en nube",
-                      "Sign in to enable the cloud code"
-                    )
-                  : cloudStatus.cloudSyncError
-                  ? tx(
-                      "Sin conexión a nube · Toca ↻ para reintentar",
-                      "Cloud offline · Tap ↻ to retry"
-                    )
-                  : cloudStatus.cloudConnected && pairingCode
-                  ? tx(
-                      "● Código activo en nube · ingrésalo en tu reloj",
-                      "● Code live in cloud · enter on your watch"
-                    )
-                  : tx("Preparando código en nube...", "Preparing cloud code...")}
+                    ? tx(
+                        "Sin conexión a nube · Toca ↻ para reintentar",
+                        "Cloud offline · Tap ↻ to retry"
+                      )
+                    : cloudStatus.cloudConnected && pairingCode
+                    ? tx(
+                        "● Código activo · ventana abierta en pantalla VINCULAR",
+                        "● Code active · window open on LINK screen"
+                      )
+                    : tx("Preparando código en nube", "Preparing cloud code")}
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {pairingCode && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                {pairingCode && (
+                  <button
+                    type="button"
+                    onClick={handleCopyPairingCode}
+                    className="bg-[#020305] border border-[#FFE500]/45 rounded-[9px] px-2.5 py-1 inline-flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95 transition"
+                    title={tx("Copiar código de 6 dígitos", "Copy 6-digit code")}
+                    aria-label={`${tx("Copiar código", "Copy code")} ${pairingCode}`}
+                  >
+                    <span className="font-sans text-[13.5px] font-extrabold tracking-[0.16em] text-[#FFE500] tabular-nums">
+                      {pairingCode}
+                    </span>
+                    {copiedCode ? (
+                      <Check size={11} aria-hidden="true" className="text-[#00A8F3]" />
+                    ) : (
+                      <Copy size={11} aria-hidden="true" className="text-[#8E96A4]" />
+                    )}
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={handleCopyPairingCode}
-                  className="bg-[#020305] border border-[#FFE500]/45 rounded-[9px] px-2.5 py-1 inline-flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95 transition"
-                  title={tx("Copiar código de 6 dígitos", "Copy 6-digit code")}
-                  aria-label={`${tx("Copiar código", "Copy code")} ${pairingCode}`}
+                  onClick={handleRegeneratePairingCode}
+                  disabled={isRegeneratingCode || !auth.currentUser?.uid}
+                  className="w-[28px] h-[28px] rounded-[9px] bg-[#081320] border border-[#00A8F3]/45 text-white flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-40"
+                  title={tx("Generar nuevo código en nube", "Generate new cloud code")}
+                  aria-label={tx("Generar nuevo código de 6 dígitos", "Generate new 6-digit code")}
                 >
-                  <span className="font-sans text-[13.5px] font-extrabold tracking-[0.16em] text-[#FFE500] tabular-nums">
-                    {pairingCode}
-                  </span>
-                  {copiedCode ? (
-                    <Check size={11} aria-hidden="true" className="text-[#00A8F3]" />
-                  ) : (
-                    <Copy size={11} aria-hidden="true" className="text-[#8E96A4]" />
-                  )}
+                  <RefreshCw
+                    size={11}
+                    aria-hidden="true"
+                    className={isRegeneratingCode ? "animate-spin" : ""}
+                  />
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={handleRegeneratePairingCode}
-                disabled={isRegeneratingCode || !auth.currentUser?.uid}
-                className="w-[28px] h-[28px] rounded-[9px] bg-[#081320] border border-[#00A8F3]/45 text-white flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-40"
-                title={tx("Generar nuevo código en nube", "Generate new cloud code")}
-                aria-label={tx("Generar nuevo código de 6 dígitos", "Generate new 6-digit code")}
-              >
-                <RefreshCw
-                  size={11}
-                  aria-hidden="true"
-                  className={isRegeneratingCode ? "animate-spin" : ""}
-                />
-              </button>
+              </div>
             </div>
+
+            {!isWatchConnected && pairingCode && (
+              <div className="border-t border-white/[0.07] pt-1.5 text-[8.5px] font-semibold text-[#94A3B8] leading-snug break-words">
+                {isIosPlatform
+                  ? tx(
+                      "En iOS: abre la App Compañera del Reloj Inteligente en tu teléfono para instalar/activar ARCHERY 101010 en la muñeca, o ingresa estos 6 dígitos en la pantalla VINCULAR del reloj.",
+                      "On iOS: open the Companion Watch App on your phone to install/enable ARCHERY 101010 on your wrist, or enter these 6 digits on the watch LINK screen."
+                    )
+                  : tx(
+                      "Mantén activa la app compañera Bluetooth del teléfono, abre ARCHERY 101010 en tu Reloj Deportivo GPS o Reloj Inteligente e ingresa estos 6 dígitos en la pantalla VINCULAR.",
+                      "Keep your phone's Bluetooth companion app active, open ARCHERY 101010 on your GPS Sports Watch or Smartwatch, and enter these 6 digits on the LINK screen."
+                    )}
+              </div>
+            )}
           </div>
 
           {/* Universal Bluetooth Heart Rate Bar */}
@@ -2312,9 +2460,14 @@ export default function SmartwatchMiniApp({
                 triggerHaptic(25);
                 installAppOnWatch();
               }}
-              className="w-full bg-[#081320] border border-[#00A8F3]/45 text-white rounded-full py-[7px] text-[9px] font-extrabold tracking-[0.08em] uppercase tabular-nums cursor-pointer active:scale-95 transition"
+              className="w-full bg-[#081320] border border-[#00A8F3]/45 text-white rounded-full py-[7px] px-3 text-[9px] font-extrabold tracking-[0.08em] uppercase tabular-nums cursor-pointer active:scale-95 transition leading-tight"
             >
-              {watchConnStatus.connectedNodesCount > 0
+              {watchConnStatus.isNativeIos
+                ? tx(
+                    "● Abrir App Compañera del Reloj Inteligente",
+                    "● Open Companion Smartwatch App"
+                  )
+                : watchConnStatus.connectedNodesCount > 0
                 ? tx("● Instalar en mi reloj", "● Install on my watch")
                 : tx(
                     "● Reloj no detectado · Abrir tienda",
@@ -2375,7 +2528,7 @@ export default function SmartwatchMiniApp({
                   : "bg-[#1F242E] border-[#343B48]"
               }`}
             />
-            <WatchFaceContent />
+            <WatchFaceContent {...watchFaceProps} />
           </div>
 
           {/* Clean Bottom Navigation Tabs (4 screens) */}

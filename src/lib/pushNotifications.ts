@@ -1,10 +1,40 @@
 import { getMessagingInstance } from "./firebase";
 import { getToken } from "firebase/messaging";
-import { updateProfile } from "./authService";
+import { getLoggedUser, updateProfile } from "./authService";
 
 const SENDER_ID = (process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "757910399585").trim();
 const VAPID_KEY = (process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY || "").trim();
 const MESSAGING_SW_SCOPE = "/firebase-messaging";
+const MAX_FCM_TOKENS = 10;
+
+async function persistBoundedFcmToken(userUid: string, rawToken: string): Promise<void> {
+  const token = rawToken.trim();
+  if (!userUid || userUid === "USR-GUEST-OFFLINE" || token.length < 10 || token.length > 512) {
+    return;
+  }
+  const currentUser = await getLoggedUser();
+  const existingList =
+    currentUser && currentUser.uid === userUid && Array.isArray(currentUser.fcmTokens)
+      ? currentUser.fcmTokens
+      : [];
+  const legacySingle =
+    currentUser && currentUser.uid === userUid && typeof currentUser.fcmToken === "string"
+      ? currentUser.fcmToken.trim()
+      : "";
+  const mergedTokens: string[] = [token];
+  for (const candidate of [...existingList, legacySingle]) {
+    if (typeof candidate !== "string") continue;
+    const clean = candidate.trim();
+    if (clean.length >= 10 && clean.length <= 512 && !mergedTokens.includes(clean)) {
+      mergedTokens.push(clean);
+    }
+    if (mergedTokens.length >= MAX_FCM_TOKENS) break;
+  }
+  await updateProfile(userUid, {
+    fcmToken: token,
+    fcmTokens: mergedTokens
+  });
+}
 
 export interface PushSetupOutcome {
   enabled: boolean;
@@ -244,7 +274,7 @@ export async function configurePushOrInAppNotifications(
 
     if (token) {
       if (userUid && userUid !== "USR-GUEST-OFFLINE") {
-        await updateProfile(userUid, { fcmToken: token } as any);
+        await persistBoundedFcmToken(userUid, token);
       }
       return {
         enabled: true,
@@ -310,7 +340,7 @@ export async function registerPushSilent(userUid: string): Promise<void> {
         });
 
         if (token) {
-          await updateProfile(userUid, { fcmToken: token } as any);
+          await persistBoundedFcmToken(userUid, token);
         }
       }
     } catch (err) {

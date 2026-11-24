@@ -377,7 +377,7 @@ export default function CoachAthletesTab({
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="relative shrink-0">
                     <div className="w-10 h-10 rounded-full bg-[#121620] border border-white/[0.12] flex items-center justify-center font-black text-xs text-white">
-                      {ath.fullName.substring(0, 2).toUpperCase()}
+                      {(ath.fullName || ath.email || "?").trim().slice(0, 2).toUpperCase() || "?"}
                     </div>
                     {isOnlineSim && (
                       <span

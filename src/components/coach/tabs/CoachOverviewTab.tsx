@@ -199,7 +199,7 @@ export default function CoachOverviewTab({
               >
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <div className="w-8 h-8 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-black text-[11.6px] text-white shrink-0">
-                    {ath.fullName.substring(0, 2).toUpperCase()}
+                    {(ath.fullName || ath.email || "?").trim().slice(0, 2).toUpperCase() || "?"}
                   </div>
                   <div className="flex flex-col min-w-0 flex-1">
                     <span className="text-white text-xs font-bold leading-tight break-words">

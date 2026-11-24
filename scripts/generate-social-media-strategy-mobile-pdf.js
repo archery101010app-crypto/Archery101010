@@ -519,7 +519,10 @@ async function generateSocialMediaMobilePdf() {
 
   const pdfBytes = await pdfDoc.save();
 
-  const artifactDir = 'C:/Users/Archery 101010/.gemini/antigravity/brain/6a327e3e-d87f-4993-ab10-ae63666eaeeb';
+  const artifactDir =
+    process.env.ARCHERY_ARTIFACTS_DIR ||
+    process.argv[2] ||
+    path.resolve(__dirname, '../artifacts');
   const outPaths = [
     path.join(artifactDir, 'Estrategia_Redes_Sociales_WHOOP_Archery101010_Movil.pdf'),
     path.join(rootDir, 'public', 'Estrategia_Redes_Sociales_WHOOP_Archery101010_Movil.pdf'),
@@ -528,6 +531,7 @@ async function generateSocialMediaMobilePdf() {
   ];
 
   for (const p of outPaths) {
+    fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, pdfBytes);
   }
 

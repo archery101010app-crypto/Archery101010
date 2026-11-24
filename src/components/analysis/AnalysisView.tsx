@@ -586,7 +586,14 @@ export default function AnalysisView({
         ...(manualStopAt > 0 ? { manualStopAt } : {}),
         ...(calibrateZeroAt > 0 ? { calibrateZeroAt } : {})
       }),
-      updatedAt: sessionStartTsRef.current + shots.length
+      updatedAt: Math.max(
+        sessionStartTsRef.current + shots.length,
+        manualStartAt,
+        manualStopAt,
+        calibrateZeroAt,
+        calibration.calibratedAt || 0,
+        shots[shots.length - 1]?.timestamp || 0
+      )
     };
   }, [
     shots,
@@ -613,7 +620,9 @@ export default function AnalysisView({
   }, [isManualRecording, manualStartAt]);
 
   const latestWatchSnapshotRef = useRef<BiometricSessionSnapshot>(liveWatchSnapshot);
-  latestWatchSnapshotRef.current = liveWatchSnapshot;
+  useEffect(() => {
+    latestWatchSnapshotRef.current = liveWatchSnapshot;
+  }, [liveWatchSnapshot]);
 
   useEffect(() => {
     if (isFinishingRef.current) return;
@@ -692,6 +701,7 @@ export default function AnalysisView({
       if (msg.type === "ANALYSIS_MANUAL_START") {
         const ts = typeof msg.ts === "number" && msg.ts > 0 ? msg.ts : Date.now();
         setCaptureMode("MANUAL");
+        setManualStopAt(0);
         setManualStartAt(ts);
         setIsManualRecording(true);
         setIsMarkMode(false);
@@ -856,6 +866,7 @@ export default function AnalysisView({
     const now = Date.now();
     triggerHaptic("arrow");
     setIsMarkMode(false);
+    setManualStopAt(0);
     setManualStartAt(now);
     setIsManualRecording(true);
     sendWatchCommand({ type: "ANALYSIS_MANUAL_START", ts: now, source: "phone_manual" });
@@ -897,6 +908,7 @@ export default function AnalysisView({
       onNavigateHistoryAnalysis();
     } catch (err) {
       console.error("Failed to save analysis session:", err);
+    } finally {
       isFinishingRef.current = false;
     }
   };
