@@ -28,10 +28,11 @@ import {
 
 interface BleHeartRateModalProps {
   isOpen: boolean;
+  userUid?: string;
   onClose: () => void;
 }
 
-export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModalProps) {
+export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeartRateModalProps) {
   const { language, t, tx } = useLanguage();
   const isEs = language === "es";
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -104,20 +105,31 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
       typeof HTMLDialogElement !== "undefined" &&
       !("closedBy" in HTMLDialogElement.prototype)
     ) {
-      const onBackdropClick = (event: MouseEvent) => {
-        if (event.target !== dialog) return;
+      const isPointerOutside = (event: PointerEvent) => {
         const rect = dialog.getBoundingClientRect();
-        const isInsideDialog =
-          rect.top <= event.clientY &&
-          event.clientY <= rect.top + rect.height &&
-          rect.left <= event.clientX &&
-          event.clientX <= rect.left + rect.width;
-        if (!isInsideDialog && dialog.open) {
+        return (
+          event.clientX < rect.left ||
+          event.clientX > rect.right ||
+          event.clientY < rect.top ||
+          event.clientY > rect.bottom
+        );
+      };
+      let pressedOutside = false;
+      const onPointerDown = (event: PointerEvent) => {
+        pressedOutside = isPointerOutside(event);
+      };
+      const onPointerUp = (event: PointerEvent) => {
+        if (pressedOutside && isPointerOutside(event) && dialog.open) {
           dialog.close();
         }
+        pressedOutside = false;
       };
-      dialog.addEventListener("click", onBackdropClick);
-      removeLightDismissFallback = () => dialog.removeEventListener("click", onBackdropClick);
+      dialog.addEventListener("pointerdown", onPointerDown);
+      dialog.addEventListener("pointerup", onPointerUp);
+      removeLightDismissFallback = () => {
+        dialog.removeEventListener("pointerdown", onPointerDown);
+        dialog.removeEventListener("pointerup", onPointerUp);
+      };
     }
 
     return () => {
@@ -137,11 +149,13 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
           dialog.showModal();
         } catch {}
       }
-      ensurePhoneWatchPairingReady(auth.currentUser?.uid);
+      const effectiveUid = userUid || auth.currentUser?.uid;
+      ensurePhoneWatchPairingReady(effectiveUid);
       requestWatchAppHeartRate();
       pingNativeWatch();
       const pollWatchTimer = setInterval(() => {
-        requestWatchAppHeartRate();
+        ensurePhoneWatchPairingReady(userUid || auth.currentUser?.uid);
+        requestWatchAppHeartRate({ unmute: false });
         pingNativeWatch();
       }, 3000);
       const current = getBleHeartRateStatus();
@@ -168,7 +182,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
       stopBleHeartRateScan();
       dialog.close();
     }
-  }, [isOpen]);
+  }, [isOpen, userUid]);
 
   const handleCloseClick = () => {
     setTappedUnsupported(false);
@@ -183,7 +197,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
 
   const handleSyncWatchPulseClick = () => {
     setIsSyncingWatch(true);
-    ensurePhoneWatchPairingReady(auth.currentUser?.uid);
+    ensurePhoneWatchPairingReady(userUid || auth.currentUser?.uid);
     pingNativeWatch();
     requestWatchAppHeartRate();
     if (syncWatchTimerRef.current) {
@@ -196,7 +210,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
   };
 
   const handleRefreshPairingCodeClick = () => {
-    const uid = auth.currentUser?.uid;
+    const uid = userUid || auth.currentUser?.uid;
     if (!uid) return;
     setIsSyncingWatch(true);
     getOrCreatePhoneWatchPairingCode(uid, true)

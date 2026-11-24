@@ -46,7 +46,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
     const watchPoll = setInterval(() => {
       if (getBleHeartRateStatus().state !== "connected") {
         ensurePhoneWatchPairingReady(user?.uid);
-        requestWatchAppHeartRate();
+        requestWatchAppHeartRate({ unmute: false });
       }
     }, 4500);
     return () => {
@@ -575,6 +575,7 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
 
       <BleHeartRateModal
         isOpen={showBleHrModal}
+        userUid={user?.uid}
         onClose={() => setShowBleHrModal(false)}
       />
 

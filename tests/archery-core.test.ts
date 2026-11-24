@@ -1957,4 +1957,266 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     assert.ok(garminManifest.includes('<iq:product id="fr965"/>'), "Garmin manifest must explicitly support Forerunner 965");
     assert.ok(garminSrc.includes("(now - mLastHrPushMs) >= 6000"), "Garmin Connect IQ must push live HR every 6s");
   });
+
+  it("enforces v2.159 deep-audit fixes: slow high-pre-draw forearm pitch separation, disjoint 650ms hysteresis, LH/70m/18s/jitter edge cases, Bluetooth mid-session calibration, and live HR preservation across session exit", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { isNativeCapacitorRuntime } = await import("../src/lib/firebase.ts");
+    const { analyzeImuShotWindow } = await import("../src/lib/scoring/shotAnalysisEngine.ts");
+    const {
+      disconnectBleHeartRateDevice,
+      getBleHeartRateStatus,
+      requestWatchAppHeartRate
+    } = await import("../src/lib/scoring/bleHeartRateService.ts");
+
+    // 1. Real Android/iOS Capacitor JavascriptInterface name (ArcheryBleHeartRateBridge) must trigger prod Firebase config
+    assert.equal(
+      isNativeCapacitorRuntime({
+        location: { protocol: "https:", hostname: "localhost" },
+        ArcheryBleHeartRateBridge: {}
+      }),
+      true,
+      "ArcheryBleHeartRateBridge must be recognized as native Capacitor runtime"
+    );
+
+    // 2. Explicit user Disconnect must not be overridden by passive { unmute: false } background polls,
+    //    until the user explicitly reconnects via requestWatchAppHeartRate() (default unmute: true)
+    const prevWin = (globalThis as any).window;
+    const mockWin: any = {
+      location: { protocol: "https:", hostname: "archery101010-c0bb4.web.app" }
+    };
+    (globalThis as any).window = mockWin;
+    try {
+      requestWatchAppHeartRate(); // initializes window.__onNativeWearHrUpdate & unmutes
+      mockWin.__onNativeWearHrUpdate?.({
+        bpm: 84,
+        status: "ok",
+        deviceName: "Reloj Inteligente",
+        nodeId: "cloud:WEAR_OS"
+      });
+      assert.equal(getBleHeartRateStatus().state, "connected");
+      assert.equal(getBleHeartRateStatus().currentBpm, 84);
+
+      disconnectBleHeartRateDevice(false);
+      assert.equal(getBleHeartRateStatus().state, "disconnected");
+
+      // Passive background poll must respect mute
+      requestWatchAppHeartRate({ unmute: false });
+      mockWin.__onNativeWearHrUpdate?.({
+        bpm: 85,
+        status: "ok",
+        deviceName: "Reloj Inteligente",
+        nodeId: "cloud:WEAR_OS"
+      });
+      assert.equal(
+        getBleHeartRateStatus().state,
+        "disconnected",
+        "Passive background poll must not override explicit user Disconnect"
+      );
+
+      // Explicit user action (opening modal / tapping Sincronizar) unmutes immediately
+      requestWatchAppHeartRate();
+      mockWin.__onNativeWearHrUpdate?.({
+        bpm: 86,
+        status: "ok",
+        deviceName: "Reloj Inteligente",
+        nodeId: "cloud:WEAR_OS"
+      });
+      assert.equal(getBleHeartRateStatus().state, "connected");
+      assert.equal(getBleHeartRateStatus().currentBpm, 86);
+      disconnectBleHeartRateDevice(false);
+    } finally {
+      (globalThis as any).window = prevWin;
+    }
+
+    // 3. Adversarial Biomechanical Case A: High pre-draw + slow 4.3 deg/s vertical forearm alignment onto gold
+    //    (ax lowers slowly from 1.65 -> 0.22 m/s^2 over 2.0s while ay=9.55, az=1.92 stay nearly constant!)
+    //    Prior v2.158 failed here because ax was omitted from tiltVertRad and gy=0.075 was < 0.19!
+    {
+      const baseTs = 900_000;
+      const samples = [];
+      // 0..1.2s: resting arm down
+      // 1.2..2.2s: 1.0s bow lift to high pre-draw (ax: 7.5 -> 1.65)
+      // 2.2..4.2s: 2.0s slow bowstring draw & sight lowering onto gold (ax: 1.65 -> 0.22, gy = -0.075 rad/s = 4.3 deg/s)
+      // 4.2..7.4s: 3.2s true Aiming hold (with a 60ms clicker twitch at 5.6s that spans 500ms EMA tail — testing 650ms disjoint hysteresis!)
+      // 7.42s: bowstring release + arm drop
+      for (let ms = 0; ms <= 8800; ms += 20) {
+        const t = baseTs + ms;
+        const s = ms / 1000;
+        if (s < 1.2) {
+          samples.push({ t, ax: 7.5, ay: 5.9, az: 2.6, gx: 0, gy: 0.01, gz: 0 });
+        } else if (s < 2.2) {
+          const p = (s - 1.2) / 1.0;
+          samples.push({
+            t,
+            ax: 7.5 * (1 - p) + 1.65 * p,
+            ay: 5.9 * (1 - p) + 9.48 * p,
+            az: 2.6 * (1 - p) + 1.94 * p,
+            gx: 0.08,
+            gy: -0.58,
+            gz: 0.22
+          });
+        } else if (s < 4.2) {
+          const p = (s - 2.2) / 2.0;
+          samples.push({
+            t,
+            ax: 1.65 * (1 - p) + 0.22 * p,
+            ay: 9.48 * (1 - p) + 9.60 * p,
+            az: 1.94 * (1 - p) + 1.90 * p,
+            gx: 0.03,
+            gy: -0.075,
+            gz: 0.025
+          });
+        } else if (s >= 5.60 && s <= 5.64) {
+          samples.push({ t, ax: 0.92, ay: 10.45, az: 2.45, gx: 0.22, gy: 0.44, gz: -0.32 });
+        } else if (s >= 7.42 && s <= 7.46) {
+          samples.push({ t, ax: 4.1, ay: 13.8, az: 2.5, gx: 0.6, gy: 1.45, gz: -0.92 });
+        } else if (s > 7.46) {
+          const d = Math.min(1, (s - 7.46) / 1.0);
+          samples.push({ t, ax: 0.22 + 7.2 * d, ay: 9.6 - 3.7 * d, az: 1.9 + 0.7 * d, gx: 0.3, gy: 0.85, gz: 0.5 });
+        } else {
+          samples.push({
+            t,
+            ax: 0.22 + Math.sin(s * 5) * 0.02,
+            ay: 9.60 + Math.cos(s * 6) * 0.025,
+            az: 1.90 + Math.sin(s * 4) * 0.02,
+            gx: 0.005,
+            gy: 0.01,
+            gz: -0.01
+          });
+        }
+      }
+
+      const shot = analyzeImuShotWindow({
+        samples,
+        manualStartTimestampMs: baseTs,
+        releaseTimestampMs: baseTs + 8800,
+        shotNumber: 7,
+        distanceM: 18,
+        bowType: "Recurve",
+        bowWrist: "LEFT",
+        zeroGravityVec: [7.5, 5.9, 2.6],
+        heartRateBpm: 94
+      });
+      assert.ok(shot, "High pre-draw shot must reconstruct cleanly");
+      assert.ok(
+        shot!.prepSeconds >= 2.5 && shot!.prepSeconds <= 3.5,
+        `High pre-draw + slow 4.3 deg/s alignment must stay in Preparatory (~3.0s), got ${shot!.prepSeconds}s`
+      );
+      assert.ok(
+        shot!.aimSeconds >= 2.8 && shot!.aimSeconds <= 3.6,
+        `True Aiming hold (~3.2s) must not absorb slow pre-draw or split on 5.6s twitch, got ${shot!.aimSeconds}s`
+      );
+      assert.ok(shot!.stabilityPct >= 88, `Expected >= 88% stability, got ${shot!.stabilityPct}%`);
+    }
+
+    // 4. Adversarial Biomechanical Case B: Left-Handed Archer (bowWrist="RIGHT") at 70m + Irregular SensorHub Jitter + 16s Compound Hold
+    {
+      const baseTs = 1_200_000;
+      const samples = [];
+      const jitterSteps = [11, 29, 14, 26, 19, 21];
+      let cursorMs = 0;
+      let stepIdx = 0;
+      // 0..2.2s: 2.2s RH wrist lift/draw -> 2.2..18.2s: 16.0s Compound hold at 70m -> 18.22s release
+      while (cursorMs <= 19_000) {
+        const t = baseTs + cursorMs;
+        const s = cursorMs / 1000;
+        if (s < 2.2) {
+          const p = s / 2.2;
+          samples.push({
+            t,
+            ax: -7.1 * (1 - p) - 0.25 * p,
+            ay: -5.8 * (1 - p) - 9.55 * p,
+            az: 2.5 * (1 - p) + 1.95 * p,
+            gx: -0.12,
+            gy: 0.42 * (1 - p * 0.6),
+            gz: -0.24 * (1 - p * 0.6)
+          });
+        } else if (s >= 18.22 && s <= 18.27) {
+          samples.push({ t, ax: -4.4, ay: -14.2, az: 2.6, gx: -0.8, gy: -1.6, gz: 1.1 });
+        } else if (s > 18.27) {
+          samples.push({ t, ax: -6.8, ay: -6.0, az: 2.8, gx: 0.4, gy: -0.9, gz: -0.5 });
+        } else {
+          samples.push({
+            t,
+            ax: -0.25 + Math.sin(s * 4) * 0.015,
+            ay: -9.55 + Math.cos(s * 5) * 0.018,
+            az: 1.95 + Math.sin(s * 3) * 0.015,
+            gx: -0.005,
+            gy: -0.008,
+            gz: 0.008
+          });
+        }
+        cursorMs += jitterSteps[stepIdx % jitterSteps.length];
+        stepIdx++;
+      }
+
+      const lhShot = analyzeImuShotWindow({
+        samples,
+        manualStartTimestampMs: baseTs,
+        releaseTimestampMs: baseTs + 19_000,
+        shotNumber: 12,
+        distanceM: 70,
+        bowType: "Compound",
+        bowWrist: "RIGHT",
+        heartRateBpm: 102
+      });
+      assert.ok(lhShot, "LH archer 70m 16s Compound shot under burst jitter must reconstruct cleanly");
+      assert.ok(
+        lhShot!.prepSeconds >= 1.7 && lhShot!.prepSeconds <= 2.8,
+        `Expected ~2.2s LH prep, got ${lhShot!.prepSeconds}s`
+      );
+      assert.ok(
+        lhShot!.aimSeconds >= 15.2 && lhShot!.aimSeconds <= 16.6,
+        `Expected ~16.0s Compound hold, got ${lhShot!.aimSeconds}s`
+      );
+      assert.ok(lhShot!.stabilityPct >= 85, `Expected >= 85% stability at 70m, got ${lhShot!.stabilityPct}%`);
+    }
+
+    // 5. Structural Invariants: Live HR never wiped on session exit, Bluetooth calibration parity, 0-arg DataClient HR query, Garmin 3D settle
+    const bioSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/lib/scoring/biometricsEngine.ts"),
+      "utf8"
+    );
+    const analysisSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/analysis/AnalysisView.tsx"),
+      "utf8"
+    );
+    const mainActSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "android/app/src/main/java/com/archery101010/app/MainActivity.java"),
+      "utf8"
+    );
+    const wearMainSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "android/wear/src/main/java/com/archery101010/app/WearMainActivity.java"),
+      "utf8"
+    );
+    const garminSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "garmin-ciq/source/Archery101010WatchApp.mc"),
+      "utf8"
+    );
+
+    assert.equal(
+      bioSrc.includes("fields.watchHeartRateBpm = 0"),
+      false,
+      "Phone must NEVER wipe watchHeartRateBpm to 0 in Firestore when sessionActive becomes false"
+    );
+    assert.equal(
+      (analysisSrc.match(/onStartZeroCapture=/g) || []).length >= 2,
+      true,
+      "Both State A and State B in AnalysisView must wire onStartZeroCapture for mid-session calibration"
+    );
+    assert.equal(
+      mainActSrc.includes('Uri.parse("wear://*/archery101010/hr"), DataClient.FILTER_LITERAL'),
+      false,
+      "MainActivity must not pass wildcard host '*' with FILTER_LITERAL (throws IllegalArgumentException)"
+    );
+    assert.ok(
+      wearMainSrc.includes("motionGx") && wearMainSrc.includes("ts[i] - ts[p] >= 650L"),
+      "WearMainActivity must capture 3-axis gyro (motionGx) and use 650ms disjoint hysteresis"
+    );
+    assert.ok(
+      garminSrc.includes("gdLimitMg") && !garminSrc.includes("(effCount * 35) / 100"),
+      "Garmin Connect IQ must compute real 3D adaptive settleIdx instead of hardcoded 35% split"
+    );
+  });
 });

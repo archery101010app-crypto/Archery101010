@@ -60,7 +60,10 @@ export function isNativeCapacitorRuntime(win?: any): boolean {
     return true;
   }
   return Boolean(
-    w.ArcheryNativeAuth || w.ArcheryWatchNativeBridge || w.ArcheryBleHrBridge
+    w.ArcheryNativeAuth ||
+      w.ArcheryWatchNativeBridge ||
+      w.ArcheryBleHeartRateBridge ||
+      w.ArcheryBleHrBridge
   );
 }
 

@@ -334,7 +334,7 @@ function detectManualReleaseTimestamp(
   let bestSpikeTs = 0;
   const searchStartMs =
     bestPlateauEndIdx >= 0
-      ? Math.max(windowStart + 700, windowSamples[bestPlateauEndIdx].t - 2200)
+      ? Math.max(windowStart + 700, windowSamples[bestPlateauEndIdx].t - 320)
       : windowStart + 800;
 
   for (let i = 3; i < windowSamples.length; i++) {
@@ -527,6 +527,7 @@ export function analyzeImuShotWindow(params: {
   const refNorm = Math.max(4.0, Math.hypot(refAx, refAy, refAz));
 
   const wristSign = bowWrist === "RIGHT" ? -1 : 1;
+  const forePitchWeight = Math.abs(refAz) < 7.5 ? 0.85 : 0.35;
   const faceRadiusCm = getTargetFaceRadiusCm(distanceM, bowType);
   const distCm = Math.max(1000, distanceM * 100);
 
@@ -534,6 +535,7 @@ export function analyzeImuShotWindow(params: {
   const angles: Array<{
     t: number;
     dtSec: number;
+    gx: number;
     gy: number;
     gz: number;
     sAx: number;
@@ -556,21 +558,26 @@ export function analyzeImuShotWindow(params: {
     const dtSec =
       i > 0 ? clamp((cur.t - preSamples[i - 1].t) / 1000, 0.002, 0.12) : 0.02;
 
-    smoothAx = 0.82 * smoothAx + 0.18 * cur.ax;
-    smoothAy = 0.82 * smoothAy + 0.18 * cur.ay;
-    smoothAz = 0.82 * smoothAz + 0.18 * cur.az;
+    const curMag = Math.hypot(cur.ax, cur.ay, cur.az);
+    const alphaG = Math.abs(curMag - 9.81) > 0.45 ? 0.03 : 0.18;
+    smoothAx = (1 - alphaG) * smoothAx + alphaG * cur.ax;
+    smoothAy = (1 - alphaG) * smoothAy + alphaG * cur.ay;
+    smoothAz = (1 - alphaG) * smoothAz + alphaG * cur.az;
 
-    // Tilt deltas (rad) orthogonal to gravity reference
+    // 3D Tilt deltas (rad): includes forearm X-axis elevation pitch ((smoothAx - refAx) * forePitchWeight)
+    // so vertical bow lift & pre-draw lowering are captured whether the watch face points sideways or up
     const tiltHorizRad = ((smoothAy - refAy) / refNorm) * wristSign * 0.28;
-    const tiltVertRad = ((smoothAz - refAz) / refNorm) * 0.28;
+    const tiltVertRad =
+      (((smoothAz - refAz) + (smoothAx - refAx) * wristSign * forePitchWeight) / refNorm) * 0.28;
 
-    const gz = typeof cur.gz === "number" ? cur.gz : 0;
+    const gx = typeof cur.gx === "number" ? cur.gx : 0;
     const gy = typeof cur.gy === "number" ? cur.gy : 0;
-    gyroYaw = 0.92 * (gyroYaw + gz * dtSec * wristSign * 0.35) + 0.08 * tiltHorizRad;
-    gyroPitch = 0.92 * (gyroPitch + gy * dtSec * 0.35) + 0.08 * tiltVertRad;
+    const gz = typeof cur.gz === "number" ? cur.gz : 0;
+    gyroYaw = 0.88 * (gyroYaw + gz * dtSec * wristSign * 0.28) + 0.12 * tiltHorizRad;
+    gyroPitch = 0.88 * (gyroPitch + gy * dtSec * 0.28) + 0.12 * tiltVertRad;
 
     const linDelta = Math.hypot(cur.ax - smoothAx, cur.ay - smoothAy, cur.az - smoothAz);
-    const gyroMag = Math.hypot(cur.gx || 0, gy, gz);
+    const gyroMag = Math.hypot(gx, gy, gz);
     const gravDelta = Math.hypot(
       smoothAx - anchorGravAx,
       smoothAy - anchorGravAy,
@@ -580,6 +587,7 @@ export function analyzeImuShotWindow(params: {
     angles.push({
       t: cur.t,
       dtSec,
+      gx,
       gy,
       gz,
       sAx: smoothAx,
@@ -606,6 +614,7 @@ export function analyzeImuShotWindow(params: {
     return {
       t: a.t,
       dtSec: a.dtSec,
+      gx: a.gx,
       gy: a.gy,
       gz: a.gz,
       sAx: a.sAx,
@@ -622,7 +631,7 @@ export function analyzeImuShotWindow(params: {
   });
 
   // Compute adaptive pre-release anchor baseline [tEnd - 850ms .. tEnd - 100ms] so slow horizontal bow draw
-  // & sight alignment are separated into Preparatory, while natural aiming sway & micro-twitches stay in Aiming.
+  // & vertical pre-draw sight alignment stay in Preparatory, while natural aiming sway & micro-twitches stay in Aiming.
   const preRelBaseline = targetTraj.filter((p) => p.t >= tEnd - 850 && p.t <= tEnd - 100);
   const baseRef = preRelBaseline.length >= 4 ? preRelBaseline : targetTraj.slice(-6);
   const anchorMeanGd =
@@ -635,24 +644,28 @@ export function analyzeImuShotWindow(params: {
     baseRef.reduce((s, p) => s + Math.hypot(p.dxCm, p.dyCm), 0) / Math.max(1, baseRef.length);
 
   const settleRadiusCm = clamp(
-    Math.max(faceRadiusCm * 0.30, anchorMeanRad * 2.1 + faceRadiusCm * 0.08),
-    faceRadiusCm * 0.30,
-    faceRadiusCm * 0.42
+    Math.max(faceRadiusCm * 0.26, anchorMeanRad * 2.1 + faceRadiusCm * 0.07),
+    faceRadiusCm * 0.26,
+    faceRadiusCm * 0.40
   );
-  const gdLimit = clamp(Math.max(0.85, anchorMeanGd * 2.2 + 0.35), 0.85, 1.65);
-  const gyLimit = clamp(Math.max(0.19, anchorMeanGy * 2.2 + 0.08), 0.19, 0.32);
-  const enLimit = clamp(Math.max(0.95, anchorMeanEn * 2.3 + 0.38), 0.95, 1.65);
-  const netDispLimitRad = 0.044;
+  const gdLimit = clamp(Math.max(0.42, anchorMeanGd * 2.3 + 0.22), 0.42, 1.15);
+  const gyLimit = clamp(Math.max(0.085, anchorMeanGy * 2.3 + 0.045), 0.085, 0.20);
+  const enLimit = clamp(Math.max(0.72, anchorMeanEn * 2.3 + 0.32), 0.72, 1.45);
+  const netDispLimitRad = clamp(Math.max(0.018, anchorMeanGy * 0.63 + 0.010), 0.018, 0.032);
+  const gravDriftLimit = clamp(Math.max(0.32, anchorMeanGd * 1.8 + 0.20), 0.32, 0.75);
 
   const isWindowOutOfAimAt = (endIdx: number): boolean => {
-    const winEndT = targetTraj[endIdx].t;
+    const pjEnd = targetTraj[endIdx];
+    const winEndT = pjEnd.t;
     const winStartT = winEndT - 350;
     let sumRad = 0;
     let sumEnergy = 0;
     let sumGyro = 0;
     let sumGravDelta = 0;
+    let sumGxDt = 0;
     let sumGyDt = 0;
     let sumGzDt = 0;
+    let oldestIdx = endIdx;
     let wN = 0;
     for (let j = endIdx; j >= 0 && targetTraj[j].t >= winStartT; j--) {
       const pj = targetTraj[j];
@@ -660,21 +673,30 @@ export function analyzeImuShotWindow(params: {
       sumEnergy += pj.motionEnergy;
       sumGyro += pj.gyroMag;
       sumGravDelta += pj.gravDelta;
+      sumGxDt += pj.gx * pj.dtSec;
       sumGyDt += pj.gy * pj.dtSec;
       sumGzDt += pj.gz * pj.dtSec;
+      oldestIdx = j;
       wN++;
     }
+    const pjOldest = targetTraj[oldestIdx];
     const meanRad = sumRad / Math.max(1, wN);
     const meanEnergy = sumEnergy / Math.max(1, wN);
     const meanGyro = sumGyro / Math.max(1, wN);
     const meanGravDelta = sumGravDelta / Math.max(1, wN);
-    const netGyroDispRad = Math.hypot(sumGyDt, sumGzDt);
+    const netGyroDispRad = Math.hypot(sumGxDt, sumGyDt, sumGzDt);
+    const gravDrift350 = Math.hypot(
+      pjEnd.sAx - pjOldest.sAx,
+      pjEnd.sAy - pjOldest.sAy,
+      pjEnd.sAz - pjOldest.sAz
+    );
     return (
       meanRad > settleRadiusCm ||
       meanGravDelta > gdLimit ||
       meanGyro > gyLimit ||
       meanEnergy > enLimit ||
-      netGyroDispRad > netDispLimitRad
+      netGyroDispRad > netDispLimitRad ||
+      gravDrift350 > gravDriftLimit
     );
   };
 
@@ -686,11 +708,11 @@ export function analyzeImuShotWindow(params: {
   let aimStartIdx = Math.max(0, Math.min(scanStartIdx, targetTraj.length - 4));
   for (let i = scanStartIdx; i >= 0; i--) {
     if (isWindowOutOfAimAt(i)) {
-      // True hysteresis: verify that ~450ms earlier the archer was ALSO out of Aiming (drawing/lifting/resting),
-      // so a brief mid-aim clicker check or wind gust preceded by steady Aiming never splits Aiming!
+      // True disjoint hysteresis: verify that ~650ms earlier (> 350ms window + 250ms EMA tail) the archer
+      // was ALSO out of Aiming (drawing/lifting/resting), so a single mid-aim clicker twitch can NEVER touch both windows!
       let priorCheckIdx = -1;
       for (let p = i - 1; p >= 0; p--) {
-        if (targetTraj[i].t - targetTraj[p].t >= 450) {
+        if (targetTraj[i].t - targetTraj[p].t >= 650) {
           priorCheckIdx = p;
           break;
         }
@@ -701,14 +723,21 @@ export function analyzeImuShotWindow(params: {
         continue;
       }
 
-      // Pinpoint exact entry sample inside [i..end] where wrist settled into anchor
+      // Pinpoint exact entry sample inside [max(0, i - 8)..end] where wrist settled into true Aiming hold
       let exactSettle = Math.min(targetTraj.length - 3, i + 1);
-      for (let k = i; k < targetTraj.length - 2; k++) {
-        const rK = Math.hypot(targetTraj[k].dxCm, targetTraj[k].dyCm);
+      const searchFrom = Math.max(0, i - 8);
+      for (let k = searchFrom; k < targetTraj.length - 2; k++) {
+        const pK = targetTraj[k];
+        const pAhead = targetTraj[Math.min(targetTraj.length - 2, k + 2)];
+        const rK = Math.hypot(pK.dxCm, pK.dyCm);
+        const rAhead = Math.hypot(pAhead.dxCm, pAhead.dyCm);
         if (
           rK <= settleRadiusCm &&
-          targetTraj[k].gravDelta <= gdLimit &&
-          targetTraj[k].gyroMag <= gyLimit
+          pK.gravDelta <= gdLimit &&
+          pK.gyroMag <= gyLimit &&
+          rAhead <= settleRadiusCm &&
+          pAhead.gravDelta <= gdLimit &&
+          pAhead.gyroMag <= gyLimit
         ) {
           exactSettle = k;
           break;
@@ -793,9 +822,21 @@ export function analyzeImuShotWindow(params: {
   const totalSeconds = Number((prepSeconds + aimSeconds).toFixed(1));
 
   const aimSlice = targetTraj.slice(aimStartIdx);
+  let meanAimDx = 0;
+  let meanAimDy = 0;
+  if (aimSlice.length > 0) {
+    for (const p of aimSlice) {
+      meanAimDx += p.dxCm;
+      meanAimDy += p.dyCm;
+    }
+    meanAimDx /= aimSlice.length;
+    meanAimDy /= aimSlice.length;
+  }
   let sumSqCm = 0;
   for (const p of aimSlice) {
-    sumSqCm += p.dxCm * p.dxCm + p.dyCm * p.dyCm;
+    const rx = p.dxCm - meanAimDx;
+    const ry = p.dyCm - meanAimDy;
+    sumSqCm += rx * rx + ry * ry;
   }
   const rmsSwayCm = aimSlice.length > 0 ? Math.sqrt(sumSqCm / aimSlice.length) : 1.5;
   const swayRadiusCm = Number(clamp(rmsSwayCm, 0.3, faceRadiusCm).toFixed(1));

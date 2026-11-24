@@ -3352,6 +3352,11 @@ public class MainActivity extends BridgeActivity {
                 byte[] req = ("{\"type\":\"HR_REQUEST\",\"_ts\":" + nowMs + "}")
                     .getBytes(StandardCharsets.UTF_8);
                 broadcastToWearNodes("/archery101010/hr_request", req);
+                if (lastWatchSnapshotJson != null && !lastWatchSnapshotJson.isEmpty()) {
+                    String enriched = enrichSnapshotWithAckSeq(lastWatchSnapshotJson);
+                    broadcastToWearNodes("/archery101010/telemetry", enriched.getBytes(StandardCharsets.UTF_8));
+                    syncStateDataItemToWear(enriched);
+                }
                 try {
                     PutDataMapRequest putReq = PutDataMapRequest.create("/archery101010/hr_request");
                     putReq.getDataMap().putLong("requested_at", nowMs);
@@ -3367,24 +3372,25 @@ public class MainActivity extends BridgeActivity {
                         }
                     });
                 }
-                // Actively inspect current DataClient /archery101010/hr DataItems so steady watch pulse
-                // written before WebView subscribed is delivered immediately without waiting for next tick.
+                // Actively inspect current DataClient /archery101010/hr DataItems (via 0-arg getDataItems() so
+                // wildcard authority never throws IllegalArgumentException under FILTER_LITERAL).
                 try {
                     Wearable.getDataClient(MainActivity.this)
-                        .getDataItems(Uri.parse("wear://*/archery101010/hr"), DataClient.FILTER_LITERAL)
+                        .getDataItems()
                         .addOnSuccessListener(items -> {
                             if (items == null) return;
                             try {
                                 long checkNow = System.currentTimeMillis();
                                 for (DataItem item : items) {
-                                    if (item == null) continue;
+                                    if (item == null || item.getUri() == null) continue;
+                                    if (!"/archery101010/hr".equals(item.getUri().getPath())) continue;
                                     DataMap dm = DataMapItem.fromDataItem(item).getDataMap();
                                     long sentAt = dm.getLong("sent_at", 0L);
                                     String hrJson = dm.getString("hr_json", "");
                                     if (hrJson != null && !hrJson.isEmpty()
                                             && sentAt > 0L
                                             && Math.abs(checkNow - sentAt) < 40_000L) {
-                                        String host = item.getUri() != null ? item.getUri().getHost() : "";
+                                        String host = item.getUri().getHost() != null ? item.getUri().getHost() : "";
                                         emitWearHeartRateToWebView(hrJson, host);
                                     }
                                 }

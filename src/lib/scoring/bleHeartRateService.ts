@@ -828,9 +828,14 @@ export function stopBleHeartRateScan(): void {
 }
 
 /** Asks the ARCHERY 101010 watch app (via Bluetooth Data Layer & 6-Digit Cloud) to stream live pulse. */
-export function requestWatchAppHeartRate(): void {
+export function requestWatchAppHeartRate(options?: { unmute?: boolean }): void {
   ensureInitialized();
-  wearHrMuted = false;
+  const shouldUnmute = options?.unmute !== false;
+  if (shouldUnmute) {
+    wearHrMuted = false;
+  } else if (wearHrMuted) {
+    return;
+  }
   const bridge = getNativeBridge();
   if (bridge && typeof bridge.requestWatchHeartRate === "function") {
     try {
@@ -925,6 +930,10 @@ export function disconnectBleHeartRateDevice(forgetSaved = false): void {
   if (wearHrTimeoutTimer) {
     clearTimeout(wearHrTimeoutTimer);
     wearHrTimeoutTimer = null;
+  }
+  if (staleSampleWatchdogTimer) {
+    clearTimeout(staleSampleWatchdogTimer);
+    staleSampleWatchdogTimer = null;
   }
 
   const bridge = getNativeBridge();

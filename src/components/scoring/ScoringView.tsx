@@ -894,7 +894,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     const watchHrKeepalive = setInterval(() => {
       if (cancelled || watchFinishedSessionRef.current || isClosingSessionRef.current) return;
       if (getBleHeartRateStatus().state !== "connected") {
-        requestWatchAppHeartRate();
+        requestWatchAppHeartRate({ unmute: false });
       }
     }, 5000);
     return () => {
@@ -4001,6 +4001,7 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       {/* Open Bluetooth Heart Rate Sensor Modal */}
       <BleHeartRateModal
         isOpen={isBleHrModalOpen}
+        userUid={user?.uid}
         onClose={() => setIsBleHrModalOpen(false)}
       />
 

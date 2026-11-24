@@ -659,6 +659,7 @@ export function ensurePhoneWatchPairingReady(explicitUid?: string): void {
   const runForUid = (resolvedUid: string) => {
     if (!resolvedUid || resolvedUid === "USR-GUEST-OFFLINE") return;
     if (activePhonePairingCode && activePhonePairingUid === resolvedUid && phoneCloudUnsubscribe) {
+      pushPairingCodeToNativeWatchBridge(activePhonePairingCode);
       fetchCloudWatchHrOnce(activePhonePairingCode);
       return;
     }
@@ -668,7 +669,10 @@ export function ensurePhoneWatchPairingReady(explicitUid?: string): void {
     inFlightPairingInitUid = resolvedUid;
     inFlightPairingInitPromise = getOrCreatePhoneWatchPairingCode(resolvedUid)
       .then((code) => {
-        if (code) fetchCloudWatchHrOnce(code);
+        if (code) {
+          pushPairingCodeToNativeWatchBridge(code);
+          fetchCloudWatchHrOnce(code);
+        }
         return code;
       })
       .catch(() => "")
@@ -689,8 +693,11 @@ export function ensurePhoneWatchPairingReady(explicitUid?: string): void {
     // Also immediately listen on any cached localStorage pairing code while Firebase Auth hydrates
     try {
       const cached = localStorage.getItem(`archery_watch_pairing_code_${explicitUid}`) || "";
-      if (/^[1-9]\d{5}$/.test(cached) && (!activePhonePairingCode || !phoneCloudUnsubscribe)) {
-        startPhonePairingSnapshotListener(cached, explicitUid);
+      if (/^[1-9]\d{5}$/.test(cached)) {
+        pushPairingCodeToNativeWatchBridge(cached);
+        if (!activePhonePairingCode || !phoneCloudUnsubscribe) {
+          startPhonePairingSnapshotListener(cached, explicitUid);
+        }
         fetchCloudWatchHrOnce(cached);
       }
     } catch {}
@@ -1223,9 +1230,10 @@ function flushPhoneSnapshotToCloudImmediate(snapshot: BiometricSessionSnapshot, 
 
   const fields = buildPhoneCloudSessionFields(snapshot, uid);
   if (snapshot.sessionActive === false) {
+    // Reset cumulative session counters, but NEVER wipe instantaneous wrist watchHeartRateBpm
+    // so SessionConfigView and BleHeartRateModal continue showing live pulse between rounds!
     fields.watchStepsCount = 0;
     fields.watchDistanceM = 0;
-    fields.watchHeartRateBpm = 0;
     fields.watchAvgHeartRateBpm = 0;
     fields.watchMaxHeartRateBpm = 0;
     lastCloudTelemetrySteps = 0;
@@ -1240,9 +1248,14 @@ function flushPhoneSnapshotToCloudImmediate(snapshot: BiometricSessionSnapshot, 
 
   setDoc(doc(db, "watch_sessions", code), fields, { merge: true })
     .then(() => {
-      notifyCloudPairingStatus({ lastCloudSyncAt: Date.now(), cloudConnected: true });
+      notifyCloudPairingStatus({ lastCloudSyncAt: Date.now(), cloudConnected: true, cloudSyncError: "" });
     })
-    .catch(() => {});
+    .catch((err: any) => {
+      const errCode = String(err?.code || "");
+      if (errCode === "permission-denied" || errCode === "not-found") {
+        getOrCreatePhoneWatchPairingCode(uid, true).catch(() => {});
+      }
+    });
 }
 
 let lastPushedAnalysisCalSig = "";

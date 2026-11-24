@@ -86,20 +86,31 @@ export default function AnalysisCalibrationModal({
       typeof HTMLDialogElement !== "undefined" &&
       !("closedBy" in HTMLDialogElement.prototype)
     ) {
-      const onBackdropClick = (event: MouseEvent) => {
-        if (event.target !== dialog) return;
+      const isPointerOutside = (event: PointerEvent) => {
         const rect = dialog.getBoundingClientRect();
-        const inside =
-          rect.top <= event.clientY &&
-          event.clientY <= rect.top + rect.height &&
-          rect.left <= event.clientX &&
-          event.clientX <= rect.left + rect.width;
-        if (!inside && dialog.open) {
+        return (
+          event.clientX < rect.left ||
+          event.clientX > rect.right ||
+          event.clientY < rect.top ||
+          event.clientY > rect.bottom
+        );
+      };
+      let pressedOutside = false;
+      const onPointerDown = (event: PointerEvent) => {
+        pressedOutside = isPointerOutside(event);
+      };
+      const onPointerUp = (event: PointerEvent) => {
+        if (pressedOutside && isPointerOutside(event) && dialog.open) {
           dialog.close();
         }
+        pressedOutside = false;
       };
-      dialog.addEventListener("click", onBackdropClick);
-      removeLightDismissFallback = () => dialog.removeEventListener("click", onBackdropClick);
+      dialog.addEventListener("pointerdown", onPointerDown);
+      dialog.addEventListener("pointerup", onPointerUp);
+      removeLightDismissFallback = () => {
+        dialog.removeEventListener("pointerdown", onPointerDown);
+        dialog.removeEventListener("pointerup", onPointerUp);
+      };
     }
 
     return () => {

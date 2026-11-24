@@ -647,7 +647,7 @@ export default function AnalysisView({
     });
     const watchHrKeepalive = window.setInterval(() => {
       if (!cancelled && getBleHeartRateStatus().state !== "connected") {
-        requestWatchAppHeartRate();
+        requestWatchAppHeartRate({ unmute: false });
       }
     }, 5000);
 
@@ -726,10 +726,12 @@ export default function AnalysisView({
         }
         if (vec) {
           setCalibration((prev) => {
-            const next = { ...prev, zeroGravityVec: vec as [number, number, number] };
-            if (next.calibratedAt > 0) {
-              saveAnalysisCalibration(next, user?.uid);
-            }
+            const next = {
+              ...prev,
+              zeroGravityVec: vec as [number, number, number],
+              calibratedAt: prev.calibratedAt > 0 ? prev.calibratedAt : Date.now()
+            };
+            saveAnalysisCalibration(next, user?.uid);
             return next;
           });
         }
@@ -1311,6 +1313,11 @@ export default function AnalysisView({
         <AnalysisCalibrationModal
           isOpen={isCalibrationOpen}
           initialProfile={calibration}
+          userUid={user?.uid}
+          onStartZeroCapture={() => {
+            setCalibrateZeroAt(Date.now());
+            sendWatchCommand({ type: "ANALYSIS_CALIBRATE_ZERO" });
+          }}
           onClose={() => setIsCalibrationOpen(false)}
           onSaveCalibration={(next) => setCalibration(next)}
         />
@@ -1935,6 +1942,7 @@ export default function AnalysisView({
 
       <BleHeartRateModal
         isOpen={isBleHrModalOpen}
+        userUid={user?.uid}
         onClose={() => setIsBleHrModalOpen(false)}
       />
     </div>

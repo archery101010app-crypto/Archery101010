@@ -509,7 +509,6 @@ class Archery101010WatchView extends WatchUi.View {
         gpsDistanceM = 0.0;
         distanceWalkedM = 0;
         activeKcal = 0;
-        heartRateBpm = 0;
         avgHeartRateBpm = 0;
         maxHeartRateBpm = 0;
         mHrSum = 0;
@@ -800,22 +799,33 @@ class Archery101010WatchView extends WatchUi.View {
         if (now < mLastHrSampleMs || (now - mLastHrSampleMs) >= 2000) {
             mLastHrSampleMs = now;
             try {
+                var curHr = 0;
                 var hrInfo = Sensor.getInfo();
                 if (hrInfo != null && (hrInfo has :heartRate) && hrInfo.heartRate != null) {
-                    var curHr = hrInfo.heartRate.toNumber();
-                    if (curHr >= 35 && curHr <= 240) {
-                        heartRateBpm = curHr;
-                        mHrSum = mHrSum + curHr;
-                        mHrSamples = mHrSamples + 1;
-                        avgHeartRateBpm = (mHrSum / mHrSamples).toNumber();
-                        if (curHr > maxHeartRateBpm) {
-                            maxHeartRateBpm = curHr;
+                    curHr = hrInfo.heartRate.toNumber();
+                } else if ((Toybox has :ActivityMonitor) && (ActivityMonitor has :getHeartRateHistory)) {
+                    var hrIter = ActivityMonitor.getHeartRateHistory(1, true);
+                    if (hrIter != null) {
+                        var hrSample = hrIter.next();
+                        if (hrSample != null && hrSample.heartRate != null && hrSample.heartRate != ActivityMonitor.INVALID_HR_SAMPLE) {
+                            curHr = hrSample.heartRate.toNumber();
                         }
-                        if (hasPairingCode && pairingCode.length() == 6 && !isEditingCode) {
-                            if (mLastHrPushMs == 0 || now < mLastHrPushMs || (now - mLastHrPushMs) >= 6000) {
-                                mLastHrPushMs = now;
-                                syncWithFirestoreCloud("SYNC_TELEMETRY_FROM_WATCH", null);
-                            }
+                    }
+                }
+                if (curHr >= 35 && curHr <= 240) {
+                    var prevHr = heartRateBpm;
+                    heartRateBpm = curHr;
+                    mHrSum = mHrSum + curHr;
+                    mHrSamples = mHrSamples + 1;
+                    avgHeartRateBpm = (mHrSum / mHrSamples).toNumber();
+                    if (curHr > maxHeartRateBpm) {
+                        maxHeartRateBpm = curHr;
+                    }
+                    if (hasPairingCode && pairingCode.length() == 6 && !isEditingCode) {
+                        var hrDelta = (curHr - prevHr).abs();
+                        if (mLastHrPushMs == 0 || now < mLastHrPushMs || (now - mLastHrPushMs) >= 6000 || (hrDelta >= 2 && (now - mLastHrPushMs) >= 2500)) {
+                            mLastHrPushMs = now;
+                            syncWithFirestoreCloud("SYNC_TELEMETRY_FROM_WATCH", null);
                         }
                     }
                 }
@@ -1214,29 +1224,74 @@ class Archery101010WatchView extends WatchUi.View {
         var faceRadiusCm = (distanceM <= 20) ? 20.0 : ((distanceM <= 26) ? 30.0 : ((distanceM <= 36) ? 40.0 : 61.0));
         var distCm = (distanceM * 100.0 > 1000.0) ? (distanceM * 100.0) : 1000.0;
         var wristSign = bowWristStr.equals("RIGHT") ? -1.0 : 1.0;
+        var forePitchWeight = (refAz.abs() < 750.0) ? 0.85 : 0.35;
 
         var nxArr = new [effCount] as Lang.Array<Lang.Float>;
         var nyArr = new [effCount] as Lang.Array<Lang.Float>;
+        var gdArr = new [effCount] as Lang.Array<Lang.Float>;
+        var sAx = xs[0];
         var sAy = ys[0];
         var sAz = zs[0];
         for (var m = 0; m < effCount; m++) {
-            sAy = 0.78 * sAy + 0.22 * ys[m];
-            sAz = 0.78 * sAz + 0.22 * zs[m];
+            sAx = 0.80 * sAx + 0.20 * xs[m];
+            sAy = 0.80 * sAy + 0.20 * ys[m];
+            sAz = 0.80 * sAz + 0.20 * zs[m];
             var yawRad = ((sAy - refAy) / refNorm) * wristSign * 0.28;
-            var pitchRad = ((sAz - refAz) / refNorm) * 0.28;
+            var pitchRad = (((sAz - refAz) + (sAx - refAx) * wristSign * forePitchWeight) / refNorm) * 0.28;
             var dxCm = Math.tan(yawRad).toFloat() * distCm;
             var dyCm = Math.tan(pitchRad).toFloat() * distCm;
             nxArr[m] = (dxCm / faceRadiusCm).toFloat();
             nyArr[m] = (dyCm / faceRadiusCm).toFloat();
+            var dGx = sAx - refAx;
+            var dGy = sAy - refAy;
+            var dGz = sAz - refAz;
+            gdArr[m] = Math.sqrt(dGx * dGx + dGy * dGy + dGz * dGz).toFloat();
         }
 
-        var settleIdx = (effCount * 35) / 100;
+        // Adaptive 3D gravity + target-radius settle detection (milli-g: 45 mg ~ 0.44 m/s^2)
+        var baseGd = 0.0;
+        var baseN = 0;
+        for (var b = refStart; b < effCount; b++) {
+            baseGd = baseGd + gdArr[b];
+            baseN = baseN + 1;
+        }
+        var gdLimitMg = (baseN > 0) ? ((baseGd / baseN) * 2.3 + 24.0) : 45.0;
+        if (gdLimitMg < 45.0) { gdLimitMg = 45.0; }
+        if (gdLimitMg > 120.0) { gdLimitMg = 120.0; }
+
+        var settleIdx = 1;
+        for (var sIdx = effCount - 2; sIdx >= 1; sIdx--) {
+            var radNorm = Math.sqrt(nxArr[sIdx] * nxArr[sIdx] + nyArr[sIdx] * nyArr[sIdx]).toFloat();
+            var prevIdx = (sIdx >= 3) ? (sIdx - 3) : 0;
+            var driftMg = (gdArr[sIdx] - gdArr[prevIdx]).abs();
+            if (gdArr[sIdx] > gdLimitMg || radNorm > 0.36 || driftMg > 34.0) {
+                var priorIdx = (sIdx >= 6) ? (sIdx - 6) : 0;
+                if (sIdx < 6 || gdArr[priorIdx] > gdLimitMg) {
+                    settleIdx = sIdx + 1;
+                    break;
+                }
+            }
+            settleIdx = sIdx;
+        }
         if (settleIdx < 1) { settleIdx = 1; }
         if (settleIdx > effCount - 2) { settleIdx = effCount - 2; }
 
-        var totalSpanSec = (tsArr[effCount - 1] - tsArr[0]).toFloat() / 1000.0;
+        // Trim pre-raise idle dead time before active lift
+        var prepStartIdx = 0;
+        var sawLift = false;
+        for (var pIdx = settleIdx - 1; pIdx >= 1; pIdx--) {
+            var stepShiftMg = (gdArr[pIdx] - gdArr[pIdx - 1]).abs();
+            if (stepShiftMg >= 18.0) {
+                sawLift = true;
+            } else if (sawLift && (tsArr[settleIdx] - tsArr[pIdx]) >= 500 && stepShiftMg < 8.0) {
+                prepStartIdx = pIdx;
+                break;
+            }
+        }
+
+        var totalSpanSec = (tsArr[effCount - 1] - tsArr[prepStartIdx]).toFloat() / 1000.0;
         if (totalSpanSec < 1.0) { totalSpanSec = 1.0; }
-        var prepSec = ((tsArr[settleIdx] - tsArr[0]).toFloat() / 1000.0);
+        var prepSec = ((tsArr[settleIdx] - tsArr[prepStartIdx]).toFloat() / 1000.0);
         if (prepSec < 0.4) { prepSec = 0.4; }
         if (prepSec > 10.0) { prepSec = 10.0; }
         var aimSec = ((tsArr[effCount - 1] - tsArr[settleIdx]).toFloat() / 1000.0);
@@ -1266,10 +1321,12 @@ class Archery101010WatchView extends WatchUi.View {
         if (relJumpCm < 0.2) { relJumpCm = 0.2; }
 
         var pOut = "[";
-        var pSteps = (settleIdx >= 6) ? 6 : (settleIdx + 1);
+        var prepSpan = settleIdx - prepStartIdx;
+        if (prepSpan < 1) { prepSpan = 1; }
+        var pSteps = (prepSpan >= 6) ? 6 : (prepSpan + 1);
         if (pSteps < 2) { pSteps = 2; }
         for (var pi = 0; pi < pSteps; pi++) {
-            var srcP = (pi * settleIdx) / (pSteps - 1);
+            var srcP = prepStartIdx + ((pi * prepSpan) / (pSteps - 1));
             if (srcP >= effCount) { srcP = effCount - 1; }
             if (pi > 0) { pOut = pOut + ","; }
             pOut = pOut + "[" + fmtMilli3(nxArr[srcP]) + "," + fmtMilli3(nyArr[srcP]) + "]";
@@ -1670,6 +1727,12 @@ class Archery101010WatchView extends WatchUi.View {
             var elapsedSinceLocal = (nowTimer >= mLastLocalActionMs) ? (nowTimer - mLastLocalActionMs) : 999999;
 
             if (!sessionActive) {
+                if (analysisMode) {
+                    analysisMode = false;
+                    manualAnalysisRecording = false;
+                    manualAnalysisStartTimerMs = 0;
+                    syncHighFreqAccelerometer();
+                }
                 if (mPendingRetryCmd == null && (mLastLocalActionMs == 0 || elapsedSinceLocal > 6000)) {
                     if (arrowsCount > 0 || totalScore > 0 || stepsCount > 0 || distanceWalkedM > 0) {
                         resetAllCounters("");
@@ -2238,8 +2301,12 @@ class Archery101010WatchView extends WatchUi.View {
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             dc.drawText(cx, card2Y + (30.0 * s).toNumber(), kcalFont, kcalStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-            var bioFootFull = arrowsCount.toString() + tr(" FLECHAS · ", " ARROWS · ") + bowPoundageLbs.toString() + " LBS";
-            var bioFootShort = arrowsCount.toString() + tr(" FL · ", " AR · ") + bowPoundageLbs.toString() + " LBS";
+            var bioFootFull = (heartRateBpm >= 35)
+                ? (heartRateBpm.toString() + " BPM · " + arrowsCount.toString() + tr(" FLECHAS", " ARROWS"))
+                : (arrowsCount.toString() + tr(" FLECHAS · ", " ARROWS · ") + bowPoundageLbs.toString() + " LBS");
+            var bioFootShort = (heartRateBpm >= 35)
+                ? (heartRateBpm.toString() + " BPM · " + arrowsCount.toString() + tr(" FL", " AR"))
+                : (arrowsCount.toString() + tr(" FL · ", " AR · ") + bowPoundageLbs.toString() + " LBS");
             var bioFoot = (dc.getTextWidthInPixels(bioFootFull, fMicro) <= innerMaxW) ? bioFootFull : bioFootShort;
             dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
             dc.drawText(cx, (177.0 * s).toNumber(), fMicro, bioFoot, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
