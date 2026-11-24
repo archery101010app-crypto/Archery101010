@@ -201,6 +201,210 @@ function downsamplePoints(
   return result;
 }
 
+function getBowReleaseThresholds(bowType: AnalysisBowType): {
+  minJerk: number;
+  minLinDev: number;
+} {
+  if (bowType === "Compound") {
+    return { minJerk: 4.2, minLinDev: 3.6 };
+  }
+  if (bowType === "Recurve") {
+    return { minJerk: 3.1, minLinDev: 2.7 };
+  }
+  return { minJerk: 3.6, minLinDev: 3.1 };
+}
+
+/**
+ * Finds the dominant sustained aiming stillness plateau inside a manual INICIO -> FINAL window
+ * so even ultra-damped bows (or late FINAL button presses after lowering the bow arm) anchor
+ * `tEnd` at the true end of aiming rather than on the arm-lowering swing.
+ */
+function detectManualReleaseTimestamp(
+  windowSamples: RawImuSample[],
+  windowStart: number,
+  rawEnd: number,
+  bowType: AnalysisBowType,
+  zeroGravityVec?: [number, number, number]
+): number {
+  if (windowSamples.length < 10) {
+    return Math.max(windowStart + 500, rawEnd - 120);
+  }
+
+  const hasCalZero =
+    Array.isArray(zeroGravityVec) &&
+    zeroGravityVec.length === 3 &&
+    (Math.abs(zeroGravityVec[0]) > 0.01 || Math.abs(zeroGravityVec[1]) > 0.01);
+
+  const { minJerk, minLinDev } = getBowReleaseThresholds(bowType);
+
+  // Step 1: Evaluate 350ms sliding stillness & horizontal-forearm posture across the window
+  const quietMask = new Array<boolean>(windowSamples.length).fill(false);
+  let bestPlateauEndIdx = -1;
+  let curRunStartIdx = -1;
+  let bestPlateauScore = -1;
+  let anchorMeanAx = 0;
+  let anchorMeanAy = 0;
+  let anchorMeanAz = 9.81;
+
+  for (let i = 0; i < windowSamples.length; i++) {
+    const tEndWin = windowSamples[i].t;
+    const tStartWin = tEndWin - 350;
+    let sumLin = 0;
+    let sumGyro = 0;
+    let sumAx = 0;
+    let sumAy = 0;
+    let sumAz = 0;
+    let minAy = Infinity;
+    let maxAy = -Infinity;
+    let minAz = Infinity;
+    let maxAz = -Infinity;
+    let n = 0;
+    for (let j = i; j >= 0 && windowSamples[j].t >= tStartWin; j--) {
+      const s = windowSamples[j];
+      const mag = Math.hypot(s.ax, s.ay, s.az);
+      sumLin += Math.abs(mag - 9.81);
+      sumGyro += Math.hypot(s.gx || 0, s.gy || 0, s.gz || 0);
+      sumAx += s.ax;
+      sumAy += s.ay;
+      sumAz += s.az;
+      if (s.ay < minAy) minAy = s.ay;
+      if (s.ay > maxAy) maxAy = s.ay;
+      if (s.az < minAz) minAz = s.az;
+      if (s.az > maxAz) maxAz = s.az;
+      n++;
+    }
+    if (n < 4) continue;
+    const meanLin = sumLin / n;
+    const meanGyro = sumGyro / n;
+    const mAx = sumAx / n;
+    const mAy = sumAy / n;
+    const mAz = sumAz / n;
+    const gNorm = Math.max(4.0, Math.hypot(mAx, mAy, mAz));
+    const forearmVertRatio = Math.abs(mAx) / gNorm;
+    const perpGrav = Math.hypot(mAy, mAz);
+    const postureValid = forearmVertRatio <= 0.80 && perpGrav >= 5.6;
+    const calDist = hasCalZero
+      ? Math.hypot(
+          mAx - zeroGravityVec![0],
+          mAy - zeroGravityVec![1],
+          mAz - zeroGravityVec![2]
+        )
+      : 0;
+    const calMatch = !hasCalZero || calDist <= 4.2;
+    const spanOk = maxAy - minAy <= 2.4 && maxAz - minAz <= 2.4;
+
+    if (postureValid && calMatch && spanOk && meanLin <= 1.25 && meanGyro <= 0.48) {
+      quietMask[i] = true;
+      if (curRunStartIdx < 0) curRunStartIdx = i;
+      const runDurMs = windowSamples[i].t - windowSamples[curRunStartIdx].t;
+      // Favor sustained aiming plateaus (>= 450ms) that occur after initial lift
+      if (runDurMs >= 450 && windowSamples[i].t - windowStart >= 650) {
+        const recencyBonus = ((windowSamples[i].t - windowStart) / Math.max(1000, rawEnd - windowStart)) * 350;
+        const score = runDurMs + recencyBonus;
+        if (score >= bestPlateauScore) {
+          bestPlateauScore = score;
+          bestPlateauEndIdx = i;
+          anchorMeanAx = mAx;
+          anchorMeanAy = mAy;
+          anchorMeanAz = mAz;
+        }
+      }
+    } else {
+      curRunStartIdx = -1;
+    }
+  }
+
+  // Step 2: Look for a genuine post-anchor release impulse (preceded by >= 400ms of quiet aiming posture)
+  let bestSpikeTs = 0;
+  const searchStartMs =
+    bestPlateauEndIdx >= 0
+      ? Math.max(windowStart + 700, windowSamples[bestPlateauEndIdx].t - 1800)
+      : windowStart + 800;
+
+  for (let i = 3; i < windowSamples.length; i++) {
+    const s = windowSamples[i];
+    if (s.t < searchStartMs) continue;
+    if (rawEnd - s.t > 6000) continue;
+
+    let maxJerk = 0;
+    for (let k = 1; k <= 3 && i - k >= 0; k++) {
+      const prev = windowSamples[i - k];
+      const jump = Math.abs(
+        Math.hypot(s.ax, s.ay, s.az) - Math.hypot(prev.ax, prev.ay, prev.az)
+      );
+      if (jump > maxJerk) maxJerk = jump;
+    }
+    const magNow = Math.hypot(s.ax, s.ay, s.az);
+    const linDev = Math.abs(magNow - 9.81);
+    const gyroNow = Math.hypot(s.gx || 0, s.gy || 0, s.gz || 0);
+    const effectiveImpulse = linDev + gyroNow * 1.1;
+
+    if (maxJerk < minJerk || effectiveImpulse < minLinDev) continue;
+
+    // Verify the 450ms immediately before this spike [s.t - 500ms .. s.t - 55ms] was in quiet aiming anchor
+    let preLinSum = 0;
+    let preGyroSum = 0;
+    let preAx = 0;
+    let preAy = 0;
+    let preAz = 0;
+    let preN = 0;
+    for (let j = i - 1; j >= 0 && windowSamples[j].t >= s.t - 520; j--) {
+      if (windowSamples[j].t > s.t - 45) continue;
+      const ps = windowSamples[j];
+      preLinSum += Math.abs(Math.hypot(ps.ax, ps.ay, ps.az) - 9.81);
+      preGyroSum += Math.hypot(ps.gx || 0, ps.gy || 0, ps.gz || 0);
+      preAx += ps.ax;
+      preAy += ps.ay;
+      preAz += ps.az;
+      preN++;
+    }
+    if (preN < 4) continue;
+    const preMeanLin = preLinSum / preN;
+    const preMeanGyro = preGyroSum / preN;
+    if (preMeanLin > 1.35 || preMeanGyro > 0.55) continue;
+
+    if (bestPlateauEndIdx >= 0) {
+      const pAx = preAx / preN;
+      const pAy = preAy / preN;
+      const pAz = preAz / preN;
+      const postureDrift = Math.hypot(
+        pAx - anchorMeanAx,
+        pAy - anchorMeanAy,
+        pAz - anchorMeanAz
+      );
+      // Reject button-tap spikes that happen AFTER the archer already lowered the bow arm!
+      if (postureDrift > 3.1) continue;
+    }
+
+    // Lock onto the FIRST valid post-anchor release onset so recoil/follow-through samples never leak into preSamples!
+    if (bestSpikeTs === 0) {
+      let onsetIdx = i;
+      while (onsetIdx > 1 && s.t - windowSamples[onsetIdx - 1].t <= 90) {
+        const prevS = windowSamples[onsetIdx - 1];
+        const prevLin = Math.abs(Math.hypot(prevS.ax, prevS.ay, prevS.az) - 9.81);
+        const prevGy = Math.hypot(prevS.gx || 0, prevS.gy || 0, prevS.gz || 0);
+        if (prevLin <= 1.2 && prevGy <= 0.45) {
+          break;
+        }
+        onsetIdx--;
+      }
+      bestSpikeTs = windowSamples[onsetIdx].t;
+      break;
+    }
+  }
+
+  if (bestSpikeTs > 0) {
+    return bestSpikeTs;
+  }
+
+  // Step 3: Ultra-damped shot with no shock spike -> trim right at the end of the sustained aiming plateau
+  if (bestPlateauEndIdx >= 0) {
+    return Math.min(rawEnd - 40, windowSamples[bestPlateauEndIdx].t + 35);
+  }
+
+  return Math.max(windowStart + 500, rawEnd - 120);
+}
+
 /**
  * Reconstructs real 2D target trajectory (Preparatory + Aiming + Release) from a wrist IMU buffer
  * ending at bowstring release (`releaseTimestampMs`).
@@ -244,30 +448,21 @@ export function analyzeImuShotWindow(params: {
   let tEnd = rawEnd;
   if (hasExplicitManualWindow) {
     const windowCandidates = sorted.filter((s) => s.t >= windowStart && s.t <= rawEnd);
-    let detectedSpikeTs = 0;
-    let peakImpulse = 0;
-    for (let i = 3; i < windowCandidates.length; i++) {
-      const s = windowCandidates[i];
-      if (s.t - windowStart < 950 || rawEnd - s.t > 4500) continue;
-      const prev = windowCandidates[i - 2];
-      const magNow = Math.hypot(s.ax, s.ay, s.az);
-      const magPrev = Math.hypot(prev.ax, prev.ay, prev.az);
-      const jerk = Math.abs(magNow - magPrev);
-      const linDev = Math.abs(magNow - 9.81);
-      if (jerk >= 6.5 && linDev >= 5.5 && linDev > peakImpulse) {
-        peakImpulse = linDev;
-        detectedSpikeTs = s.t;
-      }
-    }
-    tEnd = detectedSpikeTs > 0 ? detectedSpikeTs : Math.max(windowStart + 500, rawEnd - 120);
+    tEnd = detectManualReleaseTimestamp(
+      windowCandidates,
+      windowStart,
+      rawEnd,
+      bowType,
+      zeroGravityVec
+    );
   }
 
   // Isolate pre-release window (excluding post-release recoil spike > -15ms)
   const preSamples = sorted.filter((s) => s.t >= windowStart && s.t <= tEnd - 15);
   if (preSamples.length < 8) return null;
 
-  // Anchor reference gravity vector = mean of quietest pre-release 450ms window [tEnd - 650ms .. tEnd - 120ms]
-  const anchorWindow = preSamples.filter((s) => s.t >= tEnd - 700 && s.t <= tEnd - 100);
+  // Anchor reference gravity vector = mean of quietest pre-release 600ms window [tEnd - 900ms .. tEnd - 100ms]
+  const anchorWindow = preSamples.filter((s) => s.t >= tEnd - 900 && s.t <= tEnd - 100);
   const refList = anchorWindow.length >= 4 ? anchorWindow : preSamples.slice(-8);
 
   let refAx = 0;
@@ -281,6 +476,10 @@ export function analyzeImuShotWindow(params: {
   refAx /= refList.length;
   refAy /= refList.length;
   refAz /= refList.length;
+  const anchorGravAx = refAx;
+  const anchorGravAy = refAy;
+  const anchorGravAz = refAz;
+
   // Blend calibrated resting zero-gravity baseline (when non-synthetic) to stabilize wrist mount tilt reference
   if (
     Array.isArray(zeroGravityVec) &&
@@ -289,9 +488,9 @@ export function analyzeImuShotWindow(params: {
   ) {
     const zNorm = Math.hypot(zeroGravityVec[0], zeroGravityVec[1], zeroGravityVec[2]);
     if (zNorm >= 4.0 && zNorm <= 15.0) {
-      refAx = 0.88 * refAx + 0.12 * zeroGravityVec[0];
-      refAy = 0.88 * refAy + 0.12 * zeroGravityVec[1];
-      refAz = 0.88 * refAz + 0.12 * zeroGravityVec[2];
+      refAx = 0.82 * refAx + 0.18 * zeroGravityVec[0];
+      refAy = 0.82 * refAy + 0.18 * zeroGravityVec[1];
+      refAz = 0.82 * refAz + 0.18 * zeroGravityVec[2];
     }
   }
   const refNorm = Math.max(4.0, Math.hypot(refAx, refAy, refAz));
@@ -301,7 +500,14 @@ export function analyzeImuShotWindow(params: {
   const distCm = Math.max(1000, distanceM * 100);
 
   // Complementary low-pass tilt + gyro angle integration (rad) relative to anchor equilibrium
-  const angles: Array<{ t: number; yawRad: number; pitchRad: number; motionEnergy: number }> = [];
+  const angles: Array<{
+    t: number;
+    yawRad: number;
+    pitchRad: number;
+    motionEnergy: number;
+    gyroMag: number;
+    gravDelta: number;
+  }> = [];
   let smoothAx = preSamples[0].ax;
   let smoothAy = preSamples[0].ay;
   let smoothAz = preSamples[0].az;
@@ -328,12 +534,19 @@ export function analyzeImuShotWindow(params: {
 
     const linDelta = Math.hypot(cur.ax - smoothAx, cur.ay - smoothAy, cur.az - smoothAz);
     const gyroMag = Math.hypot(cur.gx || 0, gy, gz);
+    const gravDelta = Math.hypot(
+      smoothAx - anchorGravAx,
+      smoothAy - anchorGravAy,
+      smoothAz - anchorGravAz
+    );
 
     angles.push({
       t: cur.t,
       yawRad: tiltHorizRad * 0.65 + gyroYaw * 0.35,
       pitchRad: tiltVertRad * 0.65 + gyroPitch * 0.35,
-      motionEnergy: linDelta + gyroMag * 1.6
+      motionEnergy: linDelta + gyroMag * 1.6,
+      gyroMag,
+      gravDelta
     });
   }
 
@@ -353,57 +566,115 @@ export function analyzeImuShotWindow(params: {
       dyCm,
       nx: clamp(dxCm / faceRadiusCm, -1.08, 1.08),
       ny: clamp(dyCm / faceRadiusCm, -1.08, 1.08),
-      motionEnergy: a.motionEnergy
+      motionEnergy: a.motionEnergy,
+      gyroMag: a.gyroMag,
+      gravDelta: a.gravDelta
     };
   });
 
-  // Detect Aim Settle Start: walk backwards from release until target displacement exceeds aim envelope (or motionEnergy spikes during bow raise)
-  const settleRadiusCm = faceRadiusCm * 0.36;
-  let aimStartIdx = Math.max(0, targetTraj.length - 6);
-  for (let i = targetTraj.length - 1; i >= 0; i--) {
-    const radialCm = Math.hypot(targetTraj[i].dxCm, targetTraj[i].dyCm);
-    if (radialCm > settleRadiusCm || targetTraj[i].motionEnergy > 2.8) {
-      aimStartIdx = Math.min(targetTraj.length - 3, i + 1);
+  // Detect Aim Settle Start via Sustained 350ms Sliding Window Hysteresis:
+  // A brief 1-2 sample micro-tremor or clicker check does NOT break Aiming;
+  // Preparatory -> Aiming transition occurs only where a full ~350ms window leaves anchor posture/stillness.
+  const settleRadiusCm = faceRadiusCm * 0.44;
+  // Start backward scan ~80ms before release so rising release-recoil frames at the tail never trip outOfAimWindow
+  let scanStartIdx = targetTraj.length - 1;
+  while (scanStartIdx > 4 && tEnd - targetTraj[scanStartIdx].t < 80) {
+    scanStartIdx--;
+  }
+  let aimStartIdx = Math.max(0, Math.min(scanStartIdx, targetTraj.length - 4));
+  for (let i = scanStartIdx; i >= 0; i--) {
+    const winEndT = targetTraj[i].t;
+    const winStartT = winEndT - 350;
+    let sumRad = 0;
+    let sumEnergy = 0;
+    let sumGyro = 0;
+    let sumGravDelta = 0;
+    let wN = 0;
+    for (let j = i; j >= 0 && targetTraj[j].t >= winStartT; j--) {
+      sumRad += Math.hypot(targetTraj[j].dxCm, targetTraj[j].dyCm);
+      sumEnergy += targetTraj[j].motionEnergy;
+      sumGyro += targetTraj[j].gyroMag;
+      sumGravDelta += targetTraj[j].gravDelta;
+      wN++;
+    }
+    const meanRad = sumRad / Math.max(1, wN);
+    const meanEnergy = sumEnergy / Math.max(1, wN);
+    const meanGyro = sumGyro / Math.max(1, wN);
+    const meanGravDelta = sumGravDelta / Math.max(1, wN);
+
+    const outOfAimWindow =
+      meanRad > settleRadiusCm ||
+      meanGravDelta > 2.25 ||
+      meanGyro > 0.38 ||
+      meanEnergy > 1.85;
+
+    if (outOfAimWindow) {
+      // Pinpoint exact entry sample inside [j..i] where wrist settled into anchor
+      let exactSettle = Math.min(targetTraj.length - 3, i + 1);
+      for (let k = i; k < targetTraj.length - 2; k++) {
+        const rK = Math.hypot(targetTraj[k].dxCm, targetTraj[k].dyCm);
+        if (rK <= settleRadiusCm && targetTraj[k].gravDelta <= 2.1 && targetTraj[k].gyroMag <= 0.35) {
+          exactSettle = k;
+          break;
+        }
+      }
+      aimStartIdx = exactSettle;
       break;
     }
     aimStartIdx = i;
   }
 
-  // Detect Preparatory Raise Start: in explicit INICIO -> FINAL mode use start of window (up to 10s prep);
-  // in AUTO mode walk backwards from aimStartIdx across bow-lift/draw sweep (up to 4.5s).
+  // Detect Preparatory Raise Start & Trim Idle Pre-Raise Dead Time:
+  // Walking backwards from aimStartIdx across the active bow-raise / draw sweep,
+  // stop as soon as a sustained 320ms window returns to pre-raise rest (ignoring idle wait after pressing INICIO).
   let prepStartIdx = Math.max(0, aimStartIdx - 1);
-  if (hasExplicitManualWindow) {
-    prepStartIdx = 0;
-    for (let i = 0; i < aimStartIdx; i++) {
-      if (targetTraj[aimStartIdx].t - targetTraj[i].t <= 10_000) {
-        prepStartIdx = i;
-        break;
-      }
+  const maxPrepLookbackMs = hasExplicitManualWindow ? 10_000 : 5_000;
+  let earliestFloorIdx = 0;
+  for (let i = 0; i < aimStartIdx; i++) {
+    if (targetTraj[aimStartIdx].t - targetTraj[i].t <= maxPrepLookbackMs) {
+      earliestFloorIdx = i;
+      break;
     }
-  } else {
-    for (let i = aimStartIdx - 1; i >= 0; i--) {
-      if (targetTraj[aimStartIdx].t - targetTraj[i].t > 4500) {
-        prepStartIdx = i;
-        break;
-      }
-      const lookbackIdx = Math.max(0, i - 3);
-      const dtSpanSec = Math.max(0.04, (targetTraj[i].t - targetTraj[lookbackIdx].t) / 1000);
-      const sweepRateCmPerSec =
-        Math.hypot(
-          targetTraj[i].dxCm - targetTraj[lookbackIdx].dxCm,
-          targetTraj[i].dyCm - targetTraj[lookbackIdx].dyCm
-        ) / dtSpanSec;
-      if (
-        aimStartIdx - i > 6 &&
-        i > lookbackIdx &&
-        sweepRateCmPerSec < 6.0 &&
-        targetTraj[i].motionEnergy < 0.22
-      ) {
-        prepStartIdx = i;
-        break;
-      }
-      prepStartIdx = i;
+  }
+
+  prepStartIdx = earliestFloorIdx;
+  let sawActiveRaiseSweep = false;
+  for (let i = aimStartIdx - 1; i >= earliestFloorIdx; i--) {
+    const winEndT = targetTraj[i].t;
+    const winStartT = winEndT - 320;
+    let sumEnergy = 0;
+    let sumGyro = 0;
+    let oldestIdx = i;
+    let wN = 0;
+    for (let j = i; j >= 0 && targetTraj[j].t >= winStartT; j--) {
+      sumEnergy += targetTraj[j].motionEnergy;
+      sumGyro += targetTraj[j].gyroMag;
+      oldestIdx = j;
+      wN++;
     }
+    const meanEnergy = sumEnergy / Math.max(1, wN);
+    const meanGyro = sumGyro / Math.max(1, wN);
+    const dtSpanSec = Math.max(0.05, (targetTraj[i].t - targetTraj[oldestIdx].t) / 1000);
+    const sweepCmPerSec =
+      Math.hypot(
+        targetTraj[i].dxCm - targetTraj[oldestIdx].dxCm,
+        targetTraj[i].dyCm - targetTraj[oldestIdx].dyCm
+      ) / dtSpanSec;
+
+    if (meanGyro >= 0.14 || meanEnergy >= 0.35 || sweepCmPerSec >= 9.0) {
+      sawActiveRaiseSweep = true;
+    } else if (
+      sawActiveRaiseSweep &&
+      targetTraj[aimStartIdx].t - targetTraj[i].t >= 450 &&
+      meanGyro < 0.10 &&
+      meanEnergy < 0.24 &&
+      sweepCmPerSec < 5.5
+    ) {
+      // Sustained 320ms pre-raise idle rest reached -> trim all earlier dead time!
+      prepStartIdx = Math.min(aimStartIdx - 1, i + 1);
+      break;
+    }
+    prepStartIdx = i;
   }
 
   const tPrepStart = targetTraj[prepStartIdx].t;

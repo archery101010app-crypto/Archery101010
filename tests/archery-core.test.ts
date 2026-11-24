@@ -1624,4 +1624,113 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     assert.ok(scoringSrc.includes("requestWatchAppHeartRate()"), "ScoringView must actively request watch heart rate on entry");
     assert.ok(analysisSrc.includes("requestWatchAppHeartRate()"), "AnalysisView must actively request watch heart rate on entry");
   });
+
+  it("enforces v2.157 sustained-window phase hysteresis, dead-time & button-slap trimming, and separated Watch/BLE Heart Rate modal", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { analyzeImuShotWindow } = await import("../src/lib/scoring/shotAnalysisEngine.ts");
+
+    // Simulate realistic Recurve shot in INICIO -> FINAL mode (13.8s raw window):
+    //  - 0.0s .. 3.0s: Archer stands idle with arm down after pressing INICIO (must be trimmed!)
+    //  - 3.0s .. 5.5s: Active 2.5s bow raise / draw sweep (Preparatory)
+    //  - 5.5s .. 12.0s: 6.5s Aiming anchor WITH a brief 60ms clicker micro-twitch at 8.2s (must NOT split Aiming!)
+    //  - 12.04s: Stabilized Recurve bowstring release (~4.2 m/s^2 linear impulse, softer than old 5.5 threshold)
+    //  - 12.1s .. 13.8s: Lowering bow arm + sharp 11.5 m/s^2 button slap at 13.65s to press FINAL (must NOT steal release!)
+    const startTs = 200_000;
+    const stopTs = 213_800;
+    const samples = [];
+    for (let t = startTs; t <= stopTs; t += 20) {
+      const sec = (t - startTs) / 1000;
+      if (sec < 3.0) {
+        // Pre-raise idle rest (standing still with bow down)
+        samples.push({ t, ax: 7.2, ay: 6.1, az: 2.6, gy: 0.01, gz: 0.0 });
+      } else if (sec < 5.5) {
+        // 2.5s bow raise & draw into anchor
+        const p = (sec - 3.0) / 2.5;
+        samples.push({
+          t,
+          ax: 7.2 * (1 - p) + 0.2 * p,
+          ay: 6.1 + 3.5 * p,
+          az: 2.6 - 0.7 * p,
+          gy: -0.48 * (1 - p * 0.8),
+          gz: 0.22 * (1 - p * 0.8)
+        });
+      } else if (sec >= 8.20 && sec <= 8.24) {
+        // Brief 2-sample clicker / finger micro-twitch mid-aim (must NOT end Aiming!)
+        samples.push({ t, ax: 0.95, ay: 10.6, az: 2.5, gy: 0.45, gz: -0.35 });
+      } else if (sec >= 12.02 && sec <= 12.06) {
+        // Stabilized Recurve release (~4.2 m/s^2 above gravity)
+        samples.push({ t, ax: 3.8, ay: 13.4, az: 2.4, gy: 1.3, gz: -0.9 });
+      } else if (sec > 12.06 && sec < 13.60) {
+        // Lowering bow arm after follow-through
+        const d = Math.min(1, (sec - 12.06) / 1.2);
+        samples.push({
+          t,
+          ax: 0.2 + 7.5 * d,
+          ay: 9.6 - 4.0 * d,
+          az: 1.9 + 2.0 * d,
+          gy: 0.85,
+          gz: 0.55
+        });
+      } else if (sec >= 13.60) {
+        // Sharp button tap on watch while arm is down (bigger spike than bow release!)
+        samples.push({ t, ax: 14.5, ay: 11.2, az: 6.8, gy: 2.1, gz: 1.4 });
+      } else {
+        // Steady 6.5s Aiming anchor
+        samples.push({
+          t,
+          ax: 0.2,
+          ay: 9.6 + Math.sin(sec * 6) * 0.03,
+          az: 1.9 + Math.cos(sec * 5) * 0.03,
+          gy: 0.01,
+          gz: -0.01
+        });
+      }
+    }
+
+    const shot = analyzeImuShotWindow({
+      samples,
+      manualStartTimestampMs: startTs,
+      releaseTimestampMs: stopTs,
+      shotNumber: 1,
+      distanceM: 18,
+      bowType: "Recurve",
+      bowWrist: "LEFT"
+    });
+
+    assert.ok(shot, "Sustained-window analyzer must reconstruct valid shot");
+    assert.ok(
+      shot!.prepSeconds >= 1.9 && shot!.prepSeconds <= 3.3,
+      `Expected ~2.5s prep after trimming 3.0s idle dead time, got ${shot!.prepSeconds}s`
+    );
+    assert.ok(
+      shot!.aimSeconds >= 5.8 && shot!.aimSeconds <= 7.1,
+      `Expected ~6.5s aim (unaffected by 8.2s micro-twitch or 13.6s button slap), got ${shot!.aimSeconds}s`
+    );
+    assert.ok(
+      shot!.stabilityPct >= 86,
+      `Expected high aiming stability after rejecting arm-drop & button slap, got ${shot!.stabilityPct}%`
+    );
+
+    const wearSrc = fs.readFileSync(
+      path.resolve(
+        process.cwd(),
+        "android/wear/src/main/java/com/archery101010/app/WearMainActivity.java"
+      ),
+      "utf8"
+    );
+    assert.ok(wearSrc.includes("detectWearManualReleaseMs"), "WearMainActivity must use sustained-plateau release detector");
+    assert.ok(wearSrc.includes("sawActiveRaiseSweep"), "WearMainActivity must trim pre-raise idle dead time");
+
+    const modalSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/watch/BleHeartRateModal.tsx"),
+      "utf8"
+    );
+    assert.ok(modalSrc.includes("1 · RELOJ VINCULADO"), "BleHeartRateModal must render dedicated Block 1 for Linked Watch");
+    assert.ok(modalSrc.includes("2 · BANDAS Y SENSORES BLUETOOTH"), "BleHeartRateModal must render dedicated Block 2 for BLE Straps");
+    assert.ok(modalSrc.includes("!isLikelyCompanionSmartwatch(dev)"), "BleHeartRateModal must exclude smartwatches from BLE strap list");
+    assert.ok(modalSrc.includes('role="status"'), "BleHeartRateModal must render 1-line live diagnostic status bar");
+    const forbiddenBrands = /\b(whoop|polar|garmin|wahoo|coros|strava|apple watch|galaxy watch|samsung|fitbit|suunto|nike)\b/i;
+    assert.equal(forbiddenBrands.test(modalSrc), false, "BleHeartRateModal must contain zero third-party brand names");
+  });
 });

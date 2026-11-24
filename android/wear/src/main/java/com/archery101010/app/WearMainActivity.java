@@ -2839,9 +2839,11 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             double linearMag = Math.abs(mag - SensorManager.GRAVITY_EARTH);
             float activeGyro = ((now - lastGyroSampleMs) <= 140L) ? latestGyroRadS : -1f;
 
-            // Sensitivity: 0 = BAJA (Ultra strict), 1 = MEDIA (Olympic/Compound default), 2 = ALTA (Light bows)
-            double shotThreshold = (sensitivityLevel == 0) ? 23.0 : ((sensitivityLevel == 2) ? 15.2 : 18.8);
-            double minJerk = (sensitivityLevel == 0) ? 13.5 : ((sensitivityLevel == 2) ? 9.2 : 11.2);
+            // Sensitivity: 0 = BAJA (Ultra strict), 1 = MEDIA (Olympic/Compound default), 2 = ALTA (Light/damped bows)
+            // Scaled per bow division so stabilized Recurve/Barebow releases trigger reliably while 7-Gate anchor blocks false triggers
+            double bowFactor = "Recurve".equals(syncedBowType) ? 0.76 : ("Barebow".equals(syncedBowType) ? 0.85 : 0.94);
+            double shotThreshold = ((sensitivityLevel == 0) ? 21.0 : ((sensitivityLevel == 2) ? 13.0 : 16.5)) * bowFactor;
+            double minJerk = ((sensitivityLevel == 0) ? 12.0 : ((sensitivityLevel == 2) ? 7.8 : 9.8)) * bowFactor;
             double quietMeanMax = (sensitivityLevel == 0) ? 0.52 : ((sensitivityLevel == 2) ? 0.80 : 0.65);
             double quietPeakMax = (sensitivityLevel == 0) ? 1.10 : ((sensitivityLevel == 2) ? 1.55 : 1.30);
             double preRampMeanMax = (sensitivityLevel == 0) ? 0.50 : ((sensitivityLevel == 2) ? 0.76 : 0.62);
@@ -2964,6 +2966,168 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
     }
 
+    private long detectWearManualReleaseMs(long winStart, long rawEndMs) {
+        int rawCount = 0;
+        for (int i = 0; i < motionCount; i++) {
+            int idx = (motionIdx - 1 - i + MOTION_BUF) % MOTION_BUF;
+            long t = motionT[idx];
+            if (t < winStart) break;
+            if (t <= rawEndMs) rawCount++;
+        }
+        if (rawCount < 10) {
+            return Math.max(winStart + 450L, rawEndMs - 120L);
+        }
+
+        long[] wT = new long[rawCount];
+        float[] wAx = new float[rawCount];
+        float[] wAy = new float[rawCount];
+        float[] wAz = new float[rawCount];
+        double[] wMag = new double[rawCount];
+        double[] wLin = new double[rawCount];
+        float[] wGyro = new float[rawCount];
+        int k = rawCount - 1;
+        for (int i = 0; i < motionCount && k >= 0; i++) {
+            int idx = (motionIdx - 1 - i + MOTION_BUF) % MOTION_BUF;
+            long t = motionT[idx];
+            if (t < winStart) break;
+            if (t <= rawEndMs) {
+                wT[k] = t;
+                wAx[k] = motionAx[idx];
+                wAy[k] = motionAy[idx];
+                wAz[k] = motionAz[idx];
+                wMag[k] = motionMag[idx];
+                wLin[k] = motionLin[idx];
+                wGyro[k] = Math.max(0f, motionGyro[idx]);
+                k--;
+            }
+        }
+
+        double minJerkReq = "Compound".equals(syncedBowType) ? 4.2 : ("Recurve".equals(syncedBowType) ? 3.1 : 3.6);
+        double minLinReq = "Compound".equals(syncedBowType) ? 3.6 : ("Recurve".equals(syncedBowType) ? 2.7 : 3.1);
+
+        // Step 1: Identify dominant sustained 350ms aiming stillness plateau
+        int bestPlateauEndIdx = -1;
+        int curRunStartIdx = -1;
+        double bestPlateauScore = -1.0;
+        double anchorMeanAx = 0.0, anchorMeanAy = 0.0, anchorMeanAz = 9.81;
+
+        for (int i = 0; i < rawCount; i++) {
+            long tEndWin = wT[i];
+            long tStartWin = tEndWin - 350L;
+            double sumLin = 0.0, sumGyro = 0.0, sumAx = 0.0, sumAy = 0.0, sumAz = 0.0;
+            float minAy = Float.MAX_VALUE, maxAy = -Float.MAX_VALUE;
+            float minAz = Float.MAX_VALUE, maxAz = -Float.MAX_VALUE;
+            int n = 0;
+            for (int j = i; j >= 0 && wT[j] >= tStartWin; j--) {
+                sumLin += wLin[j];
+                sumGyro += wGyro[j];
+                sumAx += wAx[j];
+                sumAy += wAy[j];
+                sumAz += wAz[j];
+                if (wAy[j] < minAy) minAy = wAy[j];
+                if (wAy[j] > maxAy) maxAy = wAy[j];
+                if (wAz[j] < minAz) minAz = wAz[j];
+                if (wAz[j] > maxAz) maxAz = wAz[j];
+                n++;
+            }
+            if (n < 4) continue;
+            double meanLin = sumLin / n;
+            double meanGyro = sumGyro / n;
+            double mAx = sumAx / n;
+            double mAy = sumAy / n;
+            double mAz = sumAz / n;
+            double gNorm = Math.max(4.0, Math.sqrt(mAx * mAx + mAy * mAy + mAz * mAz));
+            boolean postureValid = (Math.abs(mAx) / gNorm) <= 0.80 && Math.hypot(mAy, mAz) >= 5.6;
+            boolean calMatch = true;
+            if (hasCalZeroVec) {
+                double dx = mAx - calZeroAx, dy = mAy - calZeroAy, dz = mAz - calZeroAz;
+                calMatch = Math.sqrt(dx * dx + dy * dy + dz * dz) <= 4.2;
+            }
+            boolean spanOk = (maxAy - minAy) <= 2.4f && (maxAz - minAz) <= 2.4f;
+
+            if (postureValid && calMatch && spanOk && meanLin <= 1.25 && meanGyro <= 0.48) {
+                if (curRunStartIdx < 0) curRunStartIdx = i;
+                long runDurMs = wT[i] - wT[curRunStartIdx];
+                if (runDurMs >= 450L && (wT[i] - winStart) >= 650L) {
+                    double recencyBonus = ((double) (wT[i] - winStart) / Math.max(1000L, rawEndMs - winStart)) * 350.0;
+                    double score = runDurMs + recencyBonus;
+                    if (score >= bestPlateauScore) {
+                        bestPlateauScore = score;
+                        bestPlateauEndIdx = i;
+                        anchorMeanAx = mAx;
+                        anchorMeanAy = mAy;
+                        anchorMeanAz = mAz;
+                    }
+                }
+            } else {
+                curRunStartIdx = -1;
+            }
+        }
+
+        // Step 2: Find genuine post-anchor release impulse (rejecting late arm-drop button presses)
+        long bestSpikeTs = 0L;
+        long searchStartMs = (bestPlateauEndIdx >= 0)
+                ? Math.max(winStart + 700L, wT[bestPlateauEndIdx] - 1800L)
+                : (winStart + 800L);
+
+        for (int i = 3; i < rawCount; i++) {
+            long t = wT[i];
+            if (t < searchStartMs) continue;
+            if ((rawEndMs - t) > 6000L) continue;
+
+            double maxJerk = 0.0;
+            for (int step = 1; step <= 3 && (i - step) >= 0; step++) {
+                double jump = Math.abs(wMag[i] - wMag[i - step]);
+                if (jump > maxJerk) maxJerk = jump;
+            }
+            double effectiveImpulse = wLin[i] + wGyro[i] * 1.1;
+            if (maxJerk < minJerkReq || effectiveImpulse < minLinReq) continue;
+
+            double preLinSum = 0.0, preGyroSum = 0.0, preAx = 0.0, preAy = 0.0, preAz = 0.0;
+            int preN = 0;
+            for (int j = i - 1; j >= 0 && wT[j] >= (t - 520L); j--) {
+                if (wT[j] > (t - 45L)) continue;
+                preLinSum += wLin[j];
+                preGyroSum += wGyro[j];
+                preAx += wAx[j];
+                preAy += wAy[j];
+                preAz += wAz[j];
+                preN++;
+            }
+            if (preN < 4) continue;
+            double preMeanLin = preLinSum / preN;
+            double preMeanGyro = preGyroSum / preN;
+            if (preMeanLin > 1.35 || preMeanGyro > 0.55) continue;
+
+            if (bestPlateauEndIdx >= 0) {
+                double dx = (preAx / preN) - anchorMeanAx;
+                double dy = (preAy / preN) - anchorMeanAy;
+                double dz = (preAz / preN) - anchorMeanAz;
+                if (Math.sqrt(dx * dx + dy * dy + dz * dz) > 3.1) continue;
+            }
+
+            if (bestSpikeTs == 0L) {
+                int onsetIdx = i;
+                while (onsetIdx > 1 && (t - wT[onsetIdx - 1]) <= 90L) {
+                    if (wLin[onsetIdx - 1] <= 1.2 && wGyro[onsetIdx - 1] <= 0.45f) {
+                        break;
+                    }
+                    onsetIdx--;
+                }
+                bestSpikeTs = wT[onsetIdx];
+                break;
+            }
+        }
+
+        if (bestSpikeTs > 0L) {
+            return bestSpikeTs;
+        }
+        if (bestPlateauEndIdx >= 0) {
+            return Math.min(rawEndMs - 40L, wT[bestPlateauEndIdx] + 35L);
+        }
+        return Math.max(winStart + 450L, rawEndMs - 120L);
+    }
+
     private boolean emitWearAnalysisShot(long explicitStartMs, long rawEndMs, String source) {
         if (motionCount < 10) return false;
         try {
@@ -2972,27 +3136,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     ? Math.max(rawEndMs - 30_000L, explicitStartMs)
                     : (rawEndMs - 10_000L);
 
-            long releaseMs = rawEndMs;
-            if (hasExplicitWindow) {
-                long detectedSpikeTs = 0L;
-                double peakLin = 0.0;
-                for (int i = 0; i < motionCount - 2; i++) {
-                    int idx = (motionIdx - 1 - i + MOTION_BUF) % MOTION_BUF;
-                    int prevIdx = (motionIdx - 3 - i + MOTION_BUF) % MOTION_BUF;
-                    long t = motionT[idx];
-                    if (t < winStart + 900L) break;
-                    if (t > rawEndMs || (rawEndMs - t) > 4500L) continue;
-                    double jerk = Math.abs(motionMag[idx] - motionMag[prevIdx]);
-                    double linDev = motionLin[idx];
-                    if (jerk >= 6.5 && linDev >= 5.5 && linDev > peakLin) {
-                        peakLin = linDev;
-                        detectedSpikeTs = t;
-                    }
-                }
-                releaseMs = (detectedSpikeTs > 0L)
-                        ? detectedSpikeTs
-                        : Math.max(winStart + 450L, rawEndMs - 120L);
-            }
+            long releaseMs = hasExplicitWindow
+                    ? detectWearManualReleaseMs(winStart, rawEndMs)
+                    : rawEndMs;
 
             long winEnd = releaseMs - 15L;
             int count = 0;
@@ -3029,7 +3175,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             double refAx = 0.0, refAy = 0.0, refAz = 0.0;
             int refN = 0;
             for (int i = 0; i < count; i++) {
-                if (ts[i] >= releaseMs - 700L && ts[i] <= releaseMs - 100L) {
+                if (ts[i] >= releaseMs - 900L && ts[i] <= releaseMs - 100L) {
                     refAx += axArr[i];
                     refAy += ayArr[i];
                     refAz += azArr[i];
@@ -3045,12 +3191,16 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             refAx /= Math.max(1, refN);
             refAy /= Math.max(1, refN);
             refAz /= Math.max(1, refN);
+            double anchorGravAx = refAx;
+            double anchorGravAy = refAy;
+            double anchorGravAz = refAz;
+
             if (hasCalZeroVec) {
                 double zNorm = Math.sqrt(calZeroAx * calZeroAx + calZeroAy * calZeroAy + calZeroAz * calZeroAz);
                 if (zNorm >= 4.0 && zNorm <= 15.0) {
-                    refAx = 0.88 * refAx + 0.12 * calZeroAx;
-                    refAy = 0.88 * refAy + 0.12 * calZeroAy;
-                    refAz = 0.88 * refAz + 0.12 * calZeroAz;
+                    refAx = 0.82 * refAx + 0.18 * calZeroAx;
+                    refAy = 0.82 * refAy + 0.18 * calZeroAy;
+                    refAz = 0.82 * refAz + 0.18 * calZeroAz;
                 }
             }
             double refNorm = Math.max(4.0, Math.sqrt(refAx * refAx + refAy * refAy + refAz * refAz));
@@ -3075,6 +3225,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             double[] yawArr = new double[count];
             double[] pitchArr = new double[count];
             double[] energy = new double[count];
+            double[] gyroMagArr = new double[count];
+            double[] gravDeltaArr = new double[count];
             double sAx = axArr[0], sAy = ayArr[0], sAz = azArr[0];
             double gYaw = 0.0, gPitch = 0.0;
 
@@ -3091,8 +3243,18 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
                 yawArr[i] = tiltH * 0.65 + gYaw * 0.35;
                 pitchArr[i] = tiltV * 0.65 + gPitch * 0.35;
-                double lin = Math.abs(Math.sqrt(axArr[i] * axArr[i] + ayArr[i] * ayArr[i] + azArr[i] * azArr[i]) - SensorManager.GRAVITY_EARTH);
-                energy[i] = lin + Math.hypot(gyArr[i], gzArr[i]) * 2.2;
+                double linDelta = Math.sqrt(
+                        (axArr[i] - sAx) * (axArr[i] - sAx)
+                        + (ayArr[i] - sAy) * (ayArr[i] - sAy)
+                        + (azArr[i] - sAz) * (azArr[i] - sAz)
+                );
+                double gMag = Math.hypot(gyArr[i], gzArr[i]);
+                gyroMagArr[i] = gMag;
+                energy[i] = linDelta + gMag * 1.6;
+                double dGx = sAx - anchorGravAx;
+                double dGy = sAy - anchorGravAy;
+                double dGz = sAz - anchorGravAz;
+                gravDeltaArr[i] = Math.sqrt(dGx * dGx + dGy * dGy + dGz * dGz);
             }
 
             // Zero-center final 1.2s aiming centroid so bow-lift gyro drift doesn't bias long-range traces
@@ -3125,46 +3287,87 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 ptY[i] = (float) Math.max(-1.08, Math.min(1.08, yCm / faceRadiusCm));
             }
 
-            // Detect settle index (transition from Preparatory to Aiming)
-            double settleRadiusCm = faceRadiusCm * 0.36;
-            int settleIdx = Math.max(0, count - 6);
-            for (int i = count - 1; i >= 0; i--) {
-                double radialCm = Math.hypot(dxCmArr[i], dyCmArr[i]);
-                if (radialCm > settleRadiusCm || energy[i] > 2.6) {
-                    settleIdx = Math.min(count - 2, i + 1);
+            // Detect settle index (transition from Preparatory -> Aiming) via Sustained 350ms Window Hysteresis
+            double settleRadiusCm = faceRadiusCm * 0.44;
+            int scanStartIdx = count - 1;
+            while (scanStartIdx > 4 && (releaseMs - ts[scanStartIdx]) < 80L) {
+                scanStartIdx--;
+            }
+            int settleIdx = Math.max(0, Math.min(scanStartIdx, count - 4));
+            for (int i = scanStartIdx; i >= 0; i--) {
+                long winEndT = ts[i];
+                long winStartT = winEndT - 350L;
+                double sumRad = 0.0, sumEn = 0.0, sumGy = 0.0, sumGd = 0.0;
+                int wN = 0;
+                for (int j = i; j >= 0 && ts[j] >= winStartT; j--) {
+                    sumRad += Math.hypot(dxCmArr[j], dyCmArr[j]);
+                    sumEn += energy[j];
+                    sumGy += gyroMagArr[j];
+                    sumGd += gravDeltaArr[j];
+                    wN++;
+                }
+                double meanRad = sumRad / Math.max(1, wN);
+                double meanEn = sumEn / Math.max(1, wN);
+                double meanGy = sumGy / Math.max(1, wN);
+                double meanGd = sumGd / Math.max(1, wN);
+
+                if (meanRad > settleRadiusCm || meanGd > 2.25 || meanGy > 0.38 || meanEn > 1.85) {
+                    int exactSettle = Math.min(count - 3, i + 1);
+                    for (int m = i; m < count - 2; m++) {
+                        double rM = Math.hypot(dxCmArr[m], dyCmArr[m]);
+                        if (rM <= settleRadiusCm && gravDeltaArr[m] <= 2.1 && gyroMagArr[m] <= 0.35) {
+                            exactSettle = m;
+                            break;
+                        }
+                    }
+                    settleIdx = Math.max(0, exactSettle);
                     break;
                 }
                 settleIdx = i;
             }
 
-            // Detect real bow-lift / draw onset (in explicit INICIO->FINAL mode use start of window up to 10s prep)
-            int prepStartIdx = Math.max(0, settleIdx - 1);
-            if (hasExplicitWindow) {
-                prepStartIdx = 0;
-                for (int i = 0; i < settleIdx; i++) {
-                    if (ts[settleIdx] - ts[i] <= 10_000L) {
-                        prepStartIdx = i;
-                        break;
-                    }
+            // Detect real bow-lift / draw onset & trim initial idle dead time after pressing INICIO
+            long maxPrepLookbackMs = hasExplicitWindow ? 10_000L : 5_000L;
+            int earliestFloorIdx = 0;
+            for (int i = 0; i < settleIdx; i++) {
+                if (ts[settleIdx] - ts[i] <= maxPrepLookbackMs) {
+                    earliestFloorIdx = i;
+                    break;
                 }
-            } else {
-                for (int i = settleIdx - 1; i >= 0; i--) {
-                    if (ts[settleIdx] - ts[i] > 4500L) {
-                        prepStartIdx = i;
-                        break;
-                    }
-                    int lookbackIdx = Math.max(0, i - 3);
-                    double dtSpanSec = Math.max(0.04, (ts[i] - ts[lookbackIdx]) / 1000.0);
-                    double sweepRateCmPerSec = Math.hypot(
-                            dxCmArr[i] - dxCmArr[lookbackIdx],
-                            dyCmArr[i] - dyCmArr[lookbackIdx]
-                    ) / dtSpanSec;
-                    if ((settleIdx - i) > 6 && i > lookbackIdx && sweepRateCmPerSec < 6.0 && energy[i] < 0.28) {
-                        prepStartIdx = i;
-                        break;
-                    }
-                    prepStartIdx = i;
+            }
+            int prepStartIdx = Math.max(0, Math.min(earliestFloorIdx, settleIdx - 1));
+            boolean sawActiveRaiseSweep = false;
+            for (int i = settleIdx - 1; i >= earliestFloorIdx; i--) {
+                long winEndT = ts[i];
+                long winStartT = winEndT - 320L;
+                double sumEn = 0.0, sumGy = 0.0;
+                int oldestIdx = i;
+                int wN = 0;
+                for (int j = i; j >= 0 && ts[j] >= winStartT; j--) {
+                    sumEn += energy[j];
+                    sumGy += gyroMagArr[j];
+                    oldestIdx = j;
+                    wN++;
                 }
+                double meanEn = sumEn / Math.max(1, wN);
+                double meanGy = sumGy / Math.max(1, wN);
+                double dtSpanSec = Math.max(0.05, (ts[i] - ts[oldestIdx]) / 1000.0);
+                double sweepCmPerSec = Math.hypot(
+                        dxCmArr[i] - dxCmArr[oldestIdx],
+                        dyCmArr[i] - dyCmArr[oldestIdx]
+                ) / dtSpanSec;
+
+                if (meanGy >= 0.14 || meanEn >= 0.35 || sweepCmPerSec >= 9.0) {
+                    sawActiveRaiseSweep = true;
+                } else if (sawActiveRaiseSweep
+                        && (ts[settleIdx] - ts[i]) >= 450L
+                        && meanGy < 0.10
+                        && meanEn < 0.24
+                        && sweepCmPerSec < 5.5) {
+                    prepStartIdx = Math.min(settleIdx - 1, i + 1);
+                    break;
+                }
+                prepStartIdx = i;
             }
 
             float maxPrepCap = hasExplicitWindow ? 10.0f : 6.5f;
