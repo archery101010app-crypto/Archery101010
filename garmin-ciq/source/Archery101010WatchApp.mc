@@ -812,7 +812,7 @@ class Archery101010WatchView extends WatchUi.View {
                             maxHeartRateBpm = curHr;
                         }
                         if (hasPairingCode && pairingCode.length() == 6 && !isEditingCode) {
-                            if (now < mLastHrPushMs || (now - mLastHrPushMs) >= 20000) {
+                            if (mLastHrPushMs == 0 || now < mLastHrPushMs || (now - mLastHrPushMs) >= 6000) {
                                 mLastHrPushMs = now;
                                 syncWithFirestoreCloud("SYNC_TELEMETRY_FROM_WATCH", null);
                             }
@@ -1382,10 +1382,23 @@ class Archery101010WatchView extends WatchUi.View {
         docFields["watchHeartbeatAt"] = { "integerValue" => hbEpochMsStr };
         docFields["updatedAt"] = { "integerValue" => updEpochMsStr };
 
+        var hrMask = "";
+        if (docFields.hasKey("watchHeartRateBpm")) {
+            hrMask = hrMask + "&updateMask.fieldPaths=watchHeartRateBpm";
+        }
+        if (docFields.hasKey("watchAvgHeartRateBpm")) {
+            hrMask = hrMask + "&updateMask.fieldPaths=watchAvgHeartRateBpm";
+        }
+        if (docFields.hasKey("watchMaxHeartRateBpm")) {
+            hrMask = hrMask + "&updateMask.fieldPaths=watchMaxHeartRateBpm";
+        }
+
         var url =
             "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/" +
             pairingCode +
-            "?updateMask.fieldPaths=lastWatchCmd&updateMask.fieldPaths=lastWatchCmdId&updateMask.fieldPaths=lastWatchCmdSeq&updateMask.fieldPaths=watchStepsCount&updateMask.fieldPaths=watchDistanceM&updateMask.fieldPaths=watchHeartRateBpm&updateMask.fieldPaths=watchAvgHeartRateBpm&updateMask.fieldPaths=watchMaxHeartRateBpm&updateMask.fieldPaths=watchSource&updateMask.fieldPaths=watchHeartbeatAt&updateMask.fieldPaths=updatedAt&currentDocument.exists=true";
+            "?updateMask.fieldPaths=lastWatchCmd&updateMask.fieldPaths=lastWatchCmdId&updateMask.fieldPaths=lastWatchCmdSeq&updateMask.fieldPaths=watchStepsCount&updateMask.fieldPaths=watchDistanceM" +
+            hrMask +
+            "&updateMask.fieldPaths=watchSource&updateMask.fieldPaths=watchHeartbeatAt&updateMask.fieldPaths=updatedAt&currentDocument.exists=true";
 
         var options = {
             :method => Communications.HTTP_REQUEST_METHOD_POST,
@@ -1479,13 +1492,19 @@ class Archery101010WatchView extends WatchUi.View {
             "lastWatchCmdSeq" => { "integerValue" => mCmdSeq.toString() },
             "watchStepsCount" => { "integerValue" => stepsCount.toString() },
             "watchDistanceM" => { "integerValue" => distanceWalkedM.toString() },
-            "watchHeartRateBpm" => { "integerValue" => heartRateBpm.toString() },
-            "watchAvgHeartRateBpm" => { "integerValue" => avgHeartRateBpm.toString() },
-            "watchMaxHeartRateBpm" => { "integerValue" => maxHeartRateBpm.toString() },
             "watchSource" => { "stringValue" => "GARMIN_CIQ" },
             "watchHeartbeatAt" => { "integerValue" => hbEpochMsStr },
             "updatedAt" => { "integerValue" => epochMsStr }
         };
+        if (heartRateBpm >= 35 && heartRateBpm <= 240) {
+            docFields["watchHeartRateBpm"] = { "integerValue" => heartRateBpm.toString() };
+        }
+        if (avgHeartRateBpm >= 35 && avgHeartRateBpm <= 240) {
+            docFields["watchAvgHeartRateBpm"] = { "integerValue" => avgHeartRateBpm.toString() };
+        }
+        if (maxHeartRateBpm >= 35 && maxHeartRateBpm <= 240) {
+            docFields["watchMaxHeartRateBpm"] = { "integerValue" => maxHeartRateBpm.toString() };
+        }
 
         if (!eventType.equals("SYNC_TELEMETRY_FROM_WATCH")) {
             mPendingRetryCmd = docFields;

@@ -7,10 +7,13 @@ import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 import {
   CloudWatchPairingStatus,
   WatchConnectionStatus,
+  ensurePhoneWatchPairingReady,
+  getOrCreatePhoneWatchPairingCode,
   pingNativeWatch,
   subscribeCloudWatchPairingStatus,
   subscribeWatchConnectionStatus
 } from "@/lib/scoring/biometricsEngine";
+import { auth } from "@/lib/firebase";
 import {
   BleHeartRateStatus,
   connectBleHeartRateDevice,
@@ -134,8 +137,13 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
           dialog.showModal();
         } catch {}
       }
+      ensurePhoneWatchPairingReady(auth.currentUser?.uid);
       requestWatchAppHeartRate();
       pingNativeWatch();
+      const pollWatchTimer = setInterval(() => {
+        requestWatchAppHeartRate();
+        pingNativeWatch();
+      }, 3000);
       const current = getBleHeartRateStatus();
       if (
         current.transport === "native_android" &&
@@ -153,6 +161,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
         }
       });
       return () => {
+        clearInterval(pollWatchTimer);
         unregisterBack();
       };
     } else if (dialog.open) {
@@ -174,6 +183,7 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
 
   const handleSyncWatchPulseClick = () => {
     setIsSyncingWatch(true);
+    ensurePhoneWatchPairingReady(auth.currentUser?.uid);
     pingNativeWatch();
     requestWatchAppHeartRate();
     if (syncWatchTimerRef.current) {
@@ -183,6 +193,19 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
       syncWatchTimerRef.current = null;
       setIsSyncingWatch(false);
     }, 3500);
+  };
+
+  const handleRefreshPairingCodeClick = () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    setIsSyncingWatch(true);
+    getOrCreatePhoneWatchPairingCode(uid, true)
+      .then(() => {
+        requestWatchAppHeartRate();
+      })
+      .finally(() => {
+        setIsSyncingWatch(false);
+      });
   };
 
   const nowMs = Date.now();
@@ -505,53 +528,79 @@ export default function BleHeartRateModal({ isOpen, onClose }: BleHeartRateModal
           <span className="text-[12px] font-extrabold uppercase tracking-[0.08em] text-[#00BFFF] px-0.5">
             {tx("1 · RELOJ VINCULADO (ARCHERY 101010)", "1 · LINKED WATCH (ARCHERY 101010)")}
           </span>
-          <div className="bg-[#0B0E15] border border-white/[0.14] rounded-2xl px-3.5 py-3 flex items-center justify-between gap-2.5">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-[#07131F] border border-[#00BFFF]/40 flex items-center justify-center shrink-0">
-                <Watch size={17} className="text-[#00BFFF]" aria-hidden="true" />
+          <div className="bg-[#0B0E15] border border-white/[0.14] rounded-2xl px-3.5 py-3 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-[#07131F] border border-[#00BFFF]/40 flex items-center justify-center shrink-0">
+                  <Watch size={17} className="text-[#00BFFF]" aria-hidden="true" />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[14.5px] font-bold text-white leading-tight break-words">
+                    {tx("Reloj Inteligente", "Smartwatch")}
+                  </span>
+                  <span
+                    className={`text-[11.5px] font-bold uppercase tracking-wider leading-tight break-words mt-0.5 tabular-nums ${
+                      isWearConnected
+                        ? "text-[#00C853]"
+                        : isWatchReachable
+                        ? "text-[#00BFFF]"
+                        : "text-[#94A3B8]"
+                    }`}
+                  >
+                    {isWearConnected
+                      ? `${tx("● En vivo", "● Live")} · ${status.currentBpm} BPM`
+                      : hasNativeWatchConnected
+                      ? tx("● Conectado por Bluetooth", "● Connected via Bluetooth")
+                      : hasCloudWatchConnected
+                      ? tx("● Conectado por código", "● Connected via code")
+                      : cloudStatus.pairingCode
+                      ? `${tx("Código activo", "Active code")}: ${cloudStatus.pairingCode.slice(0, 3)} ${cloudStatus.pairingCode.slice(3)}`
+                      : tx("App del reloj", "Watch app")}
+                  </span>
+                </div>
               </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-[14.5px] font-bold text-white leading-tight break-words">
-                  {tx("Reloj Inteligente", "Smartwatch")}
-                </span>
-                <span
-                  className={`text-[11.5px] font-bold uppercase tracking-wider leading-tight break-words mt-0.5 ${
-                    isWearConnected
-                      ? "text-[#00C853]"
-                      : isWatchReachable
-                      ? "text-[#00BFFF]"
-                      : "text-[#94A3B8]"
-                  }`}
-                >
-                  {isWearConnected
-                    ? `${tx("● En vivo", "● Live")} · ${status.currentBpm} BPM`
-                    : hasNativeWatchConnected
-                    ? tx("● Conectado por Bluetooth", "● Connected via Bluetooth")
-                    : hasCloudWatchConnected
-                    ? tx("● Conectado por código", "● Connected via code")
-                    : cloudStatus.pairingCode
-                    ? `${tx("Código", "Code")}: ${cloudStatus.pairingCode}`
-                    : tx("App del reloj", "Watch app")}
-                </span>
-              </div>
+
+              <button
+                type="button"
+                disabled={isWatchSyncInFlight}
+                onClick={handleSyncWatchPulseClick}
+                className={`min-h-[40px] px-3.5 rounded-xl font-bold text-[12.5px] uppercase tracking-wider shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-65 ${
+                  isWearConnected
+                    ? "bg-[#051810] border border-[#00C853]/65 text-white"
+                    : "bg-[#00BFFF] hover:brightness-105 text-black"
+                }`}
+              >
+                {isWearConnected
+                  ? tx("En vivo", "Live")
+                  : isWatchSyncInFlight
+                  ? tx("Sincronizando", "Syncing")
+                  : tx("Sincronizar", "Sync")}
+              </button>
             </div>
 
-            <button
-              type="button"
-              disabled={isWatchSyncInFlight}
-              onClick={handleSyncWatchPulseClick}
-              className={`min-h-[40px] px-3.5 rounded-xl font-bold text-[12.5px] uppercase tracking-wider shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-65 ${
-                isWearConnected
-                  ? "bg-[#051810] border border-[#00C853]/65 text-white"
-                  : "bg-[#00BFFF] hover:brightness-105 text-black"
-              }`}
-            >
-              {isWearConnected
-                ? tx("En vivo", "Live")
-                : isWatchSyncInFlight
-                ? tx("Sincronizando", "Syncing")
-                : tx("Sincronizar", "Sync")}
-            </button>
+            {!isWearConnected && cloudStatus.pairingCode && (
+              <div className="bg-[#06080D] border border-white/[0.11] rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#94A3B8] leading-tight">
+                    {tx("Código para pantalla 5 del reloj", "Code for watch screen 5")}
+                  </span>
+                  <span
+                    dir="ltr"
+                    className="text-[18px] font-extrabold tracking-[0.14em] text-[#FFE500] tabular-nums leading-tight mt-0.5"
+                  >
+                    {`${cloudStatus.pairingCode.slice(0, 3)} ${cloudStatus.pairingCode.slice(3)}`}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  disabled={isWatchSyncInFlight}
+                  onClick={handleRefreshPairingCodeClick}
+                  className="min-h-[34px] px-2.5 rounded-lg bg-[#11151F] border border-white/[0.14] text-white text-[11.5px] font-bold uppercase tracking-wider shrink-0 cursor-pointer hover:bg-white/10 transition disabled:opacity-60"
+                >
+                  {tx("Nuevo", "New")}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

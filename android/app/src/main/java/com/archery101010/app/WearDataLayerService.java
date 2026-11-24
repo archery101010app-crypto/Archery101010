@@ -164,7 +164,11 @@ public class WearDataLayerService extends WearableListenerService {
         }
 
         if ("/archery101010/hr".equals(path)) {
-            prefs.edit().putLong("lastWatchPongTimeMs", now).apply();
+            SharedPreferences.Editor hrEditor = prefs.edit().putLong("lastWatchPongTimeMs", now);
+            if (payload != null && !payload.isEmpty()) {
+                hrEditor.putString("lastWearHrJson", payload).putLong("lastWearHrReceivedMs", now);
+            }
+            hrEditor.apply();
             return;
         }
 

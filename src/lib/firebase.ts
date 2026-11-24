@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { initializeAppCheck, ReCaptchaV3Provider, AppCheck } from "firebase/app-check";
+import { initializeAppCheck, ReCaptchaV3Provider, type AppCheck } from "firebase/app-check";
 import { getAuth } from "firebase/auth";
 import {
   getFirestore,
@@ -8,7 +8,7 @@ import {
   persistentMultipleTabManager,
   enableNetwork,
   disableNetwork,
-  Firestore
+  type Firestore
 } from "firebase/firestore";
 import { getMessaging, isSupported } from "firebase/messaging";
 
@@ -51,6 +51,19 @@ const firebaseConfigs = {
   }
 };
 
+export function isNativeCapacitorRuntime(win?: any): boolean {
+  const w = win ?? (typeof window !== "undefined" ? (window as any) : null);
+  if (!w) return false;
+  const protocol = String(w.location?.protocol || "");
+  if (protocol === "capacitor:" || protocol === "ionic:") return true;
+  if (typeof w.Capacitor?.isNativePlatform === "function" && w.Capacitor.isNativePlatform()) {
+    return true;
+  }
+  return Boolean(
+    w.ArcheryNativeAuth || w.ArcheryWatchNativeBridge || w.ArcheryBleHrBridge
+  );
+}
+
 // Select configuration based on environment and current URL
 let activeConfig = firebaseConfigs.prod; // Default to production
 export let ACTIVE_ENV: "test" | "prod" | "mock" =
@@ -58,7 +71,8 @@ export let ACTIVE_ENV: "test" | "prod" | "mock" =
 
 if (typeof window !== "undefined") {
   const host = window.location.hostname;
-  const isLocalhost = host === "localhost" || host === "127.0.0.1";
+  const isNative = isNativeCapacitorRuntime(window);
+  const isLocalhost = !isNative && (host === "localhost" || host === "127.0.0.1");
   const isTestEnv =
     rawFirebaseEnv === "test" ||
     host.includes("archery101010-tst") ||

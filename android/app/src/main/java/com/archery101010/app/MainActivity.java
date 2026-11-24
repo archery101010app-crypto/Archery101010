@@ -3308,8 +3308,16 @@ public class MainActivity extends BridgeActivity {
             out.put("deviceName", in.optString("deviceName", ""));
             out.put("nodeId", sourceNodeId != null ? sourceNodeId : "");
             final String outStr = out.toString();
+            long recvNow = System.currentTimeMillis();
             lastWearHrJson = outStr;
-            lastWearHrReceivedMs = System.currentTimeMillis();
+            lastWearHrReceivedMs = recvNow;
+            try {
+                getSharedPreferences(WATCH_BRIDGE_PREFS, MODE_PRIVATE)
+                    .edit()
+                    .putString("lastWearHrJson", outStr)
+                    .putLong("lastWearHrReceivedMs", recvNow)
+                    .apply();
+            } catch (Exception ignored) {}
             final String quotedJson = JSONObject.quote(outStr);
             runOnUiThread(() -> {
                 if (getBridge() != null && getBridge().getWebView() != null) {
@@ -3349,9 +3357,9 @@ public class MainActivity extends BridgeActivity {
                     putReq.getDataMap().putLong("requested_at", nowMs);
                     Wearable.getDataClient(MainActivity.this).putDataItem(putReq.asPutDataRequest().setUrgent());
                 } catch (Exception ignored) {}
-                if (lastWearHrJson != null && !lastWearHrJson.isEmpty()
-                        && (nowMs - lastWearHrReceivedMs) < 35_000L) {
-                    final String quotedJson = JSONObject.quote(lastWearHrJson);
+                String cachedHr = getLastWearHeartRateJson();
+                if (cachedHr != null && !cachedHr.isEmpty()) {
+                    final String quotedJson = JSONObject.quote(cachedHr);
                     runOnUiThread(() -> {
                         if (getBridge() != null && getBridge().getWebView() != null) {
                             String js = "if (window.__onNativeWearHrUpdate) { window.__onNativeWearHrUpdate(" + quotedJson + "); }";
@@ -3359,16 +3367,54 @@ public class MainActivity extends BridgeActivity {
                         }
                     });
                 }
+                // Actively inspect current DataClient /archery101010/hr DataItems so steady watch pulse
+                // written before WebView subscribed is delivered immediately without waiting for next tick.
+                try {
+                    Wearable.getDataClient(MainActivity.this)
+                        .getDataItems(Uri.parse("wear://*/archery101010/hr"), DataClient.FILTER_LITERAL)
+                        .addOnSuccessListener(items -> {
+                            if (items == null) return;
+                            try {
+                                long checkNow = System.currentTimeMillis();
+                                for (DataItem item : items) {
+                                    if (item == null) continue;
+                                    DataMap dm = DataMapItem.fromDataItem(item).getDataMap();
+                                    long sentAt = dm.getLong("sent_at", 0L);
+                                    String hrJson = dm.getString("hr_json", "");
+                                    if (hrJson != null && !hrJson.isEmpty()
+                                            && sentAt > 0L
+                                            && Math.abs(checkNow - sentAt) < 40_000L) {
+                                        String host = item.getUri() != null ? item.getUri().getHost() : "";
+                                        emitWearHeartRateToWebView(hrJson, host);
+                                    }
+                                }
+                            } catch (Exception ignored) {
+                            } finally {
+                                items.release();
+                            }
+                        });
+                } catch (Exception ignored) {}
             } catch (Exception ignored) {}
         }
 
         @Keep
         @JavascriptInterface
         public String getLastWearHeartRateJson() {
+            long nowMs = System.currentTimeMillis();
             if (lastWearHrJson != null && !lastWearHrJson.isEmpty()
-                    && (System.currentTimeMillis() - lastWearHrReceivedMs) < 35_000L) {
+                    && (nowMs - lastWearHrReceivedMs) < 35_000L) {
                 return lastWearHrJson;
             }
+            try {
+                android.content.SharedPreferences prefs = getSharedPreferences(WATCH_BRIDGE_PREFS, MODE_PRIVATE);
+                String savedJson = prefs.getString("lastWearHrJson", "");
+                long savedAt = prefs.getLong("lastWearHrReceivedMs", 0L);
+                if (savedJson != null && !savedJson.isEmpty() && (nowMs - savedAt) < 35_000L) {
+                    lastWearHrJson = savedJson;
+                    lastWearHrReceivedMs = savedAt;
+                    return savedJson;
+                }
+            } catch (Exception ignored) {}
             return "";
         }
 

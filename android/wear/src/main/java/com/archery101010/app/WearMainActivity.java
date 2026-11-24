@@ -160,8 +160,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private float latestGyroZ = 0f;
     private long lastGyroSampleMs = 0L;
 
-    // 7-Gate 3D Biomechanical Ring Buffer (~30.7s at 100 Hz for full INICIO -> FINAL shots)
-    private static final int MOTION_BUF = 3072;
+    // 7-Gate 3D Biomechanical Ring Buffer (~40s at 100 Hz decimated for full INICIO -> FINAL shots)
+    private static final int MOTION_BUF = 4096;
     private final long[] motionT = new long[MOTION_BUF];
     private final float[] motionAx = new float[MOTION_BUF];
     private final float[] motionAy = new float[MOTION_BUF];
@@ -173,6 +173,12 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private final float[] motionGyro = new float[MOTION_BUF];
     private int motionIdx = 0;
     private int motionCount = 0;
+    private long sensorEpochOffsetMs = 0L;
+    private boolean hasSensorEpochOffset = false;
+    private long lastAccelSampleMs = 0L;
+    private long lastStoredMotionMs = 0L;
+    private volatile int liveBowPhase = 0; // 0 = standby, 1 = preparatory, 2 = aiming
+    private long lastLivePhaseEvalMs = 0L;
 
     // Biomechanical Analysis mode state (2-Screen Diana + Shot Metrics + Manual INICIO/FINAL)
     private boolean analysisMode = false;
@@ -216,6 +222,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     private String lastHrDataItemSentStatus = "";
     private long lastHrSampleAccumMs = 0L;
     private long lastHrStatusSentMs = 0L;
+    private long lastHrPrefsSaveMs = 0L;
     private long lastCloudHrPushMs = 0L;
     private int lastCloudHrPushedBpm = 0;
     private String cachedWatchDisplayName = null;
@@ -249,10 +256,20 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                         lastHrSentMs = now;
                         sendHeartRateToPhone(bpm, "ok");
                     }
+                    if ((now - lastHrPrefsSaveMs) >= 4000L) {
+                        lastHrPrefsSaveMs = now;
+                        try {
+                            getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                                .edit()
+                                .putInt("lastLiveHrBpm", bpm)
+                                .putLong("lastLiveHrAtMs", now)
+                                .apply();
+                        } catch (Exception ignored) {}
+                    }
                     boolean activeForCloudHr = analysisMode
                             || manualAnalysisRecording
                             || !currentSessionId.isEmpty()
-                            || (now - lastActivityMs) < 600_000L;
+                            || (now - lastActivityMs) < 30 * 60_000L;
                     if (hasPairingCode && pairingCode.length() == 6 && !isEditingCode && activeForCloudHr
                             && (bpm != lastCloudHrPushedBpm || (now - lastCloudHrPushMs) >= HR_CLOUD_PUSH_INTERVAL_MS)) {
                         lastCloudHrPushMs = now;
@@ -299,13 +316,25 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             if (bpm > localMaxHrBpm) {
                 localMaxHrBpm = bpm;
             }
+            if ((now - lastHrPrefsSaveMs) >= 2500L || isFirstReading) {
+                lastHrPrefsSaveMs = now;
+                try {
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                        .edit()
+                        .putInt("lastLiveHrBpm", bpm)
+                        .putLong("lastLiveHrAtMs", now)
+                        .apply();
+                } catch (Exception ignored) {}
+            }
             if (isFirstReading || bpmChanged || (now - lastHrSentMs) >= HR_SEND_INTERVAL_MS) {
                 lastHrSentMs = now;
                 sendHeartRateToPhone(bpm, "ok");
                 runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
             }
             if (hasPairingCode && pairingCode.length() == 6 && !isEditingCode
-                    && (isFirstReading || (now - lastCloudHrPushMs) >= HR_CLOUD_PUSH_INTERVAL_MS)) {
+                    && (isFirstReading
+                        || (Math.abs(bpm - lastCloudHrPushedBpm) >= 2 && (now - lastCloudHrPushMs) >= 2000L)
+                        || (now - lastCloudHrPushMs) >= HR_CLOUD_PUSH_INTERVAL_MS)) {
                 lastCloudHrPushMs = now;
                 lastCloudHrPushedBpm = bpm;
                 lastCloudHeartbeatTouchMs = now;
@@ -1473,6 +1502,17 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             }
             final boolean shouldRescheduleFromPhone = phoneStateChanged;
 
+            String earlyPairingCode = obj.optString("pairingCode", rootObj.optString("pairingCode", "")).trim();
+            if (earlyPairingCode.matches("^[1-9][0-9]{5}$")
+                    && (!hasPairingCode || !earlyPairingCode.equals(pairingCode))) {
+                pairingCode = earlyPairingCode;
+                hasPairingCode = true;
+                parsePairingDigitsFromString(earlyPairingCode);
+                lastCloudHeartbeatTouchMs = 0L;
+                saveState();
+                pollFirestoreCloud();
+            }
+
             if (!sessionActive) {
                 if (analysisMode) {
                     analysisMode = false;
@@ -1769,9 +1809,13 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         cloudLinkStatus = "LINKING";
         lastRemoteCloudSig = "";
         lastCloudHeartbeatTouchMs = 0L;
+        lastCloudHrPushMs = 0L;
+        lastCloudHrPushedBpm = 0;
         markUserActivity(true);
         saveState();
         triggerHaptic(45);
+        long now = System.currentTimeMillis();
+        touchWatchHeartbeatInFirestore(pairingCode, now);
         pollFirestoreCloud();
         if (canvasView != null) canvasView.invalidate();
     }
@@ -2085,7 +2129,9 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                                         double zx = zArr.optDouble(0, 0.0);
                                         double zy = zArr.optDouble(1, 0.0);
                                         double zz = zArr.optDouble(2, 9.81);
-                                        if (Math.abs(zx) > 0.01 || Math.abs(zy) > 0.01) {
+                                        double zMag = Math.sqrt(zx * zx + zy * zy + zz * zz);
+                                        boolean isTableDefault = Math.abs(zx) < 0.05 && Math.abs(zy) < 0.05 && Math.abs(zz - 9.81) < 0.25;
+                                        if (!isTableDefault && zMag >= 6.0 && zMag <= 13.5) {
                                             calZeroAx = zx;
                                             calZeroAy = zy;
                                             calZeroAz = zz;
@@ -2341,7 +2387,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
     protected void onPause() {
         super.onPause();
         saveState();
+        long now = System.currentTimeMillis();
+        boolean recentlyActive = (now - lastActivityMs) < 20 * 60_000L;
         boolean idleNoSession = !analysisMode
+                && !recentlyActive
                 && arrowCount == 0
                 && lastAnalysisShotNum == 0
                 && totalScore == 0
@@ -2753,18 +2802,90 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         return true;
     }
 
-    /** Requires a crisp mechanical shock rise (jump >= minJerk within ~60ms), rejecting slow swings/tugs. */
-    private boolean hasSharpReleaseJerk(double currentMag, double minJerk) {
+    /** Requires a crisp mechanical shock rise (jump >= minJerk within ~85ms), rejecting slow swings/tugs. */
+    private boolean hasSharpReleaseJerk(long now, double currentMag, double minJerk) {
         if (motionCount < 3) return false;
         double maxJump = 0.0;
-        for (int k = 1; k <= 3 && k <= motionCount; k++) {
+        for (int k = 1; k <= motionCount; k++) {
             int prevIdx = (motionIdx - k + MOTION_BUF) % MOTION_BUF;
+            long ageMs = now - motionT[prevIdx];
+            if (k > 3 && ageMs > 85L) break;
             double jump = Math.abs(currentMag - motionMag[prevIdx]);
             if (jump > maxJump) {
                 maxJump = jump;
             }
         }
         return maxJump >= minJerk;
+    }
+
+    private long resolveSensorEpochMs(long eventTimestampNs, long wallNowMs) {
+        if (eventTimestampNs <= 0L) return wallNowMs;
+        long eventMs = eventTimestampNs / 1_000_000L;
+        if (!hasSensorEpochOffset) {
+            sensorEpochOffsetMs = wallNowMs - eventMs;
+            hasSensorEpochOffset = true;
+        } else {
+            long candidate = sensorEpochOffsetMs + eventMs;
+            if (Math.abs(wallNowMs - candidate) > 750L) {
+                sensorEpochOffsetMs = wallNowMs - eventMs;
+            }
+        }
+        return sensorEpochOffsetMs + eventMs;
+    }
+
+    private void evaluateLiveBowPhase(long now) {
+        if (!analysisMode) {
+            liveBowPhase = 0;
+            return;
+        }
+        if ((now - lastLivePhaseEvalMs) < 120L || motionCount < 8) return;
+        lastLivePhaseEvalMs = now;
+
+        long startWin = now - 350L;
+        double sumAx = 0.0, sumAy = 0.0, sumAz = 0.0, sumLin = 0.0, sumGy = 0.0;
+        float minAy = Float.MAX_VALUE, maxAy = -Float.MAX_VALUE;
+        float minAz = Float.MAX_VALUE, maxAz = -Float.MAX_VALUE;
+        int n = 0, gyN = 0;
+        for (int i = 0; i < motionCount; i++) {
+            int idx = (motionIdx - 1 - i + MOTION_BUF) % MOTION_BUF;
+            long t = motionT[idx];
+            if (t < startWin) break;
+            float sx = motionAx[idx], sy = motionAy[idx], sz = motionAz[idx];
+            sumAx += sx;
+            sumAy += sy;
+            sumAz += sz;
+            sumLin += motionLin[idx];
+            if (sy < minAy) minAy = sy;
+            if (sy > maxAy) maxAy = sy;
+            if (sz < minAz) minAz = sz;
+            if (sz > maxAz) maxAz = sz;
+            if (motionGyro[idx] >= 0f) {
+                sumGy += motionGyro[idx];
+                gyN++;
+            }
+            n++;
+        }
+        int nextPhase = 0;
+        if (n >= 4) {
+            double mAx = sumAx / n, mAy = sumAy / n, mAz = sumAz / n;
+            double gNorm = Math.max(4.0, Math.sqrt(mAx * mAx + mAy * mAy + mAz * mAz));
+            double vertRatio = Math.abs(mAx) / gNorm;
+            double perpG = Math.hypot(mAy, mAz);
+            double meanLin = sumLin / n;
+            double meanGy = gyN > 0 ? (sumGy / gyN) : 0.0;
+            boolean elevated = vertRatio <= 0.78 && perpG >= 5.8;
+            if (elevated) {
+                boolean settledAim = meanLin <= 0.58
+                        && meanGy <= 0.20
+                        && (maxAy - minAy) <= 1.15f
+                        && (maxAz - minAz) <= 1.15f;
+                nextPhase = settledAim ? 2 : 1;
+            }
+        }
+        if (nextPhase != liveBowPhase) {
+            liveBowPhase = nextPhase;
+            runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
+        }
     }
 
     /**
@@ -2815,7 +2936,8 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        long now = System.currentTimeMillis();
+        long wallNow = System.currentTimeMillis();
+        long now = resolveSensorEpochMs(event.timestamp, wallNow);
         int sensorType = event.sensor.getType();
 
         if (sensorType == Sensor.TYPE_GYROSCOPE) {
@@ -2830,6 +2952,11 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         }
 
         if (sensorType == Sensor.TYPE_ACCELEROMETER) {
+            if (now <= lastAccelSampleMs) {
+                now = lastAccelSampleMs + 1L;
+            }
+            lastAccelSampleMs = now;
+
             float ax = event.values[0];
             float ay = event.values[1];
             float az = event.values[2];
@@ -2840,18 +2967,18 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             float activeGyro = ((now - lastGyroSampleMs) <= 140L) ? latestGyroRadS : -1f;
 
             // Sensitivity: 0 = BAJA (Ultra strict), 1 = MEDIA (Olympic/Compound default), 2 = ALTA (Light/damped bows)
-            // Scaled per bow division so stabilized Recurve/Barebow releases trigger reliably while 7-Gate anchor blocks false triggers
-            double bowFactor = "Recurve".equals(syncedBowType) ? 0.76 : ("Barebow".equals(syncedBowType) ? 0.85 : 0.94);
-            double shotThreshold = ((sensitivityLevel == 0) ? 21.0 : ((sensitivityLevel == 2) ? 13.0 : 16.5)) * bowFactor;
-            double minJerk = ((sensitivityLevel == 0) ? 12.0 : ((sensitivityLevel == 2) ? 7.8 : 9.8)) * bowFactor;
+            // Calibrated for bow-wrist shock physics while 7-Gate anchor + follow-through block false triggers
+            double bowFactor = "Recurve".equals(syncedBowType) ? 0.78 : ("Barebow".equals(syncedBowType) ? 0.86 : 0.95);
+            double shotThreshold = ((sensitivityLevel == 0) ? 12.5 : ((sensitivityLevel == 2) ? 7.2 : 9.2)) * bowFactor;
+            double minJerk = ((sensitivityLevel == 0) ? 7.8 : ((sensitivityLevel == 2) ? 4.4 : 5.8)) * bowFactor;
             double quietMeanMax = (sensitivityLevel == 0) ? 0.52 : ((sensitivityLevel == 2) ? 0.80 : 0.65);
             double quietPeakMax = (sensitivityLevel == 0) ? 1.10 : ((sensitivityLevel == 2) ? 1.55 : 1.30);
             double preRampMeanMax = (sensitivityLevel == 0) ? 0.50 : ((sensitivityLevel == 2) ? 0.76 : 0.62);
             double axisSpanMax = (sensitivityLevel == 0) ? 1.55 : ((sensitivityLevel == 2) ? 2.20 : 1.85);
             double gyroMeanMax = (sensitivityLevel == 0) ? 0.25 : ((sensitivityLevel == 2) ? 0.40 : 0.32);
             double gyroPeakMax = (sensitivityLevel == 0) ? 0.65 : ((sensitivityLevel == 2) ? 0.95 : 0.78);
-            long stillWindowMs = (sensitivityLevel == 0) ? 1550L : ((sensitivityLevel == 2) ? 1050L : 1300L);
-            long shotCooldownMs = (sensitivityLevel == 0) ? 7000L : ((sensitivityLevel == 2) ? 5000L : 6000L);
+            long stillWindowMs = (sensitivityLevel == 0) ? 1400L : ((sensitivityLevel == 2) ? 900L : 1150L);
+            long shotCooldownMs = (sensitivityLevel == 0) ? 6500L : ((sensitivityLevel == 2) ? 4500L : 5500L);
 
             trackMotionPeak(now, Math.max(linearMag, Math.abs(dynamicLinear)));
 
@@ -2897,7 +3024,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                     && !isWalkingBlocked
                     && linearMag >= shotThreshold
                     && (now - lastShotTimestamp) > shotCooldownMs
-                    && hasSharpReleaseJerk(mag, minJerk)
+                    && hasSharpReleaseJerk(now, mag, minJerk)
                     && isTrueArcheryAnchor(
                             now,
                             stillWindowMs,
@@ -2951,18 +3078,36 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             prevPrevDynLinear = prevDynLinear;
             prevDynLinear = dynamicLinear;
 
-            // Record synchronized 3D + gyro sample into motion ring buffer
-            motionT[motionIdx] = now;
-            motionAx[motionIdx] = ax;
-            motionAy[motionIdx] = ay;
-            motionAz[motionIdx] = az;
-            motionGy[motionIdx] = ((now - lastGyroSampleMs) <= 140L) ? latestGyroY : 0f;
-            motionGz[motionIdx] = ((now - lastGyroSampleMs) <= 140L) ? latestGyroZ : 0f;
-            motionMag[motionIdx] = mag;
-            motionLin[motionIdx] = linearMag;
-            motionGyro[motionIdx] = activeGyro;
-            motionIdx = (motionIdx + 1) % MOTION_BUF;
-            if (motionCount < MOTION_BUF) motionCount++;
+            // Record synchronized 3D + gyro sample into 4096-slot ring buffer (~100Hz decimated, preserving sub-8ms shock peaks)
+            if (motionCount > 0 && (now - lastStoredMotionMs) < 8L) {
+                int prevSlot = (motionIdx - 1 + MOTION_BUF) % MOTION_BUF;
+                if (linearMag > motionLin[prevSlot]) {
+                    motionT[prevSlot] = now;
+                    motionAx[prevSlot] = ax;
+                    motionAy[prevSlot] = ay;
+                    motionAz[prevSlot] = az;
+                    motionGy[prevSlot] = ((now - lastGyroSampleMs) <= 140L) ? latestGyroY : 0f;
+                    motionGz[prevSlot] = ((now - lastGyroSampleMs) <= 140L) ? latestGyroZ : 0f;
+                    motionMag[prevSlot] = mag;
+                    motionLin[prevSlot] = linearMag;
+                    motionGyro[prevSlot] = activeGyro;
+                }
+            } else {
+                lastStoredMotionMs = now;
+                motionT[motionIdx] = now;
+                motionAx[motionIdx] = ax;
+                motionAy[motionIdx] = ay;
+                motionAz[motionIdx] = az;
+                motionGy[motionIdx] = ((now - lastGyroSampleMs) <= 140L) ? latestGyroY : 0f;
+                motionGz[motionIdx] = ((now - lastGyroSampleMs) <= 140L) ? latestGyroZ : 0f;
+                motionMag[motionIdx] = mag;
+                motionLin[motionIdx] = linearMag;
+                motionGyro[motionIdx] = activeGyro;
+                motionIdx = (motionIdx + 1) % MOTION_BUF;
+                if (motionCount < MOTION_BUF) motionCount++;
+            }
+
+            evaluateLiveBowPhase(now);
         }
     }
 
@@ -3002,6 +3147,18 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             }
         }
 
+        double calNorm = hasCalZeroVec
+                ? Math.sqrt(calZeroAx * calZeroAx + calZeroAy * calZeroAy + calZeroAz * calZeroAz)
+                : 0.0;
+        boolean validCalZero = hasCalZeroVec
+                && calNorm >= 6.0
+                && calNorm <= 13.5
+                && !(Math.abs(calZeroAx) < 0.05 && Math.abs(calZeroAy) < 0.05 && Math.abs(calZeroAz - 9.81) < 0.25);
+        boolean calIsAiming = validCalZero
+                && (Math.abs(calZeroAx) / calNorm) <= 0.55
+                && Math.hypot(calZeroAy, calZeroAz) >= 6.8;
+        boolean calIsResting = validCalZero && !calIsAiming;
+
         double minJerkReq = "Compound".equals(syncedBowType) ? 4.2 : ("Recurve".equals(syncedBowType) ? 3.1 : 3.6);
         double minLinReq = "Compound".equals(syncedBowType) ? 3.6 : ("Recurve".equals(syncedBowType) ? 2.7 : 3.1);
 
@@ -3038,11 +3195,13 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             double mAz = sumAz / n;
             double gNorm = Math.max(4.0, Math.sqrt(mAx * mAx + mAy * mAy + mAz * mAz));
             boolean postureValid = (Math.abs(mAx) / gNorm) <= 0.80 && Math.hypot(mAy, mAz) >= 5.6;
-            boolean calMatch = true;
-            if (hasCalZeroVec) {
+            double calDist = 0.0;
+            if (validCalZero) {
                 double dx = mAx - calZeroAx, dy = mAy - calZeroAy, dz = mAz - calZeroAz;
-                calMatch = Math.sqrt(dx * dx + dy * dy + dz * dz) <= 4.2;
+                calDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
             }
+            boolean calMatch = calIsResting ? (calDist >= 1.8) : true;
+            double calAimBonus = (calIsAiming && calDist <= 3.6) ? 150.0 : 0.0;
             boolean spanOk = (maxAy - minAy) <= 2.4f && (maxAz - minAz) <= 2.4f;
 
             if (postureValid && calMatch && spanOk && meanLin <= 1.25 && meanGyro <= 0.48) {
@@ -3050,7 +3209,7 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 long runDurMs = wT[i] - wT[curRunStartIdx];
                 if (runDurMs >= 450L && (wT[i] - winStart) >= 650L) {
                     double recencyBonus = ((double) (wT[i] - winStart) / Math.max(1000L, rawEndMs - winStart)) * 350.0;
-                    double score = runDurMs + recencyBonus;
+                    double score = runDurMs + recencyBonus + calAimBonus;
                     if (score >= bestPlateauScore) {
                         bestPlateauScore = score;
                         bestPlateauEndIdx = i;
@@ -3067,16 +3226,16 @@ public class WearMainActivity extends Activity implements SensorEventListener {
         // Step 2: Find genuine post-anchor release impulse (rejecting late arm-drop button presses)
         long bestSpikeTs = 0L;
         long searchStartMs = (bestPlateauEndIdx >= 0)
-                ? Math.max(winStart + 700L, wT[bestPlateauEndIdx] - 1800L)
+                ? Math.max(winStart + 700L, wT[bestPlateauEndIdx] - 2200L)
                 : (winStart + 800L);
 
         for (int i = 3; i < rawCount; i++) {
             long t = wT[i];
             if (t < searchStartMs) continue;
-            if ((rawEndMs - t) > 6000L) continue;
+            if ((rawEndMs - t) > 9000L) continue;
 
             double maxJerk = 0.0;
-            for (int step = 1; step <= 3 && (i - step) >= 0; step++) {
+            for (int step = 1; (i - step) >= 0 && (step <= 3 || (t - wT[i - step]) <= 85L); step++) {
                 double jump = Math.abs(wMag[i] - wMag[i - step]);
                 if (jump > maxJerk) maxJerk = jump;
             }
@@ -3195,12 +3354,23 @@ public class WearMainActivity extends Activity implements SensorEventListener {
             double anchorGravAy = refAy;
             double anchorGravAz = refAz;
 
-            if (hasCalZeroVec) {
+            boolean hasRestingCalZero = false;
+            if (hasCalZeroVec
+                    && !(Math.abs(calZeroAx) < 0.05 && Math.abs(calZeroAy) < 0.05 && Math.abs(calZeroAz - 9.81) < 0.25)) {
                 double zNorm = Math.sqrt(calZeroAx * calZeroAx + calZeroAy * calZeroAy + calZeroAz * calZeroAz);
-                if (zNorm >= 4.0 && zNorm <= 15.0) {
-                    refAx = 0.82 * refAx + 0.18 * calZeroAx;
-                    refAy = 0.82 * refAy + 0.18 * calZeroAy;
-                    refAz = 0.82 * refAz + 0.18 * calZeroAz;
+                if (zNorm >= 6.0 && zNorm <= 13.5) {
+                    double distToAnchor = Math.sqrt(
+                            (anchorGravAx - calZeroAx) * (anchorGravAx - calZeroAx)
+                            + (anchorGravAy - calZeroAy) * (anchorGravAy - calZeroAy)
+                            + (anchorGravAz - calZeroAz) * (anchorGravAz - calZeroAz)
+                    );
+                    if (distToAnchor <= 2.2) {
+                        refAx = 0.85 * refAx + 0.15 * calZeroAx;
+                        refAy = 0.85 * refAy + 0.15 * calZeroAy;
+                        refAz = 0.85 * refAz + 0.15 * calZeroAz;
+                    } else if (distToAnchor >= 3.2) {
+                        hasRestingCalZero = true;
+                    }
                 }
             }
             double refNorm = Math.max(4.0, Math.sqrt(refAx * refAx + refAy * refAy + refAz * refAz));
@@ -3222,6 +3392,10 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
             float[] ptX = new float[count];
             float[] ptY = new float[count];
+            double[] dtArr = new double[count];
+            double[] sAxArr = new double[count];
+            double[] sAyArr = new double[count];
+            double[] sAzArr = new double[count];
             double[] yawArr = new double[count];
             double[] pitchArr = new double[count];
             double[] energy = new double[count];
@@ -3232,9 +3406,13 @@ public class WearMainActivity extends Activity implements SensorEventListener {
 
             for (int i = 0; i < count; i++) {
                 double dt = (i > 0) ? Math.max(0.002, Math.min(0.12, (ts[i] - ts[i - 1]) / 1000.0)) : 0.02;
+                dtArr[i] = dt;
                 sAx = 0.82 * sAx + 0.18 * axArr[i];
                 sAy = 0.82 * sAy + 0.18 * ayArr[i];
                 sAz = 0.82 * sAz + 0.18 * azArr[i];
+                sAxArr[i] = sAx;
+                sAyArr[i] = sAy;
+                sAzArr[i] = sAz;
 
                 double tiltH = ((sAy - refAy) / refNorm) * wristSign * 0.28;
                 double tiltV = ((sAz - refAz) / refNorm) * 0.28;
@@ -3287,35 +3465,89 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 ptY[i] = (float) Math.max(-1.08, Math.min(1.08, yCm / faceRadiusCm));
             }
 
-            // Detect settle index (transition from Preparatory -> Aiming) via Sustained 350ms Window Hysteresis
-            double settleRadiusCm = faceRadiusCm * 0.44;
-            int scanStartIdx = count - 1;
-            while (scanStartIdx > 4 && (releaseMs - ts[scanStartIdx]) < 80L) {
-                scanStartIdx--;
+            // Adaptive pre-release anchor baseline [releaseMs - 850ms .. releaseMs - 100ms]
+            double baseGd = 0.0, baseGy = 0.0, baseEn = 0.0, baseRad = 0.0;
+            int baseN = 0;
+            for (int i = 0; i < count; i++) {
+                if (ts[i] >= releaseMs - 850L && ts[i] <= releaseMs - 100L) {
+                    baseGd += gravDeltaArr[i];
+                    baseGy += gyroMagArr[i];
+                    baseEn += energy[i];
+                    baseRad += Math.hypot(dxCmArr[i], dyCmArr[i]);
+                    baseN++;
+                }
             }
-            int settleIdx = Math.max(0, Math.min(scanStartIdx, count - 4));
-            for (int i = scanStartIdx; i >= 0; i--) {
-                long winEndT = ts[i];
-                long winStartT = winEndT - 350L;
-                double sumRad = 0.0, sumEn = 0.0, sumGy = 0.0, sumGd = 0.0;
+            if (baseN < 4) {
+                baseGd = 0.0; baseGy = 0.0; baseEn = 0.0; baseRad = 0.0; baseN = 0;
+                for (int i = Math.max(0, count - 6); i < count; i++) {
+                    baseGd += gravDeltaArr[i];
+                    baseGy += gyroMagArr[i];
+                    baseEn += energy[i];
+                    baseRad += Math.hypot(dxCmArr[i], dyCmArr[i]);
+                    baseN++;
+                }
+            }
+            double anchorMeanGd = baseGd / Math.max(1, baseN);
+            double anchorMeanGy = baseGy / Math.max(1, baseN);
+            double anchorMeanEn = baseEn / Math.max(1, baseN);
+            double anchorMeanRad = baseRad / Math.max(1, baseN);
+
+            double settleRadiusCm = Math.max(faceRadiusCm * 0.30, Math.min(faceRadiusCm * 0.42, anchorMeanRad * 2.1 + faceRadiusCm * 0.08));
+            double gdLimit = Math.max(0.85, Math.min(1.65, anchorMeanGd * 2.2 + 0.35));
+            double gyLimit = Math.max(0.19, Math.min(0.32, anchorMeanGy * 2.2 + 0.08));
+            double enLimit = Math.max(0.95, Math.min(1.65, anchorMeanEn * 2.3 + 0.38));
+            double netDispLimitRad = 0.044;
+
+            boolean[] outOfAimMask = new boolean[count];
+            for (int i = 0; i < count; i++) {
+                long winStartT = ts[i] - 350L;
+                double sumRad = 0.0, sumEn = 0.0, sumGy = 0.0, sumGd = 0.0, sumGyDt = 0.0, sumGzDt = 0.0;
                 int wN = 0;
                 for (int j = i; j >= 0 && ts[j] >= winStartT; j--) {
                     sumRad += Math.hypot(dxCmArr[j], dyCmArr[j]);
                     sumEn += energy[j];
                     sumGy += gyroMagArr[j];
                     sumGd += gravDeltaArr[j];
+                    sumGyDt += gyArr[j] * dtArr[j];
+                    sumGzDt += gzArr[j] * dtArr[j];
                     wN++;
                 }
                 double meanRad = sumRad / Math.max(1, wN);
                 double meanEn = sumEn / Math.max(1, wN);
                 double meanGy = sumGy / Math.max(1, wN);
                 double meanGd = sumGd / Math.max(1, wN);
+                double netDisp = Math.hypot(sumGyDt, sumGzDt);
+                outOfAimMask[i] = meanRad > settleRadiusCm
+                        || meanGd > gdLimit
+                        || meanGy > gyLimit
+                        || meanEn > enLimit
+                        || netDisp > netDispLimitRad;
+            }
 
-                if (meanRad > settleRadiusCm || meanGd > 2.25 || meanGy > 0.38 || meanEn > 1.85) {
+            // Detect settle index (Preparatory -> Aiming) via Two-Window Sustained Departure Hysteresis
+            int scanStartIdx = count - 1;
+            while (scanStartIdx > 4 && (releaseMs - ts[scanStartIdx]) < 80L) {
+                scanStartIdx--;
+            }
+            int settleIdx = Math.max(0, Math.min(scanStartIdx, count - 4));
+            for (int i = scanStartIdx; i >= 0; i--) {
+                if (outOfAimMask[i]) {
+                    int priorIdx = -1;
+                    for (int p = i - 1; p >= 0; p--) {
+                        if (ts[i] - ts[p] >= 450L) {
+                            priorIdx = p;
+                            break;
+                        }
+                    }
+                    boolean sustainedDeparture = (priorIdx < 0) || outOfAimMask[priorIdx];
+                    if (!sustainedDeparture) {
+                        settleIdx = i;
+                        continue;
+                    }
                     int exactSettle = Math.min(count - 3, i + 1);
                     for (int m = i; m < count - 2; m++) {
                         double rM = Math.hypot(dxCmArr[m], dyCmArr[m]);
-                        if (rM <= settleRadiusCm && gravDeltaArr[m] <= 2.1 && gyroMagArr[m] <= 0.35) {
+                        if (rM <= settleRadiusCm && gravDeltaArr[m] <= gdLimit && gyroMagArr[m] <= gyLimit) {
                             exactSettle = m;
                             break;
                         }
@@ -3356,14 +3588,23 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                         dxCmArr[i] - dxCmArr[oldestIdx],
                         dyCmArr[i] - dyCmArr[oldestIdx]
                 ) / dtSpanSec;
+                double gravShift = Math.sqrt(
+                        (sAxArr[i] - sAxArr[oldestIdx]) * (sAxArr[i] - sAxArr[oldestIdx])
+                        + (sAyArr[i] - sAyArr[oldestIdx]) * (sAyArr[i] - sAyArr[oldestIdx])
+                        + (sAzArr[i] - sAzArr[oldestIdx]) * (sAzArr[i] - sAzArr[oldestIdx])
+                );
+                boolean returnedToRestingCal = hasRestingCalZero && Math.sqrt(
+                        (sAxArr[i] - calZeroAx) * (sAxArr[i] - calZeroAx)
+                        + (sAyArr[i] - calZeroAy) * (sAyArr[i] - calZeroAy)
+                        + (sAzArr[i] - calZeroAz) * (sAzArr[i] - calZeroAz)
+                ) <= 1.65;
 
-                if (meanGy >= 0.14 || meanEn >= 0.35 || sweepCmPerSec >= 9.0) {
+                if (meanGy >= 0.14 || meanEn >= 0.35 || sweepCmPerSec >= 9.0 || gravShift >= 0.55) {
                     sawActiveRaiseSweep = true;
                 } else if (sawActiveRaiseSweep
                         && (ts[settleIdx] - ts[i]) >= 450L
-                        && meanGy < 0.10
-                        && meanEn < 0.24
-                        && sweepCmPerSec < 5.5) {
+                        && ((meanGy < 0.10 && meanEn < 0.24 && sweepCmPerSec < 5.5 && gravShift < 0.30)
+                            || (returnedToRestingCal && meanGy < 0.14 && gravShift < 0.40))) {
                     prepStartIdx = Math.min(settleIdx - 1, i + 1);
                     break;
                 }
@@ -4127,36 +4368,59 @@ public class WearMainActivity extends Activity implements SensorEventListener {
                 canvas.drawBitmap(logo, Math.round(cx - logo.getWidth() / 2f), Math.round(11f * scale), paint);
             }
 
-            // Top Live Status Pill (tap jumps to Shot Data screen)
+            // Top Live Status Pill (shows live PREPARACIÓN vs EN TIRO phase & jumps to Shot Data screen on tap)
             int shotNum = Math.max(lastAnalysisShotNum, arrowCount);
             float elapsedSec = manualAnalysisRecording
                     ? Math.max(0f, (System.currentTimeMillis() - manualAnalysisStartMs) / 1000f)
                     : 0f;
-            String pillText = manualAnalysisRecording
-                    ? (tr("GRABANDO · ", "REC · ") + String.format(Locale.US, "%.1fs", elapsedSec))
-                    : (shotNum > 0
-                        ? (tr("TIRO ", "SHOT ") + shotNum + " · " + distanceMeters + "M")
-                        : (tr("LISTO · ", "READY · ") + distanceMeters + "M"));
+            String pillText;
+            if (manualAnalysisRecording) {
+                String phaseLabel = (liveBowPhase == 2)
+                        ? tr("EN TIRO · ", "AIMING · ")
+                        : ((liveBowPhase == 1) ? tr("PREPARACIÓN · ", "PREP · ") : tr("LISTO · ", "READY · "));
+                pillText = phaseLabel + String.format(Locale.US, "%.1fs", elapsedSec);
+            } else if (analysisAutoMode && liveBowPhase == 2) {
+                pillText = tr("EN TIRO · ", "AIMING · ") + distanceMeters + "M";
+            } else if (analysisAutoMode && liveBowPhase == 1) {
+                pillText = tr("PREPARACIÓN · ", "PREP · ") + distanceMeters + "M";
+            } else if (shotNum > 0) {
+                pillText = tr("TIRO ", "SHOT ") + shotNum + " · " + distanceMeters + "M";
+            } else {
+                pillText = tr("LISTO · ", "READY · ") + distanceMeters + "M";
+            }
+
+            boolean isAimPhaseLive = (manualAnalysisRecording || analysisAutoMode) && liveBowPhase == 2;
+            boolean isPrepPhaseLive = (manualAnalysisRecording || analysisAutoMode) && liveBowPhase == 1;
 
             paint.setTypeface(outfitExtraBold);
             paint.setTextSize(6.5f * scale);
             float textW = paint.measureText(pillText);
-            float pillW = Math.max(96f * scale, textW + 19f * scale);
+            if (textW > 126f * scale) {
+                paint.setTextSize(5.8f * scale);
+                textW = paint.measureText(pillText);
+            }
+            float pillW = Math.min(148f * scale, Math.max(96f * scale, textW + 19f * scale));
             float pillH = 14.5f * scale;
             float pillTop = 22.5f * scale;
             btnToggleDetector.set(cx - pillW / 2f, pillTop, cx + pillW / 2f, pillTop + pillH);
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(manualAnalysisRecording ? Color.parseColor("#171305") : Color.parseColor("#080B10"));
+            paint.setColor(isAimPhaseLive
+                    ? Color.parseColor("#061910")
+                    : (isPrepPhaseLive || manualAnalysisRecording ? Color.parseColor("#171305") : Color.parseColor("#080B10")));
             canvas.drawRoundRect(btnToggleDetector, pillH / 2f, pillH / 2f, paint);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(1.0f * scale);
-            paint.setColor(manualAnalysisRecording ? Color.parseColor("#C2FFE500") : Color.parseColor("#26FFFFFF"));
+            paint.setColor(isAimPhaseLive
+                    ? Color.parseColor("#B300C853")
+                    : (isPrepPhaseLive || manualAnalysisRecording ? Color.parseColor("#C2FFE500") : Color.parseColor("#26FFFFFF")));
             canvas.drawRoundRect(btnToggleDetector, pillH / 2f, pillH / 2f, paint);
             paint.setStyle(Paint.Style.FILL);
 
             float dotR = 1.9f * scale;
             float startX = cx - (dotR * 2f + 4.0f * scale + textW) / 2f;
-            paint.setColor(manualAnalysisRecording ? Color.parseColor("#FFE500") : Color.parseColor("#00BFFF"));
+            paint.setColor(isAimPhaseLive
+                    ? Color.parseColor("#00C853")
+                    : (isPrepPhaseLive || manualAnalysisRecording ? Color.parseColor("#FFE500") : Color.parseColor("#00BFFF")));
             canvas.drawCircle(startX + dotR, btnToggleDetector.centerY(), dotR, paint);
             paint.setColor(Color.WHITE);
             paint.setTextAlign(Paint.Align.LEFT);

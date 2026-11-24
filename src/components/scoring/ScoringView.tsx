@@ -768,6 +768,23 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     }
   }, [config.draftId, config.id]);
 
+  const latestHrForWatchRef = useRef({
+    bleState: bleHrStatus.state,
+    bleBpm: bleHrStatus.currentBpm,
+    watchBpm: watchLiveHr.bpm,
+    watchAt: watchLiveHr.at,
+    avgBpm: avgHeartRateBpm,
+    maxBpm: maxHeartRateBpm
+  });
+  latestHrForWatchRef.current = {
+    bleState: bleHrStatus.state,
+    bleBpm: bleHrStatus.currentBpm,
+    watchBpm: watchLiveHr.bpm,
+    watchAt: watchLiveHr.at,
+    avgBpm: avgHeartRateBpm,
+    maxBpm: maxHeartRateBpm
+  };
+
   const liveWatchSnapshot = useMemo<BiometricSessionSnapshot>(() => {
     const currentArrows = (ends[currentEndIdx]?.arrows || []).filter(
       (a) => a !== "" && a !== undefined
@@ -776,15 +793,16 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       config.practiceType === "Volumen"
         ? tallyCount
         : Math.max(totalShotArrows, watchPhysicalArrows);
+    const hrSnap = latestHrForWatchRef.current;
     const freshWatchBpm =
-      watchLiveHr.bpm >= 30 && Date.now() - watchLiveHr.at <= 35_000 ? watchLiveHr.bpm : 0;
+      hrSnap.watchBpm >= 30 && Date.now() - hrSnap.watchAt <= 35_000 ? hrSnap.watchBpm : 0;
     const effectiveLiveBpm =
-      bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
-        ? bleHrStatus.currentBpm
+      hrSnap.bleState === "connected" && hrSnap.bleBpm >= 30
+        ? hrSnap.bleBpm
         : freshWatchBpm >= 30
         ? freshWatchBpm
-        : avgHeartRateBpm >= 30
-        ? avgHeartRateBpm
+        : hrSnap.avgBpm >= 30
+        ? hrSnap.avgBpm
         : 0;
     return {
       sessionId: activeSessionIdRef.current,
@@ -803,8 +821,8 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
       gpsActive,
       activeKcal,
       ...(effectiveLiveBpm >= 30 ? { heartRateBpm: effectiveLiveBpm } : {}),
-      ...(avgHeartRateBpm >= 30 ? { avgHeartRateBpm } : {}),
-      ...(maxHeartRateBpm >= 30 ? { maxHeartRateBpm } : {}),
+      ...(hrSnap.avgBpm >= 30 ? { avgHeartRateBpm: hrSnap.avgBpm } : {}),
+      ...(hrSnap.maxBpm >= 30 ? { maxHeartRateBpm: hrSnap.maxBpm } : {}),
       bowPoundageLbs,
       practiceType: config.practiceType || "Práctica",
       bowType: config.bowType || user.bowConfig?.type || "Recurve",
@@ -830,12 +848,6 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
     distanceWalkedM,
     gpsActive,
     activeKcal,
-    bleHrStatus.state,
-    bleHrStatus.currentBpm,
-    watchLiveHr.bpm,
-    watchLiveHr.at,
-    avgHeartRateBpm,
-    maxHeartRateBpm,
     bowPoundageLbs,
     config.practiceType,
     config.bowType,
@@ -879,8 +891,15 @@ export default function ScoringView({ user, config, onBack, onSessionSaved }: Sc
         ensureScoringWatchReady(fbUser.uid);
       }
     });
+    const watchHrKeepalive = setInterval(() => {
+      if (cancelled || watchFinishedSessionRef.current || isClosingSessionRef.current) return;
+      if (getBleHeartRateStatus().state !== "connected") {
+        requestWatchAppHeartRate();
+      }
+    }, 5000);
     return () => {
       cancelled = true;
+      clearInterval(watchHrKeepalive);
       unsubAuth();
     };
   }, [user?.uid]);

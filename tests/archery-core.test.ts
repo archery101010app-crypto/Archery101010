@@ -1733,4 +1733,228 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
     const forbiddenBrands = /\b(whoop|polar|garmin|wahoo|coros|strava|apple watch|galaxy watch|samsung|fitbit|suunto|nike)\b/i;
     assert.equal(forbiddenBrands.test(modalSrc), false, "BleHeartRateModal must contain zero third-party brand names");
   });
+
+  it("enforces v2.158 universal watch HR across Session/Scoring/Analysis (even when sessionActive=false), Capacitor localhost prod guard, 12-arrow mid-session calibration resilience & Garmin 965 support", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const { isNativeCapacitorRuntime } = await import("../src/lib/firebase.ts");
+    const { shouldAcceptCloudWatchHeartRate } = await import("../src/lib/scoring/biometricsEngine.ts");
+    const { analyzeImuShotWindow } = await import("../src/lib/scoring/shotAnalysisEngine.ts");
+
+    // 1. Native Capacitor runtime on https://localhost must NEVER fall back to mock Firebase project
+    assert.equal(
+      isNativeCapacitorRuntime({ location: { protocol: "http:", hostname: "localhost" } }),
+      false
+    );
+    assert.equal(
+      isNativeCapacitorRuntime({
+        location: { protocol: "https:", hostname: "localhost" },
+        Capacitor: { isNativePlatform: () => true }
+      }),
+      true
+    );
+    assert.equal(
+      isNativeCapacitorRuntime({
+        location: { protocol: "https:", hostname: "localhost" },
+        ArcheryBleHrBridge: {}
+      }),
+      true
+    );
+
+    // 2. Cloud Watch HR must be accepted in SessionConfig / Home even when sessionActive === false
+    const now = 1_780_000_000_000;
+    assert.equal(shouldAcceptCloudWatchHeartRate(null, now, false), false);
+    assert.equal(shouldAcceptCloudWatchHeartRate({}, now, false), false);
+    assert.equal(
+      shouldAcceptCloudWatchHeartRate(
+        { sessionActive: false, watchHeartRateBpm: 78, watchHeartbeatAt: now - 4_000, watchSource: "WEAR_OS" },
+        now,
+        false
+      ),
+      true,
+      "Live watch BPM must connect in SessionConfig even when sessionActive is false"
+    );
+    assert.equal(
+      shouldAcceptCloudWatchHeartRate(
+        { sessionActive: false, watchHeartRateBpm: 29, watchHeartbeatAt: now - 2_000, watchSource: "WEAR_OS" },
+        now,
+        true
+      ),
+      false,
+      "Sub-physiological BPM (<30) must be rejected"
+    );
+    assert.equal(
+      shouldAcceptCloudWatchHeartRate(
+        { sessionActive: false, watchHeartRateBpm: 248, watchHeartbeatAt: now - 2_000, watchSource: "WEAR_OS" },
+        now,
+        true
+      ),
+      false,
+      "Out-of-range BPM (>245) must be rejected"
+    );
+    assert.equal(
+      shouldAcceptCloudWatchHeartRate(
+        { sessionActive: false, watchHeartRateBpm: 76, watchHeartbeatAt: now - 180_000, updatedAt: now - 180_000, watchSource: "WEAR_OS" },
+        now,
+        false
+      ),
+      false,
+      "Stale >90s watch BPM must expire cleanly"
+    );
+
+    // 3. Simulate full 12-arrow Analysis session with 2-stage prep (1.1s bow lift + 1.9s horizontal draw/alignment)
+    //    + 3.4s aiming hold + mid-session "setear el inicio" resting calibration reset at Arrow #7 + marked impacts!
+    assert.equal(
+      analyzeImuShotWindow({ samples: [], shotNumber: 1, distanceM: 18, bowType: "Barebow" }),
+      null
+    );
+    assert.equal(
+      analyzeImuShotWindow({
+        samples: [{ t: 1000, ax: 0, ay: 9.8, az: 0 }],
+        shotNumber: 1,
+        distanceM: 18,
+        bowType: "Barebow"
+      }),
+      null
+    );
+
+    const buildRealisticTwoStageShotSamples = (baseTs: number) => {
+      const list = [];
+      // 0.0..1.5s: resting idle in starting stance (ax=7.4, ay=5.8, az=2.7)
+      // 1.5..2.6s: 1.1s bow lift to horizontal (ax: 7.4 -> 0.55, ay: 5.8 -> 9.0, az: 2.7 -> 2.35)
+      // 2.6..4.5s: 1.9s horizontal bowstring draw & sight alignment onto gold (arm ALREADY horizontal, slow 9 deg/s alignment!)
+      // 4.5..7.9s: 3.4s true Aiming hold (with a brief 40ms finger micro-twitch at 6.1s)
+      // 7.92s: bowstring release
+      // 7.98..9.4s: lowering bow arm + pressing FINAL button
+      for (let ms = 0; ms <= 9400; ms += 20) {
+        const t = baseTs + ms;
+        const s = ms / 1000;
+        if (s < 1.5) {
+          list.push({ t, ax: 7.4, ay: 5.8, az: 2.7, gy: 0.01, gz: -0.01 });
+        } else if (s < 2.6) {
+          const p = (s - 1.5) / 1.1;
+          list.push({
+            t,
+            ax: 7.4 * (1 - p) + 0.55 * p,
+            ay: 5.8 * (1 - p) + 9.0 * p,
+            az: 2.7 * (1 - p) + 2.35 * p,
+            gy: -0.62,
+            gz: 0.28
+          });
+        } else if (s < 4.5) {
+          const p = (s - 2.6) / 1.9;
+          list.push({
+            t,
+            ax: 0.55 * (1 - p) + 0.22 * p,
+            ay: 9.0 * (1 - p) + 9.6 * p,
+            az: 2.35 * (1 - p) + 1.9 * p,
+            gy: -0.15 * (1 - p * 0.25),
+            gz: 0.11 * (1 - p * 0.25)
+          });
+        } else if (s >= 6.10 && s <= 6.12) {
+          list.push({ t, ax: 0.75, ay: 10.2, az: 2.3, gy: 0.38, gz: -0.28 });
+        } else if (s >= 7.92 && s <= 7.96) {
+          list.push({ t, ax: 3.9, ay: 13.6, az: 2.5, gy: 1.4, gz: -0.95 });
+        } else if (s > 7.96 && s < 9.20) {
+          const d = Math.min(1, (s - 7.96) / 1.0);
+          list.push({
+            t,
+            ax: 0.22 + 7.2 * d,
+            ay: 9.6 - 3.8 * d,
+            az: 1.9 + 0.8 * d,
+            gy: 0.82,
+            gz: 0.48
+          });
+        } else if (s >= 9.20) {
+          list.push({ t, ax: 13.8, ay: 10.9, az: 6.2, gy: 1.9, gz: 1.2 });
+        } else {
+          list.push({
+            t,
+            ax: 0.22,
+            ay: 9.6 + Math.sin(s * 5) * 0.025,
+            az: 1.9 + Math.cos(s * 4) * 0.025,
+            gy: 0.01,
+            gz: -0.01
+          });
+        }
+      }
+      return list;
+    };
+
+    for (let arrowIdx = 1; arrowIdx <= 12; arrowIdx++) {
+      const baseTs = 500_000 + arrowIdx * 15_000;
+      const samples = buildRealisticTwoStageShotSamples(baseTs);
+      // Arrows 1..6: uncalibrated flat default [0, 0, 9.81]
+      // Arrows 7..12: mid-session "setear el inicio" resting arm calibration [7.4, 5.8, 2.7]
+      const zeroGravityVec: [number, number, number] =
+        arrowIdx <= 6 ? [0, 0, 9.81] : [7.4, 5.8, 2.7];
+
+      const rec = analyzeImuShotWindow({
+        samples,
+        manualStartTimestampMs: baseTs,
+        releaseTimestampMs: baseTs + 9400,
+        shotNumber: arrowIdx,
+        distanceM: 18,
+        bowType: "Barebow",
+        bowWrist: "LEFT",
+        zeroGravityVec,
+        heartRateBpm: 78 + (arrowIdx % 5)
+      });
+
+      assert.ok(rec, `Arrow #${arrowIdx} must be reconstructed accurately`);
+      assert.ok(
+        rec!.prepSeconds >= 2.4 && rec!.prepSeconds <= 3.6,
+        `Arrow #${arrowIdx} prepSeconds must capture full 3.0s lift+draw (got ${rec!.prepSeconds}s)`
+      );
+      assert.ok(
+        rec!.aimSeconds >= 2.9 && rec!.aimSeconds <= 3.9,
+        `Arrow #${arrowIdx} aimSeconds must isolate true 3.4s aiming hold (got ${rec!.aimSeconds}s)`
+      );
+      assert.ok(
+        rec!.stabilityPct >= 88,
+        `Arrow #${arrowIdx} stabilityPct must stay high without draw/drop contamination (got ${rec!.stabilityPct}%)`
+      );
+      assert.equal(rec!.heartRateBpm, 78 + (arrowIdx % 5));
+    }
+
+    // 4. Verify SessionConfigView, ScoringView, BleHeartRateModal, Wear OS & Garmin 965 integration invariants
+    const sessionCfgSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/scoring/SessionConfigView.tsx"),
+      "utf8"
+    );
+    const scoringSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/scoring/ScoringView.tsx"),
+      "utf8"
+    );
+    const bleModalSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/watch/BleHeartRateModal.tsx"),
+      "utf8"
+    );
+    const wearMainSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "android/wear/src/main/java/com/archery101010/app/WearMainActivity.java"),
+      "utf8"
+    );
+    const wearServiceSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "android/wear/src/main/java/com/archery101010/app/WearWatchListenerService.java"),
+      "utf8"
+    );
+    const garminManifest = fs.readFileSync(
+      path.resolve(process.cwd(), "garmin-ciq/manifest.xml"),
+      "utf8"
+    );
+    const garminSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "garmin-ciq/source/Archery101010WatchApp.mc"),
+      "utf8"
+    );
+
+    assert.ok(sessionCfgSrc.includes("ensurePhoneWatchPairingReady"), "SessionConfigView must auto-initialize 6-digit watch pairing & HR");
+    assert.ok(sessionCfgSrc.includes("requestWatchAppHeartRate"), "SessionConfigView must actively request watch HR");
+    assert.ok(bleModalSrc.includes("ensurePhoneWatchPairingReady"), "BleHeartRateModal must initialize 6-digit watch pairing on open");
+    assert.ok(scoringSrc.includes("latestHrForWatchRef"), "ScoringView must avoid 1Hz Firestore write-back echo on incoming HR ticks");
+    assert.ok(wearMainSrc.includes("MOTION_BUF = 4096") && wearMainSrc.includes("resolveSensorEpochMs"), "WearMainActivity must use 4096-sample monotonic timestamp IMU buffer");
+    assert.ok(wearMainSrc.includes("evaluateLiveBowPhase"), "WearMainActivity must track live Preparatory vs Aiming bow phase");
+    assert.ok(wearServiceSrc.includes("incomingPairingCode"), "WearWatchListenerService must persist pairingCode even when sessionActive is false");
+    assert.ok(garminManifest.includes('<iq:product id="fr965"/>'), "Garmin manifest must explicitly support Forerunner 965");
+    assert.ok(garminSrc.includes("(now - mLastHrPushMs) >= 6000"), "Garmin Connect IQ must push live HR every 6s");
+  });
 });

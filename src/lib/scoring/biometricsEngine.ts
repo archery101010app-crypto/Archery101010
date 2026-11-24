@@ -1,6 +1,7 @@
 "use client";
 
-import { db, auth } from "@/lib/firebase";
+import { db, auth } from "../firebase.ts";
+import { onAuthStateChanged } from "firebase/auth";
 import {
   doc,
   getDoc,
@@ -8,9 +9,9 @@ import {
   updateDoc,
   onSnapshot,
   Timestamp,
-  Unsubscribe
+  type Unsubscribe
 } from "firebase/firestore";
-import { getSessionArrows, getSessionHeartRateStats } from "./sessionMetrics";
+import { getSessionArrows, getSessionHeartRateStats } from "./sessionMetrics.ts";
 export { getSessionHeartRateStats };
 
 export interface BiometricSessionSnapshot {
@@ -559,6 +560,27 @@ function dispatchWatchCommandInternal(jsonOrObj: any): string {
   }
 }
 
+export function shouldAcceptCloudWatchHeartRate(
+  data: Record<string, any> | null | undefined,
+  nowMs: number = Date.now(),
+  heartbeatChangedLive: boolean = false
+): boolean {
+  if (!data || typeof data !== "object") return false;
+  const rawBpm =
+    typeof data.watchHeartRateBpm === "number" && data.watchHeartRateBpm > 0
+      ? Math.round(data.watchHeartRateBpm)
+      : typeof data.lastWatchCmd?.heartRateBpm === "number" && data.lastWatchCmd.heartRateBpm > 0
+      ? Math.round(data.lastWatchCmd.heartRateBpm)
+      : 0;
+  if (rawBpm < 30 || rawBpm > 245) return false;
+  if (heartbeatChangedLive) return true;
+  const hb = Number(data.watchHeartbeatAt) || 0;
+  if (hb > 0 && Math.abs(nowMs - hb) <= 90_000) return true;
+  const upd = Number(data.updatedAt) || 0;
+  const hasWatchSource = typeof data.watchSource === "string" && data.watchSource.length > 0;
+  return hasWatchSource && upd > 0 && Math.abs(nowMs - upd) <= 60_000;
+}
+
 function emitCloudWatchHrToWearBridge(
   bpm: number,
   avgBpm: number,
@@ -569,8 +591,8 @@ function emitCloudWatchHrToWearBridge(
   const friendlyWatchName =
     watchSource === "WATCHOS"
       ? "Reloj Vinculado (Nube)"
-      : watchSource === "GARMIN"
-      ? "Reloj Deportivo (Nube)"
+      : watchSource && watchSource.startsWith("GARMIN")
+      ? "Reloj Deportivo"
       : "Reloj Inteligente";
   const nodeId = `cloud:${watchSource || "watch"}`;
   lastKnownCloudWatchHr = {
@@ -593,6 +615,102 @@ function emitCloudWatchHrToWearBridge(
   } catch {}
 }
 
+function fetchCloudWatchHrOnce(code: string): void {
+  if (!code || !/^[1-9]\d{5}$/.test(code)) return;
+  getDoc(doc(db, "watch_sessions", code))
+    .then((snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data() || {};
+      const nowMs = Date.now();
+      const bpm =
+        typeof data.watchHeartRateBpm === "number" && data.watchHeartRateBpm > 0
+          ? Math.round(data.watchHeartRateBpm)
+          : typeof data.lastWatchCmd?.heartRateBpm === "number"
+          ? Math.round(data.lastWatchCmd.heartRateBpm)
+          : 0;
+      const avg =
+        typeof data.watchAvgHeartRateBpm === "number" ? Math.round(data.watchAvgHeartRateBpm) : 0;
+      const max =
+        typeof data.watchMaxHeartRateBpm === "number" ? Math.round(data.watchMaxHeartRateBpm) : 0;
+      const hb = Number(data.watchHeartbeatAt) || 0;
+      const watchSource =
+        typeof data.watchSource === "string" && data.watchSource ? data.watchSource : null;
+      if (shouldAcceptCloudWatchHeartRate(data, nowMs, false)) {
+        emitCloudWatchHrToWearBridge(bpm, avg, max, watchSource);
+        notifyCloudPairingStatus({
+          pairingCode: code,
+          cloudConnected: true,
+          cloudSyncError: "",
+          watchLinked: true,
+          watchSource: watchSource || "CLOUD_WATCH",
+          lastWatchSeenAt: hb > 0 && hb <= nowMs ? hb : nowMs
+        });
+      }
+    })
+    .catch(() => {});
+}
+
+let pendingAuthPairingUnsub: (() => void) | null = null;
+let inFlightPairingInitUid = "";
+let inFlightPairingInitPromise: Promise<string> | null = null;
+
+export function ensurePhoneWatchPairingReady(explicitUid?: string): void {
+  if (typeof window === "undefined" || activeWatchClientCode) return;
+  const runForUid = (resolvedUid: string) => {
+    if (!resolvedUid || resolvedUid === "USR-GUEST-OFFLINE") return;
+    if (activePhonePairingCode && activePhonePairingUid === resolvedUid && phoneCloudUnsubscribe) {
+      fetchCloudWatchHrOnce(activePhonePairingCode);
+      return;
+    }
+    if (inFlightPairingInitPromise && inFlightPairingInitUid === resolvedUid) {
+      return;
+    }
+    inFlightPairingInitUid = resolvedUid;
+    inFlightPairingInitPromise = getOrCreatePhoneWatchPairingCode(resolvedUid)
+      .then((code) => {
+        if (code) fetchCloudWatchHrOnce(code);
+        return code;
+      })
+      .catch(() => "")
+      .finally(() => {
+        if (inFlightPairingInitUid === resolvedUid) {
+          inFlightPairingInitUid = "";
+          inFlightPairingInitPromise = null;
+        }
+      });
+  };
+
+  const immediateUid = auth.currentUser?.uid || "";
+  if (immediateUid) {
+    runForUid(immediateUid);
+    return;
+  }
+  if (explicitUid && explicitUid !== "USR-GUEST-OFFLINE") {
+    // Also immediately listen on any cached localStorage pairing code while Firebase Auth hydrates
+    try {
+      const cached = localStorage.getItem(`archery_watch_pairing_code_${explicitUid}`) || "";
+      if (/^[1-9]\d{5}$/.test(cached) && (!activePhonePairingCode || !phoneCloudUnsubscribe)) {
+        startPhonePairingSnapshotListener(cached, explicitUid);
+        fetchCloudWatchHrOnce(cached);
+      }
+    } catch {}
+  }
+  if (!pendingAuthPairingUnsub) {
+    try {
+      pendingAuthPairingUnsub = onAuthStateChanged(auth, (fbUser) => {
+        if (fbUser?.uid) {
+          const unsub = pendingAuthPairingUnsub;
+          pendingAuthPairingUnsub = null;
+          try {
+            unsub?.();
+          } catch {}
+          runForUid(fbUser.uid);
+        }
+      });
+    } catch {}
+  }
+}
+
 function requestCloudWatchHeartRateInternal(): void {
   if (typeof window === "undefined" || activeWatchClientCode) return;
   const now = Date.now();
@@ -609,38 +727,9 @@ function requestCloudWatchHeartRateInternal(): void {
     } catch {}
   }
 
-  const uid = auth.currentUser?.uid || "";
-  if (uid && (!activePhonePairingCode || activePhonePairingUid !== uid)) {
-    getOrCreatePhoneWatchPairingCode(uid).catch(() => {});
-    return;
-  }
-
+  ensurePhoneWatchPairingReady();
   if (activePhonePairingCode) {
-    const code = activePhonePairingCode;
-    getDoc(doc(db, "watch_sessions", code))
-      .then((snap) => {
-        if (!snap.exists()) return;
-        const data = snap.data() || {};
-        const bpm =
-          typeof data.watchHeartRateBpm === "number" ? Math.round(data.watchHeartRateBpm) : 0;
-        const avg =
-          typeof data.watchAvgHeartRateBpm === "number" ? Math.round(data.watchAvgHeartRateBpm) : 0;
-        const max =
-          typeof data.watchMaxHeartRateBpm === "number" ? Math.round(data.watchMaxHeartRateBpm) : 0;
-        const hb = Number(data.watchHeartbeatAt) || 0;
-        const watchSource =
-          typeof data.watchSource === "string" && data.watchSource ? data.watchSource : null;
-        if (
-          bpm >= 30 &&
-          bpm <= 245 &&
-          data.sessionActive !== false &&
-          hb > 0 &&
-          Math.abs(Date.now() - hb) <= 5 * 60 * 1000
-        ) {
-          emitCloudWatchHrToWearBridge(bpm, avg, max, watchSource);
-        }
-      })
-      .catch(() => {});
+    fetchCloudWatchHrOnce(activePhonePairingCode);
   }
 }
 
@@ -657,7 +746,8 @@ if (typeof window !== "undefined") {
   ensureGlobalNativeWatchDispatcher();
 }
 
-const WATCH_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+// 70h TTL (safely inside Firestore Rules 72h cap) so archers' codes stay valid across consecutive days
+const WATCH_SESSION_TTL_MS = 70 * 60 * 60 * 1000;
 
 function clampNum(val: unknown, fallback: number, min: number, max: number): number {
   const n = Number(val);
@@ -868,14 +958,11 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
         incomingAvgHr
       );
 
-      const isFreshCloudWatchHr =
-        incomingHrBpm >= 30 &&
-        incomingHrBpm <= 245 &&
-        (heartbeatChangedLive ||
-          (wasInitialSnapshot && heartbeatRecent && data.sessionActive !== false) ||
-          (data.sessionActive !== false &&
-            ((watchHeartbeatAt > 0 && Math.abs(now - watchHeartbeatAt) <= 45_000) ||
-              (docUpdatedAt > 0 && Math.abs(now - docUpdatedAt) <= 45_000 && Boolean(watchSource)))));
+      const isFreshCloudWatchHr = shouldAcceptCloudWatchHeartRate(
+        data,
+        now,
+        heartbeatChangedLive
+      );
 
       if (isFreshCloudWatchHr) {
         emitCloudWatchHrToWearBridge(incomingHrBpm, incomingAvgHr, incomingMaxHr, watchSource);
@@ -884,10 +971,31 @@ function startPhonePairingSnapshotListener(code: string, uid: string): void {
       if (incomingSteps === 0 && incomingDistM === 0 && data.sessionActive === false) {
         lastCloudTelemetrySteps = 0;
         lastCloudTelemetryDistM = 0;
-        lastCloudTelemetryLiveHr = 0;
         lastCloudTelemetryAvgHr = 0;
         lastCloudTelemetryMaxHr = 0;
-        lastKnownCloudWatchHr = null;
+        if (!isFreshCloudWatchHr) {
+          lastCloudTelemetryLiveHr = 0;
+          lastKnownCloudWatchHr = null;
+        } else {
+          lastCloudTelemetryLiveHr = incomingHrBpm;
+          dispatchWatchCommandInternal({
+            type: "HEART_RATE",
+            heartRateBpm: incomingHrBpm,
+            status: "ok",
+            deviceName:
+              watchSource && watchSource.startsWith("GARMIN")
+                ? "Reloj Deportivo"
+                : "Reloj Inteligente"
+          });
+          notifyCloudPairingStatus({
+            pairingCode: code,
+            cloudConnected: true,
+            cloudSyncError: "",
+            watchLinked: true,
+            watchSource: watchSource || "CLOUD_WATCH",
+            lastWatchSeenAt: now
+          });
+        }
         watchHrSum = 0;
         watchHrCount = 0;
         lastWatchHrSampleKey = "";

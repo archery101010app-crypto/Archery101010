@@ -645,9 +645,15 @@ export default function AnalysisView({
         ensureCloudWatchReady(fbUser.uid);
       }
     });
+    const watchHrKeepalive = window.setInterval(() => {
+      if (!cancelled && getBleHeartRateStatus().state !== "connected") {
+        requestWatchAppHeartRate();
+      }
+    }, 5000);
 
     return () => {
       cancelled = true;
+      window.clearInterval(watchHrKeepalive);
       unsubAuth();
       publishWatchState({
         ...latestWatchSnapshotRef.current,

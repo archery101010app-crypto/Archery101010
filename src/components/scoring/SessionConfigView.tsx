@@ -7,9 +7,11 @@ import { showOledConfirm } from "@/lib/oledDialog";
 import { ArrowLeft, Trash2, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import BleHeartRateModal from "@/components/watch/BleHeartRateModal";
+import { ensurePhoneWatchPairingReady } from "@/lib/scoring/biometricsEngine";
 import {
   BleHeartRateStatus,
   getBleHeartRateStatus,
+  requestWatchAppHeartRate,
   resetBleHeartRateSessionStats,
   subscribeBleHeartRate,
   tryAutoReconnectBleHeartRate
@@ -37,9 +39,21 @@ export default function SessionConfigView({ user, onBack, onStartSession }: Sess
 
   useEffect(() => {
     resetBleHeartRateSessionStats(0, 0);
+    ensurePhoneWatchPairingReady(user?.uid);
     tryAutoReconnectBleHeartRate();
-    return subscribeBleHeartRate((next) => setBleHrStatus(next));
-  }, []);
+    requestWatchAppHeartRate();
+    const unsub = subscribeBleHeartRate((next) => setBleHrStatus(next));
+    const watchPoll = setInterval(() => {
+      if (getBleHeartRateStatus().state !== "connected") {
+        ensurePhoneWatchPairingReady(user?.uid);
+        requestWatchAppHeartRate();
+      }
+    }, 4500);
+    return () => {
+      clearInterval(watchPoll);
+      unsub();
+    };
+  }, [user?.uid]);
 
   const [practiceType, setPracticeType] = useState<"Control" | "Práctica" | "Volumen">("Práctica");
   const [format, setFormat] = useState<string>("Libre");

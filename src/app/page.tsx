@@ -596,6 +596,16 @@ export default function Home() {
     userPresenceRef.current = user;
   }, [user]);
 
+  // Keep phone-watch 6-digit Cloud Pairing listener & live Watch HR receiver ready across all tabs
+  useEffect(() => {
+    if (!user?.uid || user.uid === "USR-GUEST-OFFLINE") return;
+    import("@/lib/scoring/biometricsEngine")
+      .then(({ ensurePhoneWatchPairingReady }) => {
+        ensurePhoneWatchPairingReady(user.uid);
+      })
+      .catch(() => {});
+  }, [user?.uid]);
+
   // Keep `users_public/{uid}` synchronized whenever public profile metadata changes after bootstrap
   useEffect(() => {
     if (!user?.uid || user.uid === "USR-GUEST-OFFLINE" || !user.fullName?.trim()) return;

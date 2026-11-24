@@ -43,23 +43,51 @@ public class WearWatchListenerService extends WearableListenerService {
         long now = System.currentTimeMillis();
         if ("/archery101010/ping".equals(path)) {
             byte[] pongBytes = ("{\"type\":\"PONG\",\"_ts\":" + now + "}").getBytes(StandardCharsets.UTF_8);
-            if (event.getSourceNodeId() != null && !event.getSourceNodeId().isEmpty()) {
-                Wearable.getMessageClient(this).sendMessage(event.getSourceNodeId(), "/archery101010/pong", pongBytes);
-            } else {
-                Wearable.getNodeClient(this).getConnectedNodes().addOnSuccessListener(nodes -> {
-                    if (nodes != null) {
-                        for (Node n : nodes) {
-                            Wearable.getMessageClient(this).sendMessage(n.getId(), "/archery101010/pong", pongBytes);
-                        }
-                    }
-                });
-            }
+            replyToPhoneNode(event.getSourceNodeId(), "/archery101010/pong", pongBytes);
+            return;
+        }
+
+        if ("/archery101010/hr_request".equals(path)) {
+            replyBackgroundHeartRateStatus(event.getSourceNodeId(), now);
             return;
         }
 
         if (payload != null && !payload.isEmpty()) {
             persistSnapshotToWatchPrefs(payload);
         }
+    }
+
+    private void replyToPhoneNode(String sourceNodeId, String path, byte[] bytes) {
+        if (sourceNodeId != null && !sourceNodeId.isEmpty()) {
+            Wearable.getMessageClient(this).sendMessage(sourceNodeId, path, bytes);
+        } else {
+            Wearable.getNodeClient(this).getConnectedNodes().addOnSuccessListener(nodes -> {
+                if (nodes != null) {
+                    for (Node n : nodes) {
+                        Wearable.getMessageClient(this).sendMessage(n.getId(), path, bytes);
+                    }
+                }
+            });
+        }
+    }
+
+    private void replyBackgroundHeartRateStatus(String sourceNodeId, long now) {
+        try {
+            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            int savedBpm = prefs.getInt("lastLiveHrBpm", 0);
+            long savedAt = prefs.getLong("lastLiveHrAtMs", 0L);
+            JSONObject obj = new JSONObject();
+            obj.put("type", "HR");
+            if (savedBpm >= 30 && savedBpm <= 245 && (now - savedAt) < 35_000L) {
+                obj.put("bpm", savedBpm);
+                obj.put("status", "ok");
+            } else {
+                obj.put("bpm", 0);
+                obj.put("status", "reading");
+            }
+            obj.put("_ts", now);
+            replyToPhoneNode(sourceNodeId, "/archery101010/hr", obj.toString().getBytes(StandardCharsets.UTF_8));
+        } catch (Exception ignored) {}
     }
 
     @Override
@@ -86,6 +114,8 @@ public class WearWatchListenerService extends WearableListenerService {
                         WearMainActivity active = WearMainActivity.getActiveInstance();
                         if (active != null) {
                             active.onBackgroundPhoneEvent("/archery101010/hr_request", "", "");
+                        } else {
+                            replyBackgroundHeartRateStatus("", System.currentTimeMillis());
                         }
                     }
                 }
@@ -113,6 +143,11 @@ public class WearWatchListenerService extends WearableListenerService {
             }
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
             SharedPreferences.Editor editor = prefs.edit();
+
+            String incomingPairingCode = obj.optString("pairingCode", rootObj.optString("pairingCode", "")).trim();
+            if (incomingPairingCode.matches("^[1-9][0-9]{5}$")) {
+                editor.putString("pairingCode", incomingPairingCode);
+            }
 
             String savedSessionId = prefs.getString("currentSessionId", "");
             String incomingSessionId = obj.optString("sessionId", "");
