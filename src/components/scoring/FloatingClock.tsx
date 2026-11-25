@@ -500,7 +500,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                     {phase === "prep"
                       ? tx("Avanza a la línea de tiro · Prohibido levantar el arco", "Walk to the shooting line · Do not raise bow")
                       : phase === "stop"
-                      ? tx("Alto al fuego · Ir a anotar y recoger flechas", "Cease fire · Score and collect arrows")
+                      ? tx("Alto · Ir a anotar y recoger flechas", "Stop · Score and collect arrows")
                       : tx("Disparo autorizado", "Shooting authorized")}
                   </p>
                 </div>
@@ -581,7 +581,7 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
                   title={tx("Detención inmediata de tiro según reglamento World Archery", "Immediate emergency stop per World Archery rules")}
                 >
                   <AlertTriangle size={16} className="shrink-0" />
-                  <span>{tx("Alto al Fuego (5 Pitidos)", "Emergency Stop (5 Beeps)")}</span>
+                  <span>{tx("Alto (5 Pitidos)", "Stop (5 Beeps)")}</span>
                 </button>
               </div>
             ) : (
@@ -768,10 +768,6 @@ export default function FloatingClock({ arrowsPerEnd = 3, onClockDisabledChange,
               </div>
             )}
 
-            {/* Bottom Brand */}
-            <div className="text-center text-[11.6px] text-white uppercase tracking-widest mt-2 relative z-10">
-              Archery 101010 · World Archery Official Timing System
-            </div>
           </motion.div>
         )}
       </AnimatePresence>
