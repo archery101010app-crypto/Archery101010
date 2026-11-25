@@ -21,17 +21,18 @@ export default function Header({ user, coachViewMode = false, onToggleCoachViewM
 
   return (
     <header className="fixed top-0 left-0 right-0 h-13 bg-black-oled/95 backdrop-blur-md border-b border-gray-border/40 px-3.5 sm:px-6 flex items-center justify-between gap-2 z-40 max-w-full">
-      {/* Official Brand Lockup: ARCHERY 101010 */}
+      {/* Brand logo compact: ONLY 101010 */}
       <div translate="no" dir="ltr" className="notranslate flex items-center gap-2 select-none min-w-0">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <img
-            src="/images/brand_logo_header.png"
-            srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
-            alt="ARCHERY 101010"
-            className="h-[15px] sm:h-[18px] w-auto object-contain shrink-0 select-none pointer-events-none"
-            draggable={false}
-          />
-          <span className="text-cyan-neon text-[12px] sm:text-[13.2px] font-black tracking-wider ps-0.5 tabular-nums shrink-0">
+        <div className="flex items-baseline gap-1">
+          <div
+            className="flex text-[23.8px] tracking-tighter font-extrabold brand-logo-101010"
+            style={{ fontFamily: "var(--font-family-logo, 'Good Times', sans-serif)" }}
+          >
+            <span className="text-cyan-neon">10</span>
+            <span className="text-red-rival">10</span>
+            <span className="text-yellow-gold">10</span>
+          </div>
+          <span className="text-cyan-neon text-[13.2px] font-black tracking-wider ps-0.5 tabular-nums">
             v{APP_VERSION}
           </span>
         </div>
