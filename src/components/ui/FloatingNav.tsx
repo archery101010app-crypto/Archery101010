@@ -42,7 +42,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
         { id: "HOME" as Screen, icon: Users, label: t("navDirector") },
         { id: "HISTORY" as Screen, icon: History, label: t("navResults") },
         { id: "CALENDAR" as Screen, icon: Calendar, label: t("navCalendar") },
-        { id: "SPOTIFY" as any, icon: SpotifyNavIcon, label: isEs ? "Música" : t("musicNav"), isAction: true },
+        { id: "SPOTIFY" as any, icon: SpotifyNavIcon, label: "Spotify", isAction: true },
         { id: "PROFILE" as Screen, icon: User, label: t("navProfile") }
       ]
     : [
@@ -51,7 +51,7 @@ export default function FloatingNav({ activeScreen, onScreenChange, user, coachV
         { id: "ANALYSIS" as Screen, icon: Activity, label: t("navAnalysis") },
         { id: "HISTORY" as Screen, icon: History, label: t("navHistory") },
         { id: "CALENDAR" as Screen, icon: Calendar, label: t("navCalendar") },
-        { id: "SPOTIFY" as any, icon: SpotifyNavIcon, label: isEs ? "Música" : t("musicNav"), isAction: true },
+        { id: "SPOTIFY" as any, icon: SpotifyNavIcon, label: "Spotify", isAction: true },
         { id: "PROFILE" as Screen, icon: User, label: t("navProfile") }
       ];
 
