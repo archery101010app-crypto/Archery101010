@@ -299,13 +299,21 @@ function applyWearPayload(payload: any): void {
   if (wearStatus !== "ok") {
     if (bleLive) return;
     if (wearStatus === "reading") {
-      if (!isWearHrLive()) {
+      if (wearConnectFallbackTimer) {
+        clearTimeout(wearConnectFallbackTimer);
+        wearConnectFallbackTimer = null;
+      }
+      wearHrLastAt = Date.now();
+      armWearHrTimeout();
+      // Always clear any stale off-wrist flag as soon as the watch reports active optical acquisition
+      statusState.contactDetected = null;
+      statusState.errorCode = "";
+      if (wearName) statusState.deviceName = wearName;
+      if (statusState.state !== "connected" || statusState.source !== "wear_os") {
         statusState.source = "wear_os";
         statusState.state = "connecting";
-        statusState.errorCode = "";
-        if (wearName) statusState.deviceName = wearName;
-        emitStatus();
       }
+      emitStatus();
       return;
     }
     if (wearConnectFallbackTimer) {
@@ -313,13 +321,22 @@ function applyWearPayload(payload: any): void {
       wearConnectFallbackTimer = null;
     }
     if (wearStatus === "no_contact") {
+      wearHrLastAt = Date.now();
+      armWearHrTimeout();
+      statusState.source = "wear_os";
+      if (statusState.state !== "connected") {
+        statusState.state = "connecting";
+      }
+      statusState.errorCode = "";
       statusState.contactDetected = false;
       sessionTracker.clearCurrentReading();
     } else if (wearStatus === "permission_denied") {
       if (statusState.source === "wear_os") statusState.state = "disconnected";
+      statusState.contactDetected = null;
       statusState.errorCode = "WEAR_HR_PERMISSION_DENIED";
     } else if (wearStatus === "no_sensor") {
       if (statusState.source === "wear_os") statusState.state = "disconnected";
+      statusState.contactDetected = null;
       statusState.errorCode = "WEAR_HR_NO_SENSOR";
     }
     if (wearName && statusState.source === "wear_os") statusState.deviceName = wearName;
@@ -616,6 +633,12 @@ export function subscribeBleHeartRate(
   return () => {
     listeners.delete(callback);
   };
+}
+
+export function applyWearHeartRatePayload(payload: unknown): void {
+  ensureInitialized();
+  wearHrMuted = false;
+  applyWearPayload(payload);
 }
 
 export function resetBleHeartRateSessionStats(

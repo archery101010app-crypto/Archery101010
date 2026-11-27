@@ -172,7 +172,7 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
         ensurePhoneWatchPairingReady(userUid || auth.currentUser?.uid);
         requestWatchAppHeartRate({ unmute: false });
         pingNativeWatch();
-      }, 3000);
+      }, 4000);
       const refreshPairingWindowTimer = setInterval(() => {
         const curUid = userUid || auth.currentUser?.uid;
         if (curUid) {
@@ -180,7 +180,17 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
         }
       }, 60_000);
       const current = getBleHeartRateStatus();
+      const watchAlreadyLinked =
+        (watchConnStatus.bridgeReady &&
+          ((watchConnStatus.connectedNodesCount > 0 &&
+            (watchConnStatus.watchAppInstalledCount ?? 0) > 0) ||
+            (watchConnStatus.lastPongAt > 0 &&
+              Date.now() - watchConnStatus.lastPongAt <= 3 * 60 * 1000) ||
+            (watchConnStatus.lastMessageAt > 0 &&
+              Date.now() - watchConnStatus.lastMessageAt <= 3 * 60 * 1000))) ||
+        current.source === "wear_os";
       if (
+        !watchAlreadyLinked &&
         current.transport === "native_android" &&
         current.state !== "connected" &&
         current.state !== "connecting" &&
@@ -266,11 +276,12 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
   const isWearConnected = isConnected && status.source === "wear_os" && status.currentBpm >= 30;
   const isBleStrapConnected = isConnected && status.source === "ble";
   const isScanning = status.state === "scanning";
-  const isExplicitConnecting = status.state === "connecting";
+  const isWatchWarmingUp =
+    !isWearConnected && status.source === "wear_os" && status.state === "connecting";
+  const isExplicitConnecting = status.state === "connecting" && status.source !== "wear_os";
   const isReconnecting = status.state === "reconnecting";
   const isConnecting = isExplicitConnecting || isReconnecting;
-  const isWatchSyncInFlight =
-    isSyncingWatch || (status.source === "wear_os" && status.state === "connecting");
+  const isWatchSyncInFlight = isSyncingWatch;
 
   const bleStrapDevices = status.discoveredDevices.filter(
     (dev) => !isLikelyCompanionSmartwatch(dev)
@@ -278,6 +289,8 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
 
   const statusBadgeText = isConnected
     ? tx("EN VIVO", "LIVE")
+    : isWatchWarmingUp
+    ? tx("MIDIENDO PULSO", "MEASURING PULSE")
     : isConnecting || isWatchSyncInFlight
     ? tx("CONECTANDO", "CONNECTING")
     : isScanning
@@ -324,6 +337,15 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
         text: tx(
           "Ajusta el reloj o banda sobre la piel para leer el pulso.",
           "Adjust the watch or band against your skin to read pulse."
+        )
+      };
+    }
+    if (isWatchWarmingUp) {
+      return {
+        dotColor: "bg-[#00BFFF]",
+        text: tx(
+          "Reloj sincronizado · activando sensor óptico en tu muñeca.",
+          "Watch synced · activating optical sensor on your wrist."
         )
       };
     }
@@ -436,7 +458,7 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
               } tabular-nums ${
                 isConnected
                   ? "bg-[#051810] border-[#00C853]/65 text-white"
-                  : isScanning || isConnecting || isWatchSyncInFlight
+                  : isScanning || isConnecting || isWatchSyncInFlight || isWatchWarmingUp
                   ? "bg-[#05121E] border-[#00BFFF]/65 text-white"
                   : "bg-[#0B0E15] border-white/[0.16] text-white"
               }`}
@@ -445,7 +467,7 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
                 className={`w-[6px] h-[6px] rounded-full shrink-0 ${
                   isConnected
                     ? "bg-[#00C853]"
-                    : isScanning || isConnecting || isWatchSyncInFlight
+                    : isScanning || isConnecting || isWatchSyncInFlight || isWatchWarmingUp
                     ? "bg-[#00BFFF]"
                     : "bg-[#8E96A4]"
                 }`}
@@ -589,6 +611,8 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
                   >
                     {isWearConnected
                       ? `${tx("● En vivo", "● Live")} · ${status.currentBpm} BPM`
+                      : hasNativeWatchConnected && isWatchWarmingUp
+                      ? tx("● Conectado por Bluetooth · Midiendo", "● Connected via Bluetooth · Measuring")
                       : hasNativeWatchConnected
                       ? tx("● Conectado por Bluetooth", "● Connected via Bluetooth")
                       : hasCloudWatchConnected
@@ -614,6 +638,8 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
                   ? tx("En vivo", "Live")
                   : isWatchSyncInFlight
                   ? tx("Sincronizando", "Syncing")
+                  : isWatchWarmingUp
+                  ? tx("Reintentar", "Retry")
                   : tx("Sincronizar", "Sync")}
               </button>
             </div>

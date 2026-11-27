@@ -311,6 +311,14 @@ public class WearDataLayerService extends WearableListenerService {
                 state.put("completedEnds", 0);
             }
 
+            String latestPairingCode = prefs.getString("lastWatchPairingCode", "");
+            String latestSessionToken = prefs.getString("lastWatchSessionToken", "");
+            if (latestPairingCode != null && latestPairingCode.matches("^[0-9]{6}$")) {
+                state.put("pairingCode", latestPairingCode);
+            }
+            if (latestSessionToken != null && latestSessionToken.matches("^[A-Za-z0-9_-]{32,64}$")) {
+                state.put("sessionToken", latestSessionToken);
+            }
             String updatedSnapshot = state.toString();
             prefs.edit()
                 .putString("lastProcessedWatchCmdId", cmdId)

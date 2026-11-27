@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-sdk tools:overrideLibrary="androidx.health.services.client" />
+
     <!-- Wear OS Watch Hardware Requirement (all optional sub-features marked required=false so Google Play allows 100% of Wear OS watches) -->
     <uses-feature android:name="android.hardware.type.watch" android:required="true" />
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />

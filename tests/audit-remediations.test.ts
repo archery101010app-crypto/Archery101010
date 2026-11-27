@@ -1114,4 +1114,66 @@ describe("M6 Audit Remediations — CI/CD, Portable Scripts, iOS/watchOS Version
       "public/manual/index.html must contain ZERO third-party trademarks"
     );
   });
+
+  it("enforces v2.169 Wear OS Health Services PPG wake-up, off-skin contact recovery, and rejected-token loop guard", async () => {
+    const { applyWearHeartRatePayload, getBleHeartRateStatus, disconnectBleHeartRateDevice } = await import(
+      "../src/lib/scoring/bleHeartRateService.ts"
+    );
+
+    disconnectBleHeartRateDevice(true);
+
+    // 1. Transient off-wrist frame sets contactDetected = false
+    applyWearHeartRatePayload({ type: "HR", bpm: 0, status: "no_contact", deviceName: "SM-L310" });
+    let st = getBleHeartRateStatus();
+    assert.equal(st.source, "wear_os");
+    assert.equal(st.contactDetected, false);
+    assert.equal(st.deviceName, "SM-L310");
+
+    // 2. Subsequent optical warm-up ("reading") MUST immediately clear contactDetected = false -> null
+    applyWearHeartRatePayload({ type: "HR", bpm: 0, status: "reading", deviceName: "SM-L310" });
+    st = getBleHeartRateStatus();
+    assert.equal(st.source, "wear_os");
+    assert.equal(st.state, "connecting");
+    assert.equal(st.contactDetected, null, "Optical reading status must clear stale off-wrist contactDetected=false");
+
+    // 3. Valid pulse ("ok") transitions cleanly to connected live BPM
+    applyWearHeartRatePayload({ type: "HR", bpm: 78, avgBpm: 76, maxBpm: 84, status: "ok", deviceName: "SM-L310" });
+    st = getBleHeartRateStatus();
+    assert.equal(st.source, "wear_os");
+    assert.equal(st.state, "connected");
+    assert.equal(st.contactDetected, true);
+    assert.equal(st.currentBpm, 78);
+    assert.equal(st.maxHeartRateBpm, 84);
+
+    disconnectBleHeartRateDevice(true);
+
+    // 4. Static source guards across WearMainActivity.java, build.gradle, and BleHeartRateModal.tsx
+    const wearBuildGradle = fs.readFileSync(
+      path.resolve(process.cwd(), "android/wear/build.gradle"),
+      "utf8"
+    );
+    assert.match(wearBuildGradle, /androidx\.health:health-services-client:1\.1\.0/);
+
+    const wearJava = fs.readFileSync(
+      path.resolve(process.cwd(), "android/wear/src/main/java/com/archery101010/app/WearMainActivity.java"),
+      "utf8"
+    );
+    assert.ok(
+      wearJava.includes("WearHealthServicesHrBridge") && wearJava.includes("DataType.HEART_RATE_BPM"),
+      "WearMainActivity must register HealthServices MeasureClient HEART_RATE_BPM to wake optical PPG LED cold"
+    );
+    assert.ok(
+      wearJava.includes("lastRejectedSessionToken") && wearJava.includes("CONECTADO POR BLUETOOTH"),
+      "WearMainActivity must block rejected cloud sessionToken loops and show stable Bluetooth link on Screen 5"
+    );
+
+    const modalSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/watch/BleHeartRateModal.tsx"),
+      "utf8"
+    );
+    assert.ok(
+      modalSrc.includes("isWatchWarmingUp") && modalSrc.includes("const isWatchSyncInFlight = isSyncingWatch;"),
+      "BleHeartRateModal must never permanently disable Sync button while optical sensor warms up"
+    );
+  });
 });

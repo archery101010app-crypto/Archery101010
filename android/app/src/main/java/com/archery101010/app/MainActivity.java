@@ -1782,6 +1782,21 @@ public class MainActivity extends BridgeActivity {
             }
             if (!incomingPairing.isEmpty()) {
                 lastWatchPairingCode = incomingPairing;
+                try {
+                    android.content.SharedPreferences.Editor pEd = getSharedPreferences(WATCH_BRIDGE_PREFS, MODE_PRIVATE)
+                        .edit()
+                        .putString("lastWatchPairingCode", lastWatchPairingCode);
+                    if (lastWatchSessionToken == null || lastWatchSessionToken.isEmpty()) {
+                        pEd.remove("lastWatchSessionToken");
+                    }
+                    pEd.apply();
+                } catch (Exception ignored) {}
+            }
+            if (lastWatchPairingCode != null && lastWatchPairingCode.matches("^[0-9]{6}$")) {
+                obj.put("pairingCode", lastWatchPairingCode);
+                if (nestedPayload != null) {
+                    nestedPayload.put("pairingCode", lastWatchPairingCode);
+                }
             }
             if (incomingToken.matches("^[A-Za-z0-9_-]{32,64}$")) {
                 lastWatchSessionToken = incomingToken;

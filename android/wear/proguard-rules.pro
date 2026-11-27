@@ -7,3 +7,7 @@
 -keepclassmembernames class * {
     @com.google.android.gms.common.annotation.KeepName *;
 }
+-keep class androidx.health.services.client.** { *; }
+-keepclassmembers class * extends androidx.health.services.client.proto.GeneratedMessageLite {
+    <fields>;
+}

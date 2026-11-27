@@ -998,6 +998,7 @@ function startPhonePairingSnapshotListener(
   notifyCloudPairingStatus({
     pairingCode: code
   });
+  pushPairingCodeToNativeWatchBridge(code, sessionToken);
 
   const sessionRef = doc(db, "watch_sessions", sessionToken);
   phoneCloudUnsubscribe = onSnapshot(
@@ -1513,14 +1514,34 @@ export async function refreshPhoneWatchPairingWindow(
 
   const ownerHash = activePhoneOwnerHash || (await computeWatchOwnerHash(effectiveUid));
   activePhoneOwnerHash = ownerHash;
+  pushPairingCodeToNativeWatchBridge(activePhonePairingCode, activePhoneSessionToken);
 
   try {
+    if (
+      reopenIfClaimed &&
+      (lastObservedWatchHeartbeatAt === 0 || Date.now() - lastObservedWatchHeartbeatAt > 45_000)
+    ) {
+      // Allow a freshly reinstalled watch app (with a new watchDeviceId) to bind cleanly without HTTP 403
+      await setDoc(
+        doc(db, "watch_sessions", activePhoneSessionToken),
+        {
+          userId: effectiveUid,
+          sessionToken: activePhoneSessionToken,
+          pairingCode: activePhonePairingCode,
+          watchDeviceId: "",
+          expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+          updatedAt: Date.now()
+        },
+        { merge: true }
+      ).catch(() => {});
+    }
     await writeOrRefreshWatchPairingDoc(
       activePhonePairingCode,
       activePhoneSessionToken,
       ownerHash,
       reopenIfClaimed
     );
+    pushPairingCodeToNativeWatchBridge(activePhonePairingCode, activePhoneSessionToken);
     return activePhonePairingCode;
   } catch (err: any) {
     const errCode = String(err?.code || "");
