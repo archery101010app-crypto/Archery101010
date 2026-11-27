@@ -106,7 +106,8 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
             return;
         }
         if ("/archery101010/hr_request".equals(path)) {
-            runOnUiThread(() -> startHeartRateStreaming(true, true));
+            lastHrRequestFromPhoneMs = System.currentTimeMillis();
+            runOnUiThread(() -> startHeartRateStreaming(true, !hasHeartRatePermission()));
             return;
         }
         if (payload != null && !payload.isEmpty()) {
@@ -200,9 +201,12 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
     // Sensor.TYPE_HEART_RATE uses REPORTING_MODE_ON_CHANGE (fires only when BPM integer changes).
     // Keep reading valid while registered on skin, and re-query hardware every 45s of steady pulse.
     private static final long LOCAL_HR_FRESH_MS = 120_000L;
-    private static final long HR_STEADY_REQUERY_MS = 45_000L;
+    private static final long HR_WARMUP_GRACE_MS = 10_000L;
+    private static final long HR_STUCK_REQUERY_MS = 35_000L;
     private Sensor heartRateSensor;
     private boolean isHrSensorRegistered = false;
+    private volatile long hrRegisteredAtMs = 0L;
+    private volatile long lastHrRequestFromPhoneMs = 0L;
     private boolean hrPermissionRequestedThisRun = false;
     private boolean hrPermissionPromptInFlight = false;
     private int hrPermissionDeniedCount = 0;
@@ -230,14 +234,6 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
             if (!isHrSensorRegistered) return;
             long now = System.currentTimeMillis();
             if (isLocalHeartRateFresh()) {
-                if ((now - localSensorHrAtMs) >= HR_STEADY_REQUERY_MS && sensorManager != null && heartRateSensor != null) {
-                    // Re-trigger REPORTING_MODE_ON_CHANGE hardware event so steady pulse stays hardware-verified
-                    try {
-                        sensorManager.unregisterListener(heartRateListener);
-                        sensorManager.registerListener(heartRateListener, heartRateSensor, SensorManager.SENSOR_DELAY_NORMAL);
-                        localSensorHrAtMs = now;
-                    } catch (Exception ignored) {}
-                }
                 int bpm = localSensorHrBpm;
                 if (bpm >= 30 && bpm <= 245) {
                     if ((now - lastHrSampleAccumMs) >= 2400L) {
@@ -289,6 +285,12 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
             if (event == null || event.values == null || event.values.length == 0) return;
             long now = System.currentTimeMillis();
             if (event.accuracy == SensorManager.SENSOR_STATUS_NO_CONTACT) {
+                // Galaxy Watch 7 / Wear OS 5 BioActive HAL fires initial NO_CONTACT during the first 3-10s of LED warm-up.
+                // Never abort or flash false off-skin errors while the green PPG LED is still calibrating!
+                if (localSensorHrBpm < 30 && hrRegisteredAtMs > 0L && (now - hrRegisteredAtMs) < HR_WARMUP_GRACE_MS) {
+                    hrStatusCode = "reading";
+                    return;
+                }
                 localSensorHrBpm = 0;
                 hrStatusCode = "no_contact";
                 if (now - lastHrStatusSentMs >= 3000L) {
@@ -343,6 +345,10 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
         public void onAccuracyChanged(Sensor sensor, int accuracy) {
             if (accuracy == SensorManager.SENSOR_STATUS_NO_CONTACT) {
                 long now = System.currentTimeMillis();
+                if (localSensorHrBpm < 30 && hrRegisteredAtMs > 0L && (now - hrRegisteredAtMs) < HR_WARMUP_GRACE_MS) {
+                    hrStatusCode = "reading";
+                    return;
+                }
                 localSensorHrBpm = 0;
                 hrStatusCode = "no_contact";
                 if (now - lastHrStatusSentMs >= 3000L) {
@@ -501,11 +507,15 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
         long now = System.currentTimeMillis();
         if (!isHrSensorRegistered) {
             try {
+                // Zero-latency registration (maxReportLatencyUs = 0) wakes Samsung BioActive / Wear OS 5 green PPG LED immediately
                 isHrSensorRegistered = sensorManager.registerListener(
-                        heartRateListener, heartRateSensor, SensorManager.SENSOR_DELAY_NORMAL);
-                if (isHrSensorRegistered && localSensorHrBpm < 30) {
-                    hrStatusCode = "reading";
-                    sendHeartRateToPhone(0, "reading");
+                        heartRateListener, heartRateSensor, SensorManager.SENSOR_DELAY_FASTEST, 0);
+                if (isHrSensorRegistered) {
+                    hrRegisteredAtMs = now;
+                    if (localSensorHrBpm < 30) {
+                        hrStatusCode = "reading";
+                        sendHeartRateToPhone(0, "reading");
+                    }
                 }
             } catch (Exception ignored) {
                 isHrSensorRegistered = false;
@@ -521,15 +531,24 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                 touchWatchHeartbeatInFirestore(pairingCode, now);
             }
         } else {
-            // Re-trigger hardware REPORTING_MODE_ON_CHANGE sample when phone explicitly requests HR
-            try {
-                sensorManager.unregisterListener(heartRateListener);
-                isHrSensorRegistered = sensorManager.registerListener(
-                        heartRateListener, heartRateSensor, SensorManager.SENSOR_DELAY_NORMAL);
-            } catch (Exception ignored) {}
+            // CRITICAL (Galaxy Watch 7 / Wear OS 5): NEVER unregister/re-register while optical PPG LED is warming up!
+            // Phone polls /hr_request every 5s; resetting the listener before 35s killed the LED before its 8-12s skin lock!
+            if (hrRegisteredAtMs > 0L && (now - hrRegisteredAtMs) >= HR_STUCK_REQUERY_MS) {
+                try {
+                    sensorManager.unregisterListener(heartRateListener);
+                    isHrSensorRegistered = sensorManager.registerListener(
+                            heartRateListener, heartRateSensor, SensorManager.SENSOR_DELAY_FASTEST, 0);
+                    if (isHrSensorRegistered) {
+                        hrRegisteredAtMs = now;
+                    }
+                } catch (Exception ignored) {}
+            }
             if ("reading".equals(hrStatusCode) || localSensorHrBpm < 30) {
                 hrStatusCode = "reading";
-                sendHeartRateToPhone(0, "reading");
+                if (now - lastHrStatusSentMs >= 2500L) {
+                    lastHrStatusSentMs = now;
+                    sendHeartRateToPhone(0, "reading");
+                }
             }
         }
         if (isHrSensorRegistered) {
@@ -1256,7 +1275,8 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                     return;
                 }
                 if ("/archery101010/hr_request".equals(path)) {
-                    runOnUiThread(() -> startHeartRateStreaming(true, true));
+                    lastHrRequestFromPhoneMs = System.currentTimeMillis();
+                    runOnUiThread(() -> startHeartRateStreaming(true, !hasHeartRatePermission()));
                     return;
                 }
                 if (path.startsWith("/archery101010/")) {
@@ -1291,7 +1311,8 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                             } else if ("/archery101010/hr_request".equals(itemPath)) {
                                 isPhoneConnected = true;
                                 lastPhoneSyncMs = System.currentTimeMillis();
-                                runOnUiThread(() -> startHeartRateStreaming(true, true));
+                                lastHrRequestFromPhoneMs = lastPhoneSyncMs;
+                                runOnUiThread(() -> startHeartRateStreaming(true, !hasHeartRatePermission()));
                             }
                         }
                     }
@@ -2746,18 +2767,22 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
         saveState();
         long now = System.currentTimeMillis();
         boolean activelyCapturingShot = analysisMode && manualAnalysisRecording;
+        boolean phoneRequestedHrRecently = isHrSensorRegistered
+                && (lastHrRequestFromPhoneMs > 0L && (now - lastHrRequestFromPhoneMs) < 3L * 60_000L);
         boolean hasActiveSession = isWatchSessionActive
-                && (!currentSessionId.isEmpty() || arrowCount > 0 || totalScore > 0 || activelyCapturingShot)
+                && (!currentSessionId.isEmpty() || arrowCount > 0 || totalScore > 0 || activelyCapturingShot || analysisMode)
                 && (now - lastActivityMs) < WAKELOCK_RENEW_TIMEOUT_MS;
 
-        if (!hasActiveSession && !activelyCapturingShot) {
+        if (!hasActiveSession && !activelyCapturingShot && !phoneRequestedHrRecently) {
             heartbeatHandler.removeCallbacks(heartbeatRunnable);
             stopHeartRateStreaming();
             unregisterImuSensors();
             releaseWakeLockSafely();
         } else {
             acquireOrRenewWakeLockIfNeeded();
-            syncShotDetectionSensors();
+            if (hasActiveSession || activelyCapturingShot) {
+                syncShotDetectionSensors();
+            }
         }
     }
 

@@ -169,7 +169,7 @@
         ]
       },
       {
-        "source": "/Archery101010-Mobile-v2.167.aab",
+        "source": "/Archery101010-Mobile-v2.168.aab",
         "headers": [
           {
             "key": "Content-Type",
@@ -177,7 +177,7 @@
           },
           {
             "key": "Content-Disposition",
-            "value": "attachment; filename=\"Archery101010-Mobile-v2.167.aab\""
+            "value": "attachment; filename=\"Archery101010-Mobile-v2.168.aab\""
           },
           {
             "key": "Cache-Control",
@@ -186,7 +186,7 @@
         ]
       },
       {
-        "source": "/Archery101010-WearOS-v2.167.aab",
+        "source": "/Archery101010-WearOS-v2.168.aab",
         "headers": [
           {
             "key": "Content-Type",
@@ -194,7 +194,7 @@
           },
           {
             "key": "Content-Disposition",
-            "value": "attachment; filename=\"Archery101010-WearOS-v2.167.aab\""
+            "value": "attachment; filename=\"Archery101010-WearOS-v2.168.aab\""
           },
           {
             "key": "Cache-Control",
@@ -229,6 +229,40 @@
           {
             "key": "Content-Disposition",
             "value": "attachment; filename=\"Plan-Asesoria-Documento-Coach-Rodrigo-Saborio-Archery101010.pdf\""
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/Archery101010-Evaluacion-Ejecutiva-Movil.pdf",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/pdf"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"Archery101010-Evaluacion-Ejecutiva-Movil.pdf\""
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/Archery101010-Auditoria-5-Preguntas-Movil.pdf",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/pdf"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment; filename=\"Archery101010-Auditoria-5-Preguntas-Movil.pdf\""
           },
           {
             "key": "Cache-Control",
@@ -272,12 +306,12 @@
       },
       {
         "source": "/download-aab",
-        "destination": "https://archery101010-c0bb4.firebaseapp.com/Archery101010-Mobile-v2.167.aab",
+        "destination": "https://archery101010-c0bb4.firebaseapp.com/Archery101010-Mobile-v2.168.aab",
         "type": 302
       },
       {
         "source": "/download-wear-aab",
-        "destination": "https://archery101010-c0bb4.firebaseapp.com/Archery101010-WearOS-v2.167.aab",
+        "destination": "https://archery101010-c0bb4.firebaseapp.com/Archery101010-WearOS-v2.168.aab",
         "type": 302
       }
     ],
