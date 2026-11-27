@@ -17,6 +17,10 @@ export interface AnalysisCalibrationProfile {
   distanceM: number;
   zeroGravityVec: [number, number, number];
   calibratedAt: number;
+  personalPrepSec?: number;
+  personalAimSec?: number;
+  settleScale?: number;
+  cycleCalibratedAt?: number;
 }
 
 export interface RawImuSample {
@@ -434,6 +438,7 @@ export function analyzeImuShotWindow(params: {
   bowType: AnalysisBowType;
   bowWrist?: AnalysisBowWrist;
   zeroGravityVec?: [number, number, number];
+  settleScale?: number;
   heartRateBpm?: number;
 }): AnalysisShotRecord | null {
   const {
@@ -444,8 +449,13 @@ export function analyzeImuShotWindow(params: {
     bowType = "Barebow",
     bowWrist = "LEFT",
     zeroGravityVec,
+    settleScale: rawSettleScale,
     heartRateBpm
   } = params;
+  const settleScale =
+    typeof rawSettleScale === "number" && Number.isFinite(rawSettleScale)
+      ? clamp(rawSettleScale, 0.55, 1.45)
+      : 1.0;
 
   if (!samples || samples.length < 10) return null;
 
@@ -644,15 +654,16 @@ export function analyzeImuShotWindow(params: {
     baseRef.reduce((s, p) => s + Math.hypot(p.dxCm, p.dyCm), 0) / Math.max(1, baseRef.length);
 
   const settleRadiusCm = clamp(
-    Math.max(faceRadiusCm * 0.26, anchorMeanRad * 2.1 + faceRadiusCm * 0.07),
-    faceRadiusCm * 0.26,
-    faceRadiusCm * 0.40
+    Math.max(faceRadiusCm * 0.21, anchorMeanRad * 2.05 + faceRadiusCm * 0.06) * settleScale,
+    faceRadiusCm * 0.16,
+    faceRadiusCm * 0.36
   );
-  const gdLimit = clamp(Math.max(0.42, anchorMeanGd * 2.3 + 0.22), 0.42, 1.15);
-  const gyLimit = clamp(Math.max(0.085, anchorMeanGy * 2.3 + 0.045), 0.085, 0.20);
-  const enLimit = clamp(Math.max(0.72, anchorMeanEn * 2.3 + 0.32), 0.72, 1.45);
-  const netDispLimitRad = clamp(Math.max(0.018, anchorMeanGy * 0.63 + 0.010), 0.018, 0.032);
-  const gravDriftLimit = clamp(Math.max(0.32, anchorMeanGd * 1.8 + 0.20), 0.32, 0.75);
+  const gdLimit = clamp(Math.max(0.40, anchorMeanGd * 2.25 + 0.21) * settleScale, 0.36, 1.12);
+  const gyLimit = clamp(Math.max(0.084, anchorMeanGy * 2.28 + 0.044) * settleScale, 0.078, 0.20);
+  const enLimit = clamp(Math.max(0.70, anchorMeanEn * 2.28 + 0.31) * settleScale, 0.62, 1.44);
+  const netDispLimitRad = clamp(Math.max(0.0175, anchorMeanGy * 0.62 + 0.0098) * settleScale, 0.015, 0.032);
+  const gravDriftLimit = clamp(Math.max(0.31, anchorMeanGd * 1.78 + 0.19) * settleScale, 0.27, 0.74);
+  const monotonicDriftLimitCm = Math.max(settleRadiusCm * 0.90, faceRadiusCm * 0.21 * settleScale);
 
   const isWindowOutOfAimAt = (endIdx: number): boolean => {
     const pjEnd = targetTraj[endIdx];
@@ -665,6 +676,7 @@ export function analyzeImuShotWindow(params: {
     let sumGxDt = 0;
     let sumGyDt = 0;
     let sumGzDt = 0;
+    let pathLen350Cm = 0;
     let oldestIdx = endIdx;
     let wN = 0;
     for (let j = endIdx; j >= 0 && targetTraj[j].t >= winStartT; j--) {
@@ -676,6 +688,12 @@ export function analyzeImuShotWindow(params: {
       sumGxDt += pj.gx * pj.dtSec;
       sumGyDt += pj.gy * pj.dtSec;
       sumGzDt += pj.gz * pj.dtSec;
+      if (j < endIdx) {
+        pathLen350Cm += Math.hypot(
+          targetTraj[j + 1].dxCm - pj.dxCm,
+          targetTraj[j + 1].dyCm - pj.dyCm
+        );
+      }
       oldestIdx = j;
       wN++;
     }
@@ -690,13 +708,22 @@ export function analyzeImuShotWindow(params: {
       pjEnd.sAy - pjOldest.sAy,
       pjEnd.sAz - pjOldest.sAz
     );
+    const netDrift350Cm = Math.hypot(pjEnd.dxCm - pjOldest.dxCm, pjEnd.dyCm - pjOldest.dyCm);
+    const oldestRadCm = Math.hypot(pjOldest.dxCm, pjOldest.dyCm);
+    const directness350 = pathLen350Cm > 0.2 ? netDrift350Cm / pathLen350Cm : 0;
+    const isMonotonicApproach =
+      oldestRadCm > settleRadiusCm * 0.85 &&
+      netDrift350Cm > monotonicDriftLimitCm &&
+      directness350 >= 0.82;
+
     return (
       meanRad > settleRadiusCm ||
       meanGravDelta > gdLimit ||
       meanGyro > gyLimit ||
       meanEnergy > enLimit ||
       netGyroDispRad > netDispLimitRad ||
-      gravDrift350 > gravDriftLimit
+      gravDrift350 > gravDriftLimit ||
+      isMonotonicApproach
     );
   };
 
@@ -798,15 +825,21 @@ export function analyzeImuShotWindow(params: {
         targetTraj[i].sAz - zeroGravityVec![2]
       ) <= 1.65;
 
+    const armClearlyLoweredFromSetUp = targetTraj[i].gravDelta >= 2.25;
+
     if (meanGyro >= 0.14 || meanEnergy >= 0.35 || sweepCmPerSec >= 9.0 || gravShift >= 0.55) {
       sawActiveRaiseSweep = true;
     } else if (
       sawActiveRaiseSweep &&
       targetTraj[aimStartIdx].t - targetTraj[i].t >= 450 &&
-      ((meanGyro < 0.10 && meanEnergy < 0.24 && sweepCmPerSec < 5.5 && gravShift < 0.30) ||
+      ((armClearlyLoweredFromSetUp &&
+        meanGyro < 0.10 &&
+        meanEnergy < 0.24 &&
+        sweepCmPerSec < 5.5 &&
+        gravShift < 0.30) ||
         (returnedToRestingCal && meanGyro < 0.14 && gravShift < 0.40))
     ) {
-      // Sustained 320ms pre-raise idle rest reached -> trim all earlier dead time!
+      // Sustained 320ms pre-raise lowered rest reached (never breaks on an elevated Set-Up pause!)
       prepStartIdx = Math.min(aimStartIdx - 1, i + 1);
       break;
     }
@@ -1052,11 +1085,63 @@ export function loadSavedAnalysisCalibration(
             Number(parsed.zeroGravityVec[2]) || 9.81
           ]
         : [0, 0, 9.81],
-      calibratedAt: Number(parsed.calibratedAt) || Date.now()
+      calibratedAt: Number(parsed.calibratedAt) || Date.now(),
+      ...(typeof parsed.personalPrepSec === "number" && parsed.personalPrepSec > 0
+        ? { personalPrepSec: Number(clamp(parsed.personalPrepSec, 0.4, 15).toFixed(1)) }
+        : {}),
+      ...(typeof parsed.personalAimSec === "number" && parsed.personalAimSec > 0
+        ? { personalAimSec: Number(clamp(parsed.personalAimSec, 0.5, 25).toFixed(1)) }
+        : {}),
+      ...(typeof parsed.settleScale === "number" && Number.isFinite(parsed.settleScale)
+        ? { settleScale: Number(clamp(parsed.settleScale, 0.55, 1.45).toFixed(3)) }
+        : {}),
+      ...(typeof parsed.cycleCalibratedAt === "number" && parsed.cycleCalibratedAt > 0
+        ? { cycleCalibratedAt: Number(parsed.cycleCalibratedAt) }
+        : {})
     };
   } catch {
     return null;
   }
+}
+
+/**
+ * Refines an incoming watch shot's Prep/Aim split when the archer has completed a 1-shot personal
+ * cycle calibration (`cycleCalibratedAt > 0`), keeping total shot duration (`prep + aim`) exact while
+ * blending out residual wrist-mount threshold bias.
+ */
+export function refineShotWithPersonalCycle(
+  shot: AnalysisShotRecord,
+  calibration?: AnalysisCalibrationProfile | null
+): AnalysisShotRecord {
+  if (
+    !calibration ||
+    !calibration.cycleCalibratedAt ||
+    typeof calibration.personalPrepSec !== "number" ||
+    typeof calibration.personalAimSec !== "number" ||
+    calibration.personalPrepSec <= 0 ||
+    calibration.personalAimSec <= 0
+  ) {
+    return shot;
+  }
+  const total = Number((shot.prepSeconds + shot.aimSeconds).toFixed(1));
+  if (total < 1.2) return shot;
+
+  const calTotal = calibration.personalPrepSec + calibration.personalAimSec;
+  const calPrepRatio = clamp(calibration.personalPrepSec / Math.max(1.0, calTotal), 0.15, 0.78);
+  const rawPrepRatio = shot.prepSeconds / total;
+  // Only apply gentle 45% anchor-boundary correction when watch split deviates noticeably from calibrated biomechanics
+  if (Math.abs(rawPrepRatio - calPrepRatio) <= 0.08) {
+    return shot;
+  }
+  const blendedRatio = clamp(rawPrepRatio * 0.55 + calPrepRatio * 0.45, 0.14, 0.82);
+  const refinedPrep = Number(clamp(total * blendedRatio, 0.4, total - 0.5).toFixed(1));
+  const refinedAim = Number(Math.max(0.5, total - refinedPrep).toFixed(1));
+  return {
+    ...shot,
+    prepSeconds: refinedPrep,
+    aimSeconds: refinedAim,
+    totalSeconds: Number((refinedPrep + refinedAim).toFixed(1))
+  };
 }
 
 export function saveAnalysisCalibration(

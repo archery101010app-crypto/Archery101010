@@ -592,6 +592,110 @@ describe("M6 Audit Remediations — shotAnalysisEngine.ts 3D Pitch, Hysteresis, 
     assert.equal(evaluateNormalizedTargetImpact(0.08, 0).scoreLabel, "10");
     assert.equal(evaluateNormalizedTargetImpact(1.05, 0).scoreLabel, "M");
   });
+
+  it("preserves elevated Set-Up pauses inside Preparatory and enforces Garmin/watchOS post-release trimming", () => {
+    const baseTs = 600_000;
+    const samples: RawImuSample[] = [];
+    // 0.0..2.0s: standing idle with bow arm down (ax=7.6, ay=5.8, az=2.6 -> must be trimmed!)
+    // 2.0..3.0s: 1.0s initial bow lift to horizontal Set-Up (ax: 7.6 -> 1.15, ay: 5.8 -> 9.35)
+    // 3.0..3.8s: 0.8s quiet mid-air Set-Up pause with bow arm raised (gravDelta ~1.0 m/s^2 < 2.25 -> must NOT be cut off!)
+    // 3.8..5.2s: 1.4s bowstring draw + monotonic anchor glide onto gold (total true Preparatory = 3.2s)
+    // 5.2..8.6s: 3.4s true Aiming hold on gold
+    // 8.62s: bowstring release + arm drop
+    for (let ms = 0; ms <= 9800; ms += 20) {
+      const t = baseTs + ms;
+      const s = ms / 1000;
+      if (s < 2.0) {
+        samples.push({ t, ax: 7.6, ay: 5.8, az: 2.6, gx: 0, gy: 0.008, gz: 0 });
+      } else if (s < 3.0) {
+        const p = (s - 2.0) / 1.0;
+        samples.push({
+          t,
+          ax: 7.6 * (1 - p) + 1.15 * p,
+          ay: 5.8 * (1 - p) + 9.35 * p,
+          az: 2.6 * (1 - p) + 2.1 * p,
+          gx: 0.06,
+          gy: -0.55,
+          gz: 0.2
+        });
+      } else if (s < 3.8) {
+        // Quiet elevated Set-Up pause before drawing string
+        samples.push({ t, ax: 1.15, ay: 9.35, az: 2.1, gx: 0.005, gy: 0.01, gz: -0.005 });
+      } else if (s < 5.2) {
+        const p = (s - 3.8) / 1.4;
+        samples.push({
+          t,
+          ax: 1.15 * (1 - p) + 0.22 * p,
+          ay: 9.35 * (1 - p) + 9.6 * p,
+          az: 2.1 * (1 - p) + 1.9 * p,
+          gx: 0.03,
+          gy: -0.11,
+          gz: 0.06
+        });
+      } else if (s >= 8.62 && s <= 8.66) {
+        samples.push({ t, ax: 4.1, ay: 13.9, az: 2.5, gx: 0.55, gy: 1.4, gz: -0.9 });
+      } else if (s > 8.66) {
+        const d = Math.min(1, (s - 8.66) / 0.9);
+        samples.push({ t, ax: 0.22 + 7.3 * d, ay: 9.6 - 3.8 * d, az: 1.9 + 0.8 * d, gx: 0.3, gy: 0.85, gz: 0.5 });
+      } else {
+        samples.push({
+          t,
+          ax: 0.22 + Math.sin(s * 5) * 0.018,
+          ay: 9.6 + Math.cos(s * 6) * 0.022,
+          az: 1.9 + Math.sin(s * 4) * 0.018,
+          gx: 0.005,
+          gy: 0.008,
+          gz: -0.008
+        });
+      }
+    }
+
+    const setUpShot = analyzeImuShotWindow({
+      samples,
+      manualStartTimestampMs: baseTs,
+      releaseTimestampMs: baseTs + 9800,
+      shotNumber: 4,
+      distanceM: 18,
+      bowType: "Recurve",
+      bowWrist: "LEFT"
+    });
+    assert.ok(setUpShot, "Set-Up pause shot must reconstruct cleanly");
+    assert.ok(
+      setUpShot.prepSeconds >= 2.7 && setUpShot.prepSeconds <= 3.7,
+      `Elevated 0.8s Set-Up pause must stay inside ~3.2s Preparatory (while trimming 2.0s arm-down wait), got ${setUpShot.prepSeconds}s`
+    );
+    assert.ok(
+      setUpShot.aimSeconds >= 2.9 && setUpShot.aimSeconds <= 3.9,
+      `Expected ~3.4s Aiming hold, got ${setUpShot.aimSeconds}s`
+    );
+
+    const garminSrc = fs.readFileSync(
+      path.join(process.cwd(), "garmin-ciq", "source", "Archery101010WatchApp.mc"),
+      "utf8"
+    );
+    assert.ok(
+      garminSrc.includes("isLowRamDevice ? 180 : 240"),
+      "Garmin buffer must hold 18s..24s at 10Hz so full shot cycles never wrap"
+    );
+    assert.ok(
+      garminSrc.includes("bestPlatIdx") && garminSrc.includes("armLoweredFromSetUp"),
+      "Garmin stopManualAnalysis must trim post-release FINAL delay and preserve Set-Up pauses"
+    );
+
+    const watchOsSrc = fs.readFileSync(
+      path.join(process.cwd(), "ios-watchos", "WatchApp", "Archery101010WatchApp.swift"),
+      "utf8"
+    );
+    assert.equal(
+      watchOsSrc.includes("(n * 35) / 100"),
+      false,
+      "watchOS must never use hardcoded 35%/65% Prep/Aim split"
+    );
+    assert.ok(
+      watchOsSrc.includes("bestPlatIdx") && watchOsSrc.includes("armLoweredFromSetUp"),
+      "watchOS buildShotRecord must trim post-release FINAL delay and preserve Set-Up pauses"
+    );
+  });
 });
 
 describe("M6 Audit Remediations — biometricsEngine.ts Watch Security & HR Invariants (AUD-FB-01 / AUD-QA-01)", () => {

@@ -3833,17 +3833,19 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
             double anchorMeanEn = baseEn / Math.max(1, baseN);
             double anchorMeanRad = baseRad / Math.max(1, baseN);
 
-            double settleRadiusCm = Math.max(faceRadiusCm * 0.26, Math.min(faceRadiusCm * 0.40, anchorMeanRad * 2.1 + faceRadiusCm * 0.07));
-            double gdLimit = Math.max(0.42, Math.min(1.15, anchorMeanGd * 2.3 + 0.22));
-            double gyLimit = Math.max(0.085, Math.min(0.20, anchorMeanGy * 2.3 + 0.045));
-            double enLimit = Math.max(0.72, Math.min(1.45, anchorMeanEn * 2.3 + 0.32));
-            double netDispLimitRad = Math.max(0.018, Math.min(0.032, anchorMeanGy * 0.63 + 0.010));
-            double gravDriftLimit = Math.max(0.32, Math.min(0.75, anchorMeanGd * 1.8 + 0.20));
+            double settleRadiusCm = Math.max(faceRadiusCm * 0.16, Math.min(faceRadiusCm * 0.36, Math.max(faceRadiusCm * 0.21, anchorMeanRad * 2.05 + faceRadiusCm * 0.06)));
+            double gdLimit = Math.max(0.36, Math.min(1.12, Math.max(0.40, anchorMeanGd * 2.25 + 0.21)));
+            double gyLimit = Math.max(0.078, Math.min(0.20, Math.max(0.084, anchorMeanGy * 2.28 + 0.044)));
+            double enLimit = Math.max(0.62, Math.min(1.44, Math.max(0.70, anchorMeanEn * 2.28 + 0.31)));
+            double netDispLimitRad = Math.max(0.015, Math.min(0.032, Math.max(0.0175, anchorMeanGy * 0.62 + 0.0098)));
+            double gravDriftLimit = Math.max(0.27, Math.min(0.74, Math.max(0.31, anchorMeanGd * 1.78 + 0.19)));
+            double monotonicDriftLimitCm = Math.max(settleRadiusCm * 0.90, faceRadiusCm * 0.21);
 
             boolean[] outOfAimMask = new boolean[count];
             for (int i = 0; i < count; i++) {
                 long winStartT = ts[i] - 350L;
                 double sumRad = 0.0, sumEn = 0.0, sumGy = 0.0, sumGd = 0.0, sumGxDt = 0.0, sumGyDt = 0.0, sumGzDt = 0.0;
+                double pathLen350Cm = 0.0;
                 int oldestIdx = i;
                 int wN = 0;
                 for (int j = i; j >= 0 && ts[j] >= winStartT; j--) {
@@ -3854,6 +3856,9 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                     sumGxDt += gxArr[j] * dtArr[j];
                     sumGyDt += gyArr[j] * dtArr[j];
                     sumGzDt += gzArr[j] * dtArr[j];
+                    if (j < i) {
+                        pathLen350Cm += Math.hypot(dxCmArr[j + 1] - dxCmArr[j], dyCmArr[j + 1] - dyCmArr[j]);
+                    }
                     oldestIdx = j;
                     wN++;
                 }
@@ -3866,12 +3871,20 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                 double dDriftY = sAyArr[i] - sAyArr[oldestIdx];
                 double dDriftZ = sAzArr[i] - sAzArr[oldestIdx];
                 double gravDrift350 = Math.sqrt(dDriftX * dDriftX + dDriftY * dDriftY + dDriftZ * dDriftZ);
+                double netDrift350Cm = Math.hypot(dxCmArr[i] - dxCmArr[oldestIdx], dyCmArr[i] - dyCmArr[oldestIdx]);
+                double oldestRadCm = Math.hypot(dxCmArr[oldestIdx], dyCmArr[oldestIdx]);
+                double directness350 = pathLen350Cm > 0.2 ? (netDrift350Cm / pathLen350Cm) : 0.0;
+                boolean isMonotonicApproach = oldestRadCm > settleRadiusCm * 0.85
+                        && netDrift350Cm > monotonicDriftLimitCm
+                        && directness350 >= 0.82;
+
                 outOfAimMask[i] = meanRad > settleRadiusCm
                         || meanGd > gdLimit
                         || meanGy > gyLimit
                         || meanEn > enLimit
                         || netDisp > netDispLimitRad
-                        || gravDrift350 > gravDriftLimit;
+                        || gravDrift350 > gravDriftLimit
+                        || isMonotonicApproach;
             }
 
             // Detect settle index (Preparatory -> Aiming) via Disjoint 650ms Two-Window Hysteresis
@@ -3957,11 +3970,12 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                         + (sAzArr[i] - calZeroAz) * (sAzArr[i] - calZeroAz)
                 ) <= 1.65;
 
+                boolean armClearlyLoweredFromSetUp = gravDeltaArr[i] >= 2.25;
                 if (meanGy >= 0.14 || meanEn >= 0.35 || sweepCmPerSec >= 9.0 || gravShift >= 0.55) {
                     sawActiveRaiseSweep = true;
                 } else if (sawActiveRaiseSweep
                         && (ts[settleIdx] - ts[i]) >= 450L
-                        && ((meanGy < 0.10 && meanEn < 0.24 && sweepCmPerSec < 5.5 && gravShift < 0.30)
+                        && ((armClearlyLoweredFromSetUp && meanGy < 0.10 && meanEn < 0.24 && sweepCmPerSec < 5.5 && gravShift < 0.30)
                             || (returnedToRestingCal && meanGy < 0.14 && gravShift < 0.40))) {
                     prepStartIdx = Math.min(settleIdx - 1, i + 1);
                     break;

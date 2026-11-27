@@ -271,7 +271,7 @@ class Archery101010WatchView extends WatchUi.View {
                 isLowRamDevice = (stats.totalMemory <= 135000);
             }
         } catch (ex) {}
-        mAnaSize = isLowRamDevice ? 60 : 160;
+        mAnaSize = isLowRamDevice ? 180 : 240;
     }
 
     function ensureAnalysisBuffersAllocated() as Void {
@@ -1352,7 +1352,85 @@ class Archery101010WatchView extends WatchUi.View {
             }
         }
 
+        // Step 1: Locate sustained horizontal aiming plateau & trim post-release arm lowering / FINAL tap delay
+        var bestPlatIdx = (count >= 6) ? (count - 2) : (count - 1);
+        var bestPlatScore = -1.0;
+        var curRunLen = 0;
+        var platAx = xs[bestPlatIdx];
+        var platAy = ys[bestPlatIdx];
+        var platAz = zs[bestPlatIdx];
+        for (var pScan = 3; pScan < count; pScan++) {
+            var sumLin = 0.0;
+            var mAx = 0.0;
+            var mAy = 0.0;
+            var mAz = 0.0;
+            var minY = 99999.0;
+            var maxY = -99999.0;
+            var minZ = 99999.0;
+            var maxZ = -99999.0;
+            var wCnt = 0;
+            var wFrom = (pScan >= 4) ? (pScan - 4) : 0;
+            for (var w = wFrom; w <= pScan; w++) {
+                var magW = Math.sqrt(xs[w] * xs[w] + ys[w] * ys[w] + zs[w] * zs[w]).toFloat();
+                sumLin = sumLin + (magW - 1000.0).abs();
+                mAx = mAx + xs[w];
+                mAy = mAy + ys[w];
+                mAz = mAz + zs[w];
+                if (ys[w] < minY) { minY = ys[w]; }
+                if (ys[w] > maxY) { maxY = ys[w]; }
+                if (zs[w] < minZ) { minZ = zs[w]; }
+                if (zs[w] > maxZ) { maxZ = zs[w]; }
+                wCnt = wCnt + 1;
+            }
+            mAx = mAx / wCnt;
+            mAy = mAy / wCnt;
+            mAz = mAz / wCnt;
+            var gNormW = Math.sqrt(mAx * mAx + mAy * mAy + mAz * mAz).toFloat();
+            if (gNormW < 400.0) { gNormW = 1000.0; }
+            var perpG = Math.sqrt(mAy * mAy + mAz * mAz).toFloat();
+            var postureOk = ((mAx.abs() / gNormW) <= 0.80) && (perpG >= 560.0);
+            var spanOk = ((maxY - minY) <= 245.0) && ((maxZ - minZ) <= 245.0);
+            if (postureOk && spanOk && (sumLin / wCnt) <= 135.0) {
+                curRunLen = curRunLen + 1;
+                if (curRunLen >= 4 && (tsArr[pScan] - tsArr[0]) >= 600) {
+                    var recBonus = ((pScan.toFloat() / count.toFloat()) * 3.5);
+                    var pScore = curRunLen.toFloat() + recBonus;
+                    if (pScore >= bestPlatScore) {
+                        bestPlatScore = pScore;
+                        bestPlatIdx = pScan;
+                        platAx = mAx;
+                        platAy = mAy;
+                        platAz = mAz;
+                    }
+                }
+            } else {
+                curRunLen = 0;
+            }
+        }
+
+        // Step 2: Pinpoint exact bowstring release shock or onset of post-shot arm drop after aiming plateau
         var effCount = (count >= 6) ? (count - 1) : count;
+        if (bestPlatScore > 0.0) {
+            effCount = (bestPlatIdx + 1 <= count) ? (bestPlatIdx + 1) : count;
+            var relStart = (bestPlatIdx >= 2) ? (bestPlatIdx - 2) : 1;
+            for (var rScan = relStart; rScan < count; rScan++) {
+                var magCur = Math.sqrt(xs[rScan] * xs[rScan] + ys[rScan] * ys[rScan] + zs[rScan] * zs[rScan]).toFloat();
+                var magPrev = Math.sqrt(xs[rScan - 1] * xs[rScan - 1] + ys[rScan - 1] * ys[rScan - 1] + zs[rScan - 1] * zs[rScan - 1]).toFloat();
+                var jerkMg = (magCur - magPrev).abs();
+                var linDevMg = (magCur - 1000.0).abs();
+                var dPx = xs[rScan] - platAx;
+                var dPy = ys[rScan] - platAy;
+                var dPz = zs[rScan] - platAz;
+                var dropDistMg = Math.sqrt(dPx * dPx + dPy * dPy + dPz * dPz).toFloat();
+                if (jerkMg >= 210.0 || linDevMg >= 185.0 || (rScan > bestPlatIdx && dropDistMg >= 245.0)) {
+                    effCount = (rScan >= 4) ? rScan : 4;
+                    break;
+                }
+            }
+        }
+        if (effCount > count) { effCount = count; }
+        if (effCount < 4) { effCount = (count >= 4) ? 4 : count; }
+
         var refStart = (effCount > 6) ? (effCount - 6) : 0;
         var refAy = 0.0;
         var refAz = 0.0;
@@ -1403,18 +1481,29 @@ class Archery101010WatchView extends WatchUi.View {
             baseGd = baseGd + gdArr[b];
             baseN = baseN + 1;
         }
-        var gdLimitMg = (baseN > 0) ? ((baseGd / baseN) * 2.3 + 24.0) : 45.0;
-        if (gdLimitMg < 45.0) { gdLimitMg = 45.0; }
-        if (gdLimitMg > 120.0) { gdLimitMg = 120.0; }
+        var gdLimitMg = (baseN > 0) ? ((baseGd / baseN) * 2.15 + 20.0) : 38.0;
+        if (gdLimitMg < 36.0) { gdLimitMg = 36.0; }
+        if (gdLimitMg > 105.0) { gdLimitMg = 105.0; }
 
         var settleIdx = 1;
         for (var sIdx = effCount - 2; sIdx >= 1; sIdx--) {
             var radNorm = Math.sqrt(nxArr[sIdx] * nxArr[sIdx] + nyArr[sIdx] * nyArr[sIdx]).toFloat();
-            var prevIdx = (sIdx >= 3) ? (sIdx - 3) : 0;
+            var prevIdx = (sIdx >= 4) ? (sIdx - 4) : 0;
             var driftMg = (gdArr[sIdx] - gdArr[prevIdx]).abs();
-            if (gdArr[sIdx] > gdLimitMg || radNorm > 0.36 || driftMg > 34.0) {
+            var pathLenNorm = 0.0;
+            for (var pStep = sIdx; pStep > prevIdx; pStep--) {
+                var sDx = nxArr[pStep] - nxArr[pStep - 1];
+                var sDy = nyArr[pStep] - nyArr[pStep - 1];
+                pathLenNorm = pathLenNorm + Math.sqrt(sDx * sDx + sDy * sDy).toFloat();
+            }
+            var dNx = nxArr[sIdx] - nxArr[prevIdx];
+            var dNy = nyArr[sIdx] - nyArr[prevIdx];
+            var netDriftNorm = Math.sqrt(dNx * dNx + dNy * dNy).toFloat();
+            var oldestRadNorm = Math.sqrt(nxArr[prevIdx] * nxArr[prevIdx] + nyArr[prevIdx] * nyArr[prevIdx]).toFloat();
+            var isMonotonicApproach = (oldestRadNorm > 0.18 && netDriftNorm > 0.21 && pathLenNorm > 0.01 && (netDriftNorm / pathLenNorm) >= 0.82);
+            if (gdArr[sIdx] > gdLimitMg || radNorm > 0.24 || driftMg > 29.0 || isMonotonicApproach) {
                 var priorIdx = (sIdx >= 6) ? (sIdx - 6) : 0;
-                if (sIdx < 6 || gdArr[priorIdx] > gdLimitMg) {
+                if (sIdx < 6 || gdArr[priorIdx] > gdLimitMg || Math.sqrt(nxArr[priorIdx] * nxArr[priorIdx] + nyArr[priorIdx] * nyArr[priorIdx]).toFloat() > 0.24) {
                     settleIdx = sIdx + 1;
                     break;
                 }
@@ -1428,9 +1517,10 @@ class Archery101010WatchView extends WatchUi.View {
         var sawLift = false;
         for (var pIdx = settleIdx - 1; pIdx >= 1; pIdx--) {
             var stepShiftMg = (gdArr[pIdx] - gdArr[pIdx - 1]).abs();
+            var armLoweredFromSetUp = (gdArr[pIdx] >= 225.0);
             if (stepShiftMg >= 18.0) {
                 sawLift = true;
-            } else if (sawLift && (tsArr[settleIdx] - tsArr[pIdx]) >= 500 && stepShiftMg < 8.0) {
+            } else if (sawLift && armLoweredFromSetUp && (tsArr[settleIdx] - tsArr[pIdx]) >= 450 && stepShiftMg < 8.5) {
                 prepStartIdx = pIdx;
                 break;
             }

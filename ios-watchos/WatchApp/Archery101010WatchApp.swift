@@ -1807,47 +1807,146 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
             return
         }
 
-        let refSlice = Array(windowSamples.suffix(min(15, windowSamples.count)))
-        let fallbackAx = refSlice.reduce(0.0) { $0 + $1.ax } / Double(refSlice.count)
-        let fallbackAy = refSlice.reduce(0.0) { $0 + $1.ay } / Double(refSlice.count)
-        let fallbackAz = refSlice.reduce(0.0) { $0 + $1.az } / Double(refSlice.count)
+        // Step 1: Locate sustained aiming plateau & trim post-release arm drop / FINAL tap delay (units in g: 1.0 = 9.81 m/s^2)
+        let rawCount = windowSamples.count
+        var bestPlatIdx = max(1, rawCount - 2)
+        var bestPlatScore = -1.0
+        var curRun = 0
+        var platAx = windowSamples[bestPlatIdx].ax
+        var platAy = windowSamples[bestPlatIdx].ay
+        var platAz = windowSamples[bestPlatIdx].az
 
-        let refAx: Double
-        let refAy: Double
-        let refAz: Double
-        if let zero = calibratedZeroVec, zero.count == 3 {
-            refAx = zero[0]
-            refAy = zero[1]
-            refAz = zero[2]
-        } else {
-            refAx = fallbackAx
-            refAy = fallbackAy
-            refAz = fallbackAz
+        for i in 3..<rawCount {
+            let wFrom = max(0, i - 10)
+            var sumLin = 0.0, mAx = 0.0, mAy = 0.0, mAz = 0.0
+            var minY = 999.0, maxY = -999.0, minZ = 999.0, maxZ = -999.0
+            var wN = 0.0
+            for j in wFrom...i {
+                let s = windowSamples[j]
+                let mag = sqrt(s.ax * s.ax + s.ay * s.ay + s.az * s.az)
+                sumLin += abs(mag - 1.0)
+                mAx += s.ax; mAy += s.ay; mAz += s.az
+                if s.ay < minY { minY = s.ay }
+                if s.ay > maxY { maxY = s.ay }
+                if s.az < minZ { minZ = s.az }
+                if s.az > maxZ { maxZ = s.az }
+                wN += 1.0
+            }
+            mAx /= wN; mAy /= wN; mAz /= wN
+            let gNorm = max(0.4, sqrt(mAx * mAx + mAy * mAy + mAz * mAz))
+            let perpG = sqrt(mAy * mAy + mAz * mAz)
+            let postureOk = (abs(mAx) / gNorm <= 0.80) && (perpG >= 0.56)
+            let spanOk = (maxY - minY <= 0.25) && (maxZ - minZ <= 0.25)
+            if postureOk && spanOk && (sumLin / wN <= 0.14) {
+                curRun += 1
+                if curRun >= 12 && (windowSamples[i].t - windowSamples[0].t) >= 600 {
+                    let pScore = Double(curRun) + (Double(i) / Double(rawCount)) * 12.0
+                    if pScore >= bestPlatScore {
+                        bestPlatScore = pScore
+                        bestPlatIdx = i
+                        platAx = mAx; platAy = mAy; platAz = mAz
+                    }
+                }
+            } else {
+                curRun = 0
+            }
         }
+
+        var effCount = max(4, rawCount - 1)
+        if bestPlatScore > 0.0 {
+            effCount = min(rawCount, bestPlatIdx + 1)
+            let relStart = max(1, bestPlatIdx - 6)
+            for r in relStart..<rawCount {
+                let cur = windowSamples[r]
+                let prev = windowSamples[r - 1]
+                let magCur = sqrt(cur.ax * cur.ax + cur.ay * cur.ay + cur.az * cur.az)
+                let magPrev = sqrt(prev.ax * prev.ax + prev.ay * prev.ay + prev.az * prev.az)
+                let jerkG = abs(magCur - magPrev)
+                let linDevG = abs(magCur - 1.0)
+                let dropDistG = sqrt(pow(cur.ax - platAx, 2) + pow(cur.ay - platAy, 2) + pow(cur.az - platAz, 2))
+                if jerkG >= 0.21 || linDevG >= 0.19 || (r > bestPlatIdx && dropDistG >= 0.25) {
+                    effCount = max(4, r)
+                    break
+                }
+            }
+        }
+
+        let trimmedSamples = Array(windowSamples.prefix(effCount))
+        let refSlice = Array(trimmedSamples.suffix(min(15, trimmedSamples.count)))
+        let refAx = refSlice.reduce(0.0) { $0 + $1.ax } / Double(refSlice.count)
+        let refAy = refSlice.reduce(0.0) { $0 + $1.ay } / Double(refSlice.count)
+        let refAz = refSlice.reduce(0.0) { $0 + $1.az } / Double(refSlice.count)
         let refNorm = max(0.4, sqrt(refAx * refAx + refAy * refAy + refAz * refAz))
         let wristSign = (bowWristStr == "RIGHT") ? -1.0 : 1.0
+        let forePitchWeight = (abs(refAz) < 0.75) ? 0.85 : 0.35
         let faceRadiusCm = (distanceM <= 20) ? 20.0 : ((distanceM <= 26) ? 30.0 : ((distanceM <= 36) ? 40.0 : 61.0))
         let distCm = max(1000.0, Double(distanceM) * 100.0)
 
-        var sAy = windowSamples[0].ay
-        var sAz = windowSamples[0].az
+        var sAx = trimmedSamples[0].ax
+        var sAy = trimmedSamples[0].ay
+        var sAz = trimmedSamples[0].az
         var nxArr: [Double] = []
         var nyArr: [Double] = []
-        for s in windowSamples {
+        var gdArr: [Double] = []
+        for s in trimmedSamples {
+            sAx = 0.80 * sAx + 0.20 * s.ax
             sAy = 0.80 * sAy + 0.20 * s.ay
             sAz = 0.80 * sAz + 0.20 * s.az
             let yaw = ((sAy - refAy) / refNorm) * wristSign * 0.28
-            let pitch = ((sAz - refAz) / refNorm) * 0.28
+            let pitch = (((sAz - refAz) + (sAx - refAx) * wristSign * forePitchWeight) / refNorm) * 0.28
             let dxCm = tan(yaw) * distCm
             let dyCm = tan(pitch) * distCm
             nxArr.append(max(-1.08, min(1.08, dxCm / faceRadiusCm)))
             nyArr.append(max(-1.08, min(1.08, dyCm / faceRadiusCm)))
+            gdArr.append(sqrt(pow(sAx - refAx, 2) + pow(sAy - refAy, 2) + pow(sAz - refAz, 2)))
         }
 
-        let n = windowSamples.count
-        let settleIdx = max(1, min(n - 2, (n * 35) / 100))
-        let prepSec = max(0.4, min(10.0, Double(windowSamples[settleIdx].t - windowSamples[0].t) / 1000.0))
-        let aimSec = max(0.5, min(24.0, Double(windowSamples[n - 1].t - windowSamples[settleIdx].t) / 1000.0))
+        let n = trimmedSamples.count
+        let baseGd = gdArr.suffix(min(15, n)).reduce(0.0, +) / Double(min(15, n))
+        let gdLimitG = max(0.036, min(0.105, baseGd * 2.15 + 0.020))
+
+        var settleIdx = 1
+        for sIdx in stride(from: max(1, n - 2), through: 1, by: -1) {
+            let radNorm = hypot(nxArr[sIdx], nyArr[sIdx])
+            let prevIdx = max(0, sIdx - 11)
+            let driftG = abs(gdArr[sIdx] - gdArr[prevIdx])
+            var pathLenNorm = 0.0
+            if sIdx > prevIdx {
+                for pStep in (prevIdx + 1)...sIdx {
+                    pathLenNorm += hypot(nxArr[pStep] - nxArr[pStep - 1], nyArr[pStep] - nyArr[pStep - 1])
+                }
+            }
+            let netDriftNorm = hypot(nxArr[sIdx] - nxArr[prevIdx], nyArr[sIdx] - nyArr[prevIdx])
+            let oldestRadNorm = hypot(nxArr[prevIdx], nyArr[prevIdx])
+            let isMonotonicApproach = oldestRadNorm > 0.18 && netDriftNorm > 0.21 && pathLenNorm > 0.01 && (netDriftNorm / pathLenNorm) >= 0.82
+            if gdArr[sIdx] > gdLimitG || radNorm > 0.24 || driftG > 0.029 || isMonotonicApproach {
+                let priorIdx = max(0, sIdx - 20)
+                if sIdx < 20 || gdArr[priorIdx] > gdLimitG || hypot(nxArr[priorIdx], nyArr[priorIdx]) > 0.24 {
+                    settleIdx = min(n - 2, sIdx + 1)
+                    break
+                }
+            }
+            settleIdx = sIdx
+        }
+        settleIdx = max(1, min(n - 2, settleIdx))
+
+        var prepStartIdx = 0
+        var sawLift = false
+        if settleIdx >= 2 {
+            for pIdx in stride(from: settleIdx - 1, through: 1, by: -1) {
+                let stepShiftG = abs(gdArr[pIdx] - gdArr[pIdx - 1])
+                let armLoweredFromSetUp = gdArr[pIdx] >= 0.225
+                if stepShiftG >= 0.008 {
+                    sawLift = true
+                } else if sawLift && armLoweredFromSetUp && (trimmedSamples[settleIdx].t - trimmedSamples[pIdx].t) >= 450 && stepShiftG < 0.004 {
+                    prepStartIdx = pIdx
+                    break
+                }
+            }
+        }
+
+        let prepSec = max(0.4, min(10.0, Double(trimmedSamples[settleIdx].t - trimmedSamples[prepStartIdx].t) / 1000.0))
+        let aimSec = max(0.5, min(24.0, Double(trimmedSamples[n - 1].t - trimmedSamples[settleIdx].t) / 1000.0))
 
         var sumSq = 0.0
         let aimCount = max(1, n - settleIdx)
