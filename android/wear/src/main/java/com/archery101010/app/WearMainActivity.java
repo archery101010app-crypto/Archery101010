@@ -76,6 +76,7 @@ import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Archery 101010 — Native Wear OS Watch App (Round & Square Smartwatches)
@@ -538,7 +539,10 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
 
     private void requestHeartRatePermissionInteractive() {
         if (hasHeartRatePermission()) {
-            heartRateSensor = null;
+            long now = System.currentTimeMillis();
+            if (!isLocalHeartRateFresh() && hrRegisteredAtMs > 0L && (now - hrRegisteredAtMs) >= 10_000L) {
+                stopHeartRateStreaming();
+            }
             startHeartRateStreaming(false, false);
             return;
         }
@@ -600,33 +604,27 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
 
         if (heartRateSensor == null) {
             heartRateSensor = sensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE);
-            try {
-                if (heartRateSensor == null || heartRateSensor.isWakeUpSensor()) {
+            if (heartRateSensor == null) {
+                try {
                     List<Sensor> hrList = sensorManager.getSensorList(Sensor.TYPE_HEART_RATE);
                     if (hrList != null && !hrList.isEmpty()) {
-                        for (Sensor candidate : hrList) {
-                            if (candidate != null && !candidate.isWakeUpSensor()) {
-                                heartRateSensor = candidate;
-                                break;
-                            }
-                        }
-                        if (heartRateSensor == null) {
-                            heartRateSensor = hrList.get(0);
-                        }
+                        heartRateSensor = hrList.get(0);
                     }
-                }
-            } catch (Exception ignored) {}
+                } catch (Exception ignored) {}
+            }
         }
 
-        // Primary Wear OS 3-6 optical wake-up via Jetpack Health Services MeasureClient:
-        // Directly binds to com.google.android.wearable.healthservices (Samsung BioActive HAL / Pixel Health Services)
-        // so the green PPG LED powers ON immediately from cold start without needing any external fitness app!
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isHealthServicesHrRegistered) {
+        // Single-owner optical PPG discipline (Samsung BioActive / Wear OS 4-6):
+        // NEVER register SensorManager TYPE_HEART_RATE and HealthServices MeasureClient simultaneously,
+        // because dual listeners fight over the optical AFE gain and emit false NO_CONTACT!
+        // Start with proven SensorManager(SENSOR_DELAY_NORMAL), and cleanly hand off to a fresh
+        // HealthServices MeasureClient instance only if SensorManager is absent or stalls >= 12s cold.
+        long now = System.currentTimeMillis();
+        if (heartRateSensor == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isHealthServicesHrRegistered) {
             try {
-                if (healthServicesHrHelperObj == null) {
-                    healthServicesHrHelperObj = new WearHealthServicesHrBridge(this);
-                }
-                isHealthServicesHrRegistered = ((WearHealthServicesHrBridge) healthServicesHrHelperObj).start(this);
+                WearHealthServicesHrBridge freshHs = new WearHealthServicesHrBridge(this);
+                healthServicesHrHelperObj = freshHs;
+                isHealthServicesHrRegistered = freshHs.start(this);
             } catch (Throwable ignored) {
                 isHealthServicesHrRegistered = false;
             }
@@ -638,14 +636,22 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
             runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
             return;
         }
-        long now = System.currentTimeMillis();
-        boolean wasAnyRegistered = isHrSensorRegistered || (hrRegisteredAtMs > 0L && isHealthServicesHrRegistered);
-        if (!isHrSensorRegistered && heartRateSensor != null) {
+        boolean wasAnyRegistered = isHrSensorRegistered || isHealthServicesHrRegistered;
+        if (!wasAnyRegistered && heartRateSensor != null) {
             try {
                 isHrSensorRegistered = sensorManager.registerListener(
-                        heartRateListener, heartRateSensor, SensorManager.SENSOR_DELAY_FASTEST, 0);
+                        heartRateListener, heartRateSensor, SensorManager.SENSOR_DELAY_NORMAL);
             } catch (Exception ignored) {
                 isHrSensorRegistered = false;
+            }
+            if (!isHrSensorRegistered && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                try {
+                    WearHealthServicesHrBridge freshHs = new WearHealthServicesHrBridge(this);
+                    healthServicesHrHelperObj = freshHs;
+                    isHealthServicesHrRegistered = freshHs.start(this);
+                } catch (Throwable ignored) {
+                    isHealthServicesHrRegistered = false;
+                }
             }
         }
         if (!wasAnyRegistered && (isHrSensorRegistered || isHealthServicesHrRegistered)) {
@@ -657,6 +663,15 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
             }
             runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
         } else if (isLocalHeartRateFresh()) {
+            // Steady-pulse hardware refresh after 45s without BPM integer change (REPORTING_MODE_ON_CHANGE)
+            if (isHrSensorRegistered && (now - localSensorHrAtMs) >= HR_STUCK_REQUERY_MS && heartRateSensor != null) {
+                try {
+                    sensorManager.unregisterListener(heartRateListener);
+                    isHrSensorRegistered = sensorManager.registerListener(
+                            heartRateListener, heartRateSensor, SensorManager.SENSOR_DELAY_NORMAL);
+                    localSensorHrAtMs = now;
+                } catch (Exception ignored) {}
+            }
             lastHrSentMs = now;
             sendHeartRateToPhone(localSensorHrBpm, "ok");
             if (canSyncWithCloudNow()) {
@@ -666,27 +681,56 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                 touchWatchHeartbeatInFirestore(pairingCode, now);
             }
         } else {
-            // CRITICAL (Galaxy Watch 7 / Wear OS 5): NEVER unregister/re-register while optical PPG LED is warming up!
-            if (!isHealthServicesAcquiring && hrRegisteredAtMs > 0L && (now - hrRegisteredAtMs) >= HR_STUCK_REQUERY_MS) {
-                hrRegisteredAtMs = now;
+            // Cold-start fallback: if raw SensorManager yielded no BPM after 12s, hand off cleanly (single-owner!)
+            // to a brand-new HealthServices MeasureClient callback so async unregister never races register!
+            if (isHrSensorRegistered
+                    && !isHealthServicesHrRegistered
+                    && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                    && hrRegisteredAtMs > 0L
+                    && (now - hrRegisteredAtMs) >= 12_000L) {
+                try {
+                    sensorManager.unregisterListener(heartRateListener);
+                } catch (Exception ignored) {}
+                isHrSensorRegistered = false;
+                try {
+                    WearHealthServicesHrBridge freshHs = new WearHealthServicesHrBridge(this);
+                    healthServicesHrHelperObj = freshHs;
+                    isHealthServicesHrRegistered = freshHs.start(this);
+                    if (isHealthServicesHrRegistered) {
+                        hrRegisteredAtMs = now;
+                    }
+                } catch (Throwable ignored) {
+                    isHealthServicesHrRegistered = false;
+                }
+                if (!isHealthServicesHrRegistered && heartRateSensor != null) {
+                    try {
+                        isHrSensorRegistered = sensorManager.registerListener(
+                                heartRateListener, heartRateSensor, SensorManager.SENSOR_DELAY_NORMAL);
+                        hrRegisteredAtMs = now;
+                    } catch (Exception ignored) {}
+                }
+            } else if (!isHealthServicesAcquiring && hrRegisteredAtMs > 0L && (now - hrRegisteredAtMs) >= HR_STUCK_REQUERY_MS) {
+                // Full cycle recovery if HealthServices also stalled > 45s: switch cleanly back to fresh SensorManager
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && healthServicesHrHelperObj != null) {
                     try {
-                        WearHealthServicesHrBridge hs = (WearHealthServicesHrBridge) healthServicesHrHelperObj;
-                        hs.stop();
-                        isHealthServicesHrRegistered = hs.start(this);
+                        ((WearHealthServicesHrBridge) healthServicesHrHelperObj).stop();
                     } catch (Throwable ignored) {}
+                    healthServicesHrHelperObj = null;
                 }
+                isHealthServicesHrRegistered = false;
+                isHealthServicesAcquiring = false;
                 if (heartRateSensor != null) {
                     try {
                         sensorManager.unregisterListener(heartRateListener);
                         isHrSensorRegistered = sensorManager.registerListener(
-                                heartRateListener, heartRateSensor, SensorManager.SENSOR_DELAY_FASTEST, 0);
+                                heartRateListener, heartRateSensor, SensorManager.SENSOR_DELAY_NORMAL);
+                        hrRegisteredAtMs = now;
                     } catch (Exception ignored) {}
                 }
             }
             if ("reading".equals(hrStatusCode) || (localSensorHrBpm < 30 && !"no_contact".equals(hrStatusCode))) {
                 hrStatusCode = "reading";
-                if (now - lastHrStatusSentMs >= 2500L) {
+                if (now - lastHrStatusSentMs >= 3500L) {
                     lastHrStatusSentMs = now;
                     sendHeartRateToPhone(0, "reading");
                 }
@@ -705,6 +749,7 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
             try {
                 ((WearHealthServicesHrBridge) healthServicesHrHelperObj).stop();
             } catch (Throwable ignored) {}
+            healthServicesHrHelperObj = null;
         }
         isHealthServicesHrRegistered = false;
         isHealthServicesAcquiring = false;
@@ -792,6 +837,8 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
     // "" | LINKING | SYNCED | EXPIRED_OR_INVALID | NOT_FOUND | NO_NET
     private volatile String cloudLinkStatus = "";
     private final ExecutorService cloudExecutor = Executors.newSingleThreadExecutor();
+    private final AtomicBoolean cloudPollInFlight = new AtomicBoolean(false);
+    private final AtomicBoolean cloudHeartbeatInFlight = new AtomicBoolean(false);
 
     private boolean isValidSessionTokenFormat(String token) {
         return token != null && token.matches("^[A-Za-z0-9_-]{32,64}$");
@@ -801,7 +848,19 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
         return "EXPIRED_OR_INVALID".equals(cloudLinkStatus) || "NOT_FOUND".equals(cloudLinkStatus);
     }
 
+    private boolean isDirectBluetoothPhoneLinkLive() {
+        return isPhoneConnected
+                && lastPhoneSyncMs > 0L
+                && (System.currentTimeMillis() - lastPhoneSyncMs) < 45_000L;
+    }
+
     private boolean canSyncWithCloudNow() {
+        // CRITICAL (Wear OS Bluetooth Proxy): When the watch is directly linked to the Android phone via Bluetooth,
+        // NEVER tunnel redundant HTTPS Firestore requests over the slow ~6 KB/s Bluetooth proxy—doing so chokes
+        // Wearable MessageClient + DataClient so neither sync nor heart rate gets through!
+        if (isDirectBluetoothPhoneLinkLive()) {
+            return false;
+        }
         return hasPairingCode && pairingCode.length() == 6 && !isEditingCode && !isTerminalCloudErrorStatus();
     }
 
@@ -1375,7 +1434,7 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                 isSensorHighRateMode = true;
             } else if (targetMode == 2) {
                 pendingShotActive = false;
-                sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
+                sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI);
                 isSensorHighRateMode = false;
             } else {
                 pendingShotActive = false;
@@ -1504,6 +1563,10 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
 
     private void handleIncomingPhonePayload(String json) {
         if (json == null || json.isEmpty()) return;
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            runOnUiThread(() -> handleIncomingPhonePayload(json));
+            return;
+        }
         try {
             JSONObject rootObj = new JSONObject(json);
             long incomingAckSeq = rootObj.optLong("_ackCmdSeq", 0L);
@@ -1648,6 +1711,11 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
             }
 
             if (!sessionActive) {
+                boolean hadActiveWatchData = isWatchSessionActive
+                        || arrowCount > 0
+                        || totalScore > 0
+                        || !currentSessionId.isEmpty()
+                        || lastAnalysisShotNum > 0;
                 isWatchSessionActive = false;
                 if (analysisMode) {
                     analysisMode = false;
@@ -1656,7 +1724,7 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                 if (incomingArrows <= 0) {
                     lastFinishedSessionId = "";
                 }
-                if ((now - lastLocalActionTimeMs) >= 4000L || incomingArrows <= 0) {
+                if (hadActiveWatchData && ((now - lastLocalActionTimeMs) >= 4000L || incomingArrows <= 0)) {
                     resetWatchSessionCounters(true);
                     boolean keepHrAlive = isHrSensorRegistered
                             || isHealthServicesHrRegistered
@@ -1665,15 +1733,9 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                         unregisterImuSensors();
                         releaseWakeLockSafely();
                     }
-                    runOnUiThread(() -> {
-                        if (shouldRescheduleFromPhone) scheduleNextHeartbeat();
-                        if (canvasView != null) canvasView.invalidate();
-                    });
-                } else {
-                    runOnUiThread(() -> {
-                        if (canvasView != null) canvasView.invalidate();
-                    });
                 }
+                if (shouldRescheduleFromPhone) scheduleNextHeartbeat();
+                if (canvasView != null) canvasView.invalidate();
                 return;
             }
 
@@ -1930,7 +1992,7 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                 putReq.getDataMap().putLong("sent_at", nonceTs);
                 putReq.getDataMap().putLong("nonce", nonceTs);
                 Wearable.getDataClient(this).putDataItem(putReq.asPutDataRequest().setUrgent());
-                if (hasPairingCode && pairingCode.length() == 6) {
+                if (canSyncWithCloudNow()) {
                     syncCommandWithFirestoreCloud(dataItemCommandJson != null ? dataItemCommandJson : enrichedPayload);
                 }
             }
@@ -2485,10 +2547,12 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
     }
 
     private void pollFirestoreCloud() {
-        if (!hasPairingCode || pairingCode.length() != 6 || isTerminalCloudErrorStatus()) return;
+        if (!hasPairingCode || pairingCode.length() != 6 || isTerminalCloudErrorStatus() || isDirectBluetoothPhoneLinkLive()) return;
+        if (!cloudPollInFlight.compareAndSet(false, true)) return;
         lastCloudPollMs = System.currentTimeMillis();
         final String code = pairingCode;
         cloudExecutor.execute(() -> {
+            try {
             if (hasPendingCloudCommands()) {
                 drainPendingCloudCommandsBlocking(code);
             }
@@ -2758,13 +2822,19 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                 runOnUiThread(() -> { if (canvasView != null) canvasView.invalidate(); });
             } finally {
                 if (conn != null) conn.disconnect();
+                cloudPollInFlight.set(false);
+            }
+            } finally {
+                cloudPollInFlight.set(false);
             }
         });
     }
 
     private void touchWatchHeartbeatInFirestore(final String code, final long nowMs) {
-        if (code == null || code.length() != 6 || isTerminalCloudErrorStatus()) return;
+        if (code == null || code.length() != 6 || isTerminalCloudErrorStatus() || isDirectBluetoothPhoneLinkLive()) return;
+        if (!cloudHeartbeatInFlight.compareAndSet(false, true)) return;
         cloudExecutor.execute(() -> {
+            try {
             String sessionToken = ensureCloudSessionTokenBlocking(code);
             if (!isValidSessionTokenFormat(sessionToken)) return;
 
@@ -2838,6 +2908,10 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                 }
             } finally {
                 if (conn != null) conn.disconnect();
+                cloudHeartbeatInFlight.set(false);
+            }
+            } finally {
+                cloudHeartbeatInFlight.set(false);
             }
         });
     }

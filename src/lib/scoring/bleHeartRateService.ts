@@ -262,6 +262,7 @@ let lastNativeScanStartedAt = 0;
 const WEAR_HR_LIVE_WINDOW_MS = 35_000;
 let wearHrLastAt = 0;
 let wearHrMuted = false;
+let lastWatchHrRequestAtMs = 0;
 let wearHrTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
 let wearConnectFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -851,7 +852,7 @@ export function stopBleHeartRateScan(): void {
 }
 
 /** Asks the ARCHERY 101010 watch app (via Bluetooth Data Layer & 6-Digit Cloud) to stream live pulse. */
-export function requestWatchAppHeartRate(options?: { unmute?: boolean }): void {
+export function requestWatchAppHeartRate(options?: { unmute?: boolean; force?: boolean }): void {
   ensureInitialized();
   const shouldUnmute = options?.unmute !== false;
   if (shouldUnmute) {
@@ -859,18 +860,23 @@ export function requestWatchAppHeartRate(options?: { unmute?: boolean }): void {
   } else if (wearHrMuted) {
     return;
   }
+  const now = Date.now();
   const bridge = getNativeBridge();
-  if (bridge && typeof bridge.requestWatchHeartRate === "function") {
-    try {
-      bridge.requestWatchHeartRate();
-    } catch {}
-  }
   if (bridge && typeof bridge.getLastWearHeartRateJson === "function") {
     try {
       const cachedWear = bridge.getLastWearHeartRateJson();
       if (cachedWear) {
         applyWearPayload(JSON.parse(cachedWear));
       }
+    } catch {}
+  }
+  if (!options?.force && now - lastWatchHrRequestAtMs < 3800) {
+    return;
+  }
+  lastWatchHrRequestAtMs = now;
+  if (bridge && typeof bridge.requestWatchHeartRate === "function") {
+    try {
+      bridge.requestWatchHeartRate();
     } catch {}
   }
   if (typeof window !== "undefined") {

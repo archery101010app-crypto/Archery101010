@@ -165,39 +165,19 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
       if (effectiveUid) {
         refreshPhoneWatchPairingWindow(effectiveUid, true).catch(() => {});
       }
-      requestWatchAppHeartRate();
+      requestWatchAppHeartRate({ force: true });
       pingNativeWatch();
       const pollWatchTimer = setInterval(() => {
         setEvalNowMs(Date.now());
-        ensurePhoneWatchPairingReady(userUid || auth.currentUser?.uid);
         requestWatchAppHeartRate({ unmute: false });
         pingNativeWatch();
-      }, 4000);
+      }, 6000);
       const refreshPairingWindowTimer = setInterval(() => {
         const curUid = userUid || auth.currentUser?.uid;
         if (curUid) {
           refreshPhoneWatchPairingWindow(curUid, false).catch(() => {});
         }
       }, 60_000);
-      const current = getBleHeartRateStatus();
-      const watchAlreadyLinked =
-        (watchConnStatus.bridgeReady &&
-          ((watchConnStatus.connectedNodesCount > 0 &&
-            (watchConnStatus.watchAppInstalledCount ?? 0) > 0) ||
-            (watchConnStatus.lastPongAt > 0 &&
-              Date.now() - watchConnStatus.lastPongAt <= 3 * 60 * 1000) ||
-            (watchConnStatus.lastMessageAt > 0 &&
-              Date.now() - watchConnStatus.lastMessageAt <= 3 * 60 * 1000))) ||
-        current.source === "wear_os";
-      if (
-        !watchAlreadyLinked &&
-        current.transport === "native_android" &&
-        current.state !== "connected" &&
-        current.state !== "connecting" &&
-        current.state !== "scanning"
-      ) {
-        startBleHeartRateScanOrRequest();
-      }
       const unregisterBack = registerModalDismiss(() => {
         if (dialog.open) {
           dialog.close();
@@ -235,7 +215,7 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
       refreshPhoneWatchPairingWindow(curUid, true).catch(() => {});
     }
     pingNativeWatch();
-    requestWatchAppHeartRate();
+    requestWatchAppHeartRate({ force: true });
     if (syncWatchTimerRef.current) {
       clearTimeout(syncWatchTimerRef.current);
     }

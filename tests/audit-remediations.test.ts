@@ -1163,8 +1163,10 @@ describe("M6 Audit Remediations — CI/CD, Portable Scripts, iOS/watchOS Version
       "WearMainActivity must register HealthServices MeasureClient HEART_RATE_BPM to wake optical PPG LED cold"
     );
     assert.ok(
-      wearJava.includes("lastRejectedSessionToken") && wearJava.includes("CONECTADO POR BLUETOOTH"),
-      "WearMainActivity must block rejected cloud sessionToken loops and show stable Bluetooth link on Screen 5"
+      wearJava.includes("lastRejectedSessionToken") &&
+        wearJava.includes("CONECTADO POR BLUETOOTH") &&
+        wearJava.includes("isDirectBluetoothPhoneLinkLive()"),
+      "WearMainActivity must block rejected cloud sessionToken loops, skip Bluetooth-proxy Firestore saturation when directly linked, and show stable Bluetooth link on Screen 5"
     );
 
     const modalSrc = fs.readFileSync(

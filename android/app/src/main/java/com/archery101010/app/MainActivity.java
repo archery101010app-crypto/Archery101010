@@ -1551,11 +1551,16 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public void pingWatch() {
             try {
-                String pingPayload = "{\"type\":\"PING\",\"_ts\":" + System.currentTimeMillis() + "}";
+                long nowMs = System.currentTimeMillis();
+                if (nowMs - lastNativePingSentMs < 3500L) return;
+                lastNativePingSentMs = nowMs;
+                String pingPayload = "{\"type\":\"PING\",\"_ts\":" + nowMs + "}";
                 broadcastToWearNodes("/archery101010/ping", pingPayload.getBytes(StandardCharsets.UTF_8));
-                if (lastWatchSnapshotJson != null && !lastWatchSnapshotJson.isEmpty()) {
+                if (lastWatchSnapshotJson != null
+                        && !lastWatchSnapshotJson.isEmpty()
+                        && (nowMs - lastWatchStateBroadcastMs) >= 12_000L) {
+                    lastWatchStateBroadcastMs = nowMs;
                     broadcastToWearNodes("/archery101010/telemetry", lastWatchSnapshotJson.getBytes(StandardCharsets.UTF_8));
-                    syncStateDataItemToWear(lastWatchSnapshotJson);
                 }
                 refreshWatchConnectionStatus();
             } catch (Exception ignored) {}
@@ -1823,19 +1828,47 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    private volatile long lastNativePingSentMs = 0L;
+    private volatile long lastWatchStateBroadcastMs = 0L;
+    private volatile long lastWatchDataItemSyncMs = 0L;
+    private volatile String lastWatchCoreStateSig = "";
+    private volatile long lastHrReqBroadcastMs = 0L;
+    private volatile long lastHrReqDataItemMs = 0L;
+
+    private static boolean isCompanionWatchBleName(final String rawName) {
+        if (rawName == null) return false;
+        String lower = rawName.trim().toLowerCase(java.util.Locale.ROOT);
+        return lower.contains("watch")
+            || lower.contains("reloj")
+            || lower.startsWith("sm-l")
+            || lower.startsWith("sm-r")
+            || lower.contains("galaxy fit")
+            || lower.contains("wear os");
+    }
+
     private void cacheAndSyncWatchState(final String snapshotJson) {
         if (snapshotJson == null || snapshotJson.isEmpty()) return;
         String enriched = enrichSnapshotWithAckSeq(snapshotJson);
+        String coreSig = enriched.replaceAll("\"(?:updatedAt|_ts)\"\\s*:\\s*[0-9]+", "");
+        long nowMs = System.currentTimeMillis();
+        boolean changed = !coreSig.equals(lastWatchCoreStateSig);
         lastWatchSnapshotJson = enriched;
         try {
             getSharedPreferences(WATCH_BRIDGE_PREFS, MODE_PRIVATE)
                 .edit()
                 .putString("lastWatchSnapshotJson", enriched)
-                .putLong("lastWatchSnapshotTimeMs", System.currentTimeMillis())
+                .putLong("lastWatchSnapshotTimeMs", nowMs)
                 .apply();
         } catch (Exception ignored) {}
-        broadcastToWearNodes("/archery101010/telemetry", enriched.getBytes(StandardCharsets.UTF_8));
-        syncStateDataItemToWear(enriched);
+        if (changed || (nowMs - lastWatchStateBroadcastMs) >= 8_000L) {
+            lastWatchCoreStateSig = coreSig;
+            lastWatchStateBroadcastMs = nowMs;
+            broadcastToWearNodes("/archery101010/telemetry", enriched.getBytes(StandardCharsets.UTF_8));
+        }
+        if (changed || (nowMs - lastWatchDataItemSyncMs) >= 12_000L) {
+            lastWatchDataItemSyncMs = nowMs;
+            syncStateDataItemToWear(enriched);
+        }
     }
 
     private void syncStateDataItemToWear(final String snapshotJson) {
@@ -3199,8 +3232,9 @@ public class MainActivity extends BridgeActivity {
         try {
             BluetoothLeScanner scanner = adapter.getBluetoothLeScanner();
             if (scanner != null) {
+                boolean hasWearWatch = cachedConnectedNodesJson != null && cachedConnectedNodesJson.length() > 0;
                 ScanSettings.Builder settingsBuilder = new ScanSettings.Builder()
-                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY);
+                    .setScanMode(hasWearWatch ? ScanSettings.SCAN_MODE_BALANCED : ScanSettings.SCAN_MODE_LOW_LATENCY);
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     settingsBuilder.setLegacy(false);
                 }
@@ -3212,7 +3246,7 @@ public class MainActivity extends BridgeActivity {
                 emitBleHrStatusToWebView(null);
                 scanner.startScan(null, settings, bleHrScanCallback);
                 bleMainHandler.removeCallbacks(stopBleScanTimeoutRunnable);
-                bleMainHandler.postDelayed(stopBleScanTimeoutRunnable, 12000L);
+                bleMainHandler.postDelayed(stopBleScanTimeoutRunnable, hasWearWatch ? 8000L : 12000L);
             } else {
                 isBleScanning = false;
                 if ("scanning".equals(bleHrState)) bleHrState = "disconnected";
@@ -3650,6 +3684,13 @@ public class MainActivity extends BridgeActivity {
         if (address == null || address.trim().isEmpty()) return;
         final String cleanAddr = address.trim();
         final String cleanName = (name != null && !name.trim().isEmpty()) ? name.trim() : "Sensor Bluetooth";
+        if (isCompanionWatchBleName(cleanName)) {
+            // Never open competing raw BLE GATT to a companion Wear OS smartwatch (collides with Wear Data Layer!)
+            try {
+                getSharedPreferences(BLE_HR_PREFS, MODE_PRIVATE).edit().clear().apply();
+            } catch (Exception ignored) {}
+            return;
+        }
 
         if (!hasBlePermissionsInternal()) {
             pendingBleConnectAddress = cleanAddr;
@@ -3818,19 +3859,6 @@ public class MainActivity extends BridgeActivity {
         public void requestWatchHeartRate() {
             try {
                 long nowMs = System.currentTimeMillis();
-                byte[] req = ("{\"type\":\"HR_REQUEST\",\"_ts\":" + nowMs + "}")
-                    .getBytes(StandardCharsets.UTF_8);
-                broadcastToWearNodes("/archery101010/hr_request", req);
-                if (lastWatchSnapshotJson != null && !lastWatchSnapshotJson.isEmpty()) {
-                    String enriched = enrichSnapshotWithAckSeq(lastWatchSnapshotJson);
-                    broadcastToWearNodes("/archery101010/telemetry", enriched.getBytes(StandardCharsets.UTF_8));
-                    syncStateDataItemToWear(enriched);
-                }
-                try {
-                    PutDataMapRequest putReq = PutDataMapRequest.create("/archery101010/hr_request");
-                    putReq.getDataMap().putLong("requested_at", nowMs);
-                    Wearable.getDataClient(MainActivity.this).putDataItem(putReq.asPutDataRequest().setUrgent());
-                } catch (Exception ignored) {}
                 String cachedHr = getLastWearHeartRateJson();
                 if (cachedHr != null && !cachedHr.isEmpty()) {
                     final String quotedJson = JSONObject.quote(cachedHr);
@@ -3840,6 +3868,21 @@ public class MainActivity extends BridgeActivity {
                             getBridge().getWebView().evaluateJavascript(js, null);
                         }
                     });
+                }
+                if (nowMs - lastHrReqBroadcastMs < 4000L) {
+                    return;
+                }
+                lastHrReqBroadcastMs = nowMs;
+                byte[] req = ("{\"type\":\"HR_REQUEST\",\"_ts\":" + nowMs + "}")
+                    .getBytes(StandardCharsets.UTF_8);
+                broadcastToWearNodes("/archery101010/hr_request", req);
+                if (nowMs - lastHrReqDataItemMs >= 20_000L) {
+                    lastHrReqDataItemMs = nowMs;
+                    try {
+                        PutDataMapRequest putReq = PutDataMapRequest.create("/archery101010/hr_request");
+                        putReq.getDataMap().putLong("requested_at", nowMs);
+                        Wearable.getDataClient(MainActivity.this).putDataItem(putReq.asPutDataRequest().setUrgent());
+                    } catch (Exception ignored) {}
                 }
                 // Actively inspect current DataClient /archery101010/hr DataItems (via 0-arg getDataItems() so
                 // wildcard authority never throws IllegalArgumentException under FILTER_LITERAL).
@@ -3931,6 +3974,12 @@ public class MainActivity extends BridgeActivity {
                 if (adapter == null || !adapter.isEnabled()) return;
                 String savedAddr = getSharedPreferences(BLE_HR_PREFS, MODE_PRIVATE).getString("saved_address", "");
                 String savedName = getSharedPreferences(BLE_HR_PREFS, MODE_PRIVATE).getString("saved_name", "");
+                if (isCompanionWatchBleName(savedName)) {
+                    try {
+                        getSharedPreferences(BLE_HR_PREFS, MODE_PRIVATE).edit().clear().apply();
+                    } catch (Exception ignored) {}
+                    return;
+                }
                 if (savedAddr != null && !savedAddr.isEmpty()) {
                     connectBleHrDeviceInternal(savedAddr, savedName, true);
                 }

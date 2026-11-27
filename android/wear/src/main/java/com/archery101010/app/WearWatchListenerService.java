@@ -37,7 +37,8 @@ public class WearWatchListenerService extends WearableListenerService {
 
         WearMainActivity active = WearMainActivity.getActiveInstance();
         if (active != null) {
-            active.onBackgroundPhoneEvent(path, payload, event.getSourceNodeId());
+            // WearMainActivity already registers live MessageClient + DataClient listeners on MainLooper;
+            // skip duplicate background forwarding so every phone message is processed once on the UI thread.
             return;
         }
 
@@ -105,17 +106,13 @@ public class WearWatchListenerService extends WearableListenerService {
                         String snapshotJson = dataMap.getString("snapshot_json", "");
                         if (snapshotJson != null && !snapshotJson.isEmpty()) {
                             WearMainActivity active = WearMainActivity.getActiveInstance();
-                            if (active != null) {
-                                active.onBackgroundPhoneEvent("/archery101010/telemetry", snapshotJson, "");
-                            } else {
+                            if (active == null) {
                                 persistSnapshotToWatchPrefs(snapshotJson);
                             }
                         }
                     } else if ("/archery101010/hr_request".equals(path)) {
                         WearMainActivity active = WearMainActivity.getActiveInstance();
-                        if (active != null) {
-                            active.onBackgroundPhoneEvent("/archery101010/hr_request", "", "");
-                        } else {
+                        if (active == null) {
                             replyBackgroundHeartRateStatus("", System.currentTimeMillis());
                         }
                     }
