@@ -223,8 +223,6 @@ export default function SessionConfigView({
     }
   };
 
-  const maxAllowedEnds = Math.min(60, Math.max(1, Math.floor(200 / Math.max(1, arrowsPerEnd))));
-
   const launchWithPracticeType = (selectedPracticeType: "Control" | "Práctica" | "Volumen") => {
     const safeArrowsPerEnd = Math.min(12, Math.max(1, arrowsPerEnd));
     const safeMaxEnds = Math.min(60, Math.max(1, Math.floor(200 / safeArrowsPerEnd)));
@@ -783,70 +781,6 @@ export default function SessionConfigView({
                 })}
               </div>
             </div>
-
-            {/* 5. TANDAS Y FLECHAS (Formato Libre) */}
-            {format === "Libre" && practiceType !== "Volumen" && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[13px] font-extrabold uppercase tracking-[0.06em] text-white">
-                    {t("rounds")}
-                  </label>
-                  <div className="h-11 flex items-center bg-[#0D1017] border border-white/[0.10] rounded-xl">
-                    <button
-                      type="button"
-                      onClick={() => setEndsCount(Math.max(1, endsCount - 1))}
-                      className="px-3.5 py-2.5 text-[#00BFFF] font-black text-[20px] leading-none cursor-pointer"
-                    >
-                      −
-                    </button>
-                    <span className="flex-1 text-center font-extrabold text-white text-[16.5px] leading-none tabular-nums">
-                      {endsCount}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setEndsCount(Math.min(maxAllowedEnds, endsCount + 1))}
-                      disabled={endsCount >= maxAllowedEnds}
-                      className="px-3.5 py-2.5 text-[#00BFFF] font-black text-[20px] leading-none cursor-pointer disabled:opacity-35"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[13px] font-extrabold uppercase tracking-[0.06em] text-white">
-                    {tx("Flechas", "Arrows")}
-                  </label>
-                  <div className="h-11 flex items-center bg-[#0D1017] border border-white/[0.10] rounded-xl">
-                    <button
-                      type="button"
-                      onClick={() => setArrowsPerEnd(Math.max(1, arrowsPerEnd - 1))}
-                      className="px-3.5 py-2.5 text-[#00BFFF] font-black text-[20px] leading-none cursor-pointer"
-                    >
-                      −
-                    </button>
-                    <span className="flex-1 text-center font-extrabold text-white text-[16.5px] leading-none tabular-nums">
-                      {arrowsPerEnd}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextArrows = Math.min(12, arrowsPerEnd + 1);
-                        const nextMaxEnds = Math.min(60, Math.max(1, Math.floor(200 / nextArrows)));
-                        setArrowsPerEnd(nextArrows);
-                        if (endsCount > nextMaxEnds) {
-                          setEndsCount(nextMaxEnds);
-                        }
-                      }}
-                      disabled={arrowsPerEnd >= 12}
-                      className="px-3.5 py-2.5 text-[#00BFFF] font-black text-[20px] leading-none cursor-pointer disabled:opacity-35"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
