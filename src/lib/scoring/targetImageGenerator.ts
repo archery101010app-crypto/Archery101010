@@ -175,6 +175,22 @@ const SHOOT_DIST_TITLE_BY_LANG: Record<string, string> = {
   ar: "المسافة"
 };
 
+const ARROWS_SHOT_TITLE_BY_LANG: Record<string, string> = {
+  es: "FLECHAS LANZADAS",
+  en: "ARROWS SHOT",
+  ko: "발사 화살",
+  ja: "射数",
+  fr: "FLÈCHES TIRÉES",
+  de: "GESCHOSSENE PFEILE",
+  pt: "FLECHAS DISPARADAS",
+  it: "FRECCE TIRATE",
+  "zh-CN": "已射箭数",
+  iw: "חיצים שנורו",
+  ru: "ВЫСТРЕЛЫ",
+  cs: "VYSTŘELENÉ ŠÍPY",
+  ar: "الأسهم المطلقة"
+};
+
 function isVolumeTelemetryParams(params: TargetShotChartParams): boolean {
   return Boolean(
     params.isVolumeOnly === true ||
@@ -592,86 +608,362 @@ export async function renderTargetShotChartCanvas(params: TargetShotChartParams)
     316
   );
 
-  // 3. Virtual Target Position & Size based on Design 1 (Black) vs Design 2 (Photo / Transparent)
-  // Design 1 (Black): +30% centered target -> diameter 754px (radius 377px), center (540, 771)
-  // Design 2 (Photo/Transparent): +20% left-aligned target -> diameter 547px (radius 273.5px), center (339.5, 722.5)
+  // 3. Centerpiece: Mechanical 3D Chrome Tally Counter for Volume sessions, or WA Target Face for Scored sessions
+  // Design 1 (Black): centered centerpiece -> target diameter 754px (radius 377px), center (540, 771)
+  // Design 2 (Photo/Transparent): left-aligned centerpiece -> target diameter 547px (radius 273.5px), center (339.5, 722.5)
   const targetDiameter = isBlackMode ? 754 : 547;
   const targetRadius = targetDiameter / 2;
   const targetCenterX = isBlackMode ? 540 : 66 + targetRadius; // 540 or 339.5
   const targetCenterY = isBlackMode ? 771 : 722.5;
   const targetScaleFactor = targetRadius / 228; // Relative to original 228px radius
 
-  // Target shadow
-  ctx.save();
-  ctx.shadowColor = "rgba(0, 0, 0, 0.88)";
-  ctx.shadowBlur = 42;
-  ctx.beginPath();
-  ctx.arc(targetCenterX, targetCenterY, targetRadius, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
-  ctx.fill();
-  ctx.restore();
-
-  // Concentric WA rings
-  ctx.save();
-  ctx.globalAlpha = isPhotoMode ? 0.90 : isTransparentMode ? 0.96 : 1.0;
-  const rings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
-  rings.forEach((ring) => {
-    const currentR = (ring.r / 48) * targetRadius;
-    ctx.beginPath();
-    ctx.arc(targetCenterX, targetCenterY, currentR, 0, Math.PI * 2);
-    ctx.fillStyle = ring.fill;
-    ctx.fill();
-    ctx.strokeStyle = ring.stroke;
-    ctx.lineWidth = (ring.v === "X" ? 1.5 : 2) * targetScaleFactor;
-    ctx.stroke();
-  });
-  ctx.restore();
-
-  // Center spider (+)
-  const spiderHalf = 10 * targetScaleFactor;
-  ctx.strokeStyle = "rgba(0, 0, 0, 0.65)";
-  ctx.lineWidth = 1.5 * targetScaleFactor;
-  ctx.beginPath();
-  ctx.moveTo(targetCenterX - spiderHalf, targetCenterY);
-  ctx.lineTo(targetCenterX + spiderHalf, targetCenterY);
-  ctx.moveTo(targetCenterX, targetCenterY - spiderHalf);
-  ctx.lineTo(targetCenterX, targetCenterY + spiderHalf);
-  ctx.stroke();
-
-  // 4. Plotted Arrow Impacts on Target
-  const outerHoleR = 11 * targetScaleFactor;
-  const innerArrowR = 9.5 * targetScaleFactor;
-  const arrowFontPx = Math.round(10 * targetScaleFactor * 10) / 10;
-
-  impacts.forEach((imp, idx) => {
-    const ix = targetCenterX + ((imp.x - 50) / 48) * targetRadius;
-    const iy = targetCenterY + ((imp.y - 50) / 48) * targetRadius;
+  if (isVolOnly) {
+    // Exact 3D Chrome Mechanical Hand Tally Clicker from phone Volume session (ScoringView.tsx)
+    const caseRadius = isBlackMode ? 330 : 266;
+    const caseCenterX = isBlackMode ? 540 : 334;
+    const caseCenterY = isBlackMode ? 792 : 748;
+    const s = caseRadius / 266; // 1.0 in Photo/Transparent (532px dia), ~1.24 in Black OLED (660px dia)
 
     ctx.save();
-    ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
-    ctx.shadowBlur = 7 * targetScaleFactor;
-    ctx.beginPath();
-    ctx.arc(ix, iy, outerHoleR, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
+    ctx.globalAlpha = isTransparentMode ? 0.98 : 1.0;
+
+    // 3a. Top Metal Hanger Loop (behind upper rim of chrome case)
+    const loopOuterW = 128 * s;
+    const loopOuterH = 88 * s;
+    const loopX = caseCenterX - loopOuterW / 2;
+    const loopY = caseCenterY - caseRadius - 68 * s;
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.72)";
+    ctx.shadowBlur = 16 * s;
+    ctx.shadowOffsetY = 4 * s;
+    const loopGrad = ctx.createLinearGradient(loopX, loopY, loopX + loopOuterW, loopY + loopOuterH);
+    loopGrad.addColorStop(0, "#e4e4e7");
+    loopGrad.addColorStop(0.5, "#a1a1aa");
+    loopGrad.addColorStop(1, "#52525b");
+    ctx.fillStyle = loopGrad;
+    drawRoundedRect(ctx, loopX, loopY, loopOuterW, loopOuterH + 24 * s, loopOuterW / 2);
     ctx.fill();
     ctx.restore();
 
-    ctx.beginPath();
-    ctx.arc(ix, iy, innerArrowR, 0, Math.PI * 2);
-    ctx.fillStyle = "#FFD700";
+    // Inner cutout of hanger loop
+    const loopBorder = 12 * s;
+    const innerLoopW = loopOuterW - loopBorder * 2;
+    const innerLoopH = loopOuterH - loopBorder;
+    ctx.save();
+    ctx.fillStyle = isBlackMode ? "#090C12" : "rgba(12, 12, 16, 0.72)";
+    ctx.strokeStyle = "#52525b";
+    ctx.lineWidth = 3 * s;
+    drawRoundedRect(
+      ctx,
+      caseCenterX - innerLoopW / 2,
+      loopY + loopBorder,
+      innerLoopW,
+      innerLoopH + 20 * s,
+      innerLoopW / 2
+    );
     ctx.fill();
-    ctx.strokeStyle = "#000000";
-    ctx.lineWidth = 1.8 * targetScaleFactor;
+    ctx.stroke();
+    ctx.restore();
+
+    // 3b. Upper-Right Reset Knob ("R") + Stem
+    const knobAngle = -0.34; // ~ -19.5 degrees (upper-right side)
+    const stemStartX = caseCenterX + Math.cos(knobAngle) * (caseRadius - 6 * s);
+    const knobCenterY = caseCenterY + Math.sin(knobAngle) * (caseRadius * 0.62);
+    const stemW = 28 * s;
+    const stemH = 42 * s;
+    const stemX = caseCenterX + caseRadius - 10 * s;
+    const stemY = knobCenterY - stemH / 2;
+
+    const stemGrad = ctx.createLinearGradient(stemX, stemY, stemX, stemY + stemH);
+    stemGrad.addColorStop(0, "#d4d4d8");
+    stemGrad.addColorStop(0.5, "#71717a");
+    stemGrad.addColorStop(1, "#3f3f46");
+    ctx.fillStyle = stemGrad;
+    ctx.strokeStyle = "#a1a1aa";
+    ctx.lineWidth = 2 * s;
+    drawRoundedRect(ctx, Math.min(stemStartX, stemX), stemY, stemW, stemH, 6 * s);
+    ctx.fill();
     ctx.stroke();
 
-    ctx.font = `900 ${arrowFontPx}px ${appFont}`;
-    ctx.fillStyle = "#000000";
+    const knobR = 34 * s;
+    const knobX = stemX + stemW + knobR - 6 * s;
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
+    ctx.shadowBlur = 16 * s;
+    ctx.shadowOffsetY = 6 * s;
+    const knobGrad = ctx.createRadialGradient(
+      knobX - knobR * 0.3,
+      knobCenterY - knobR * 0.3,
+      knobR * 0.08,
+      knobX,
+      knobCenterY,
+      knobR
+    );
+    knobGrad.addColorStop(0, "#ffffff");
+    knobGrad.addColorStop(0.45, "#d4d4d8");
+    knobGrad.addColorStop(1, "#71717a");
+    ctx.beginPath();
+    ctx.arc(knobX, knobCenterY, knobR, 0, Math.PI * 2);
+    ctx.fillStyle = knobGrad;
+    ctx.fill();
+    ctx.strokeStyle = "#a1a1aa";
+    ctx.lineWidth = 3.5 * s;
+    ctx.stroke();
+    ctx.restore();
+
+    // Dark center cap with solid white "R"
+    const capR = 16 * s;
+    ctx.beginPath();
+    ctx.arc(knobX, knobCenterY, capR, 0, Math.PI * 2);
+    ctx.fillStyle = "#27272a";
+    ctx.fill();
+    ctx.strokeStyle = "#71717a";
+    ctx.lineWidth = 2 * s;
+    ctx.stroke();
+
+    ctx.font = `800 ${Math.round(18 * s)}px ${appFont}`;
+    ctx.fillStyle = "#FFFFFF";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(imp.value || String(idx + 1), ix, iy + 0.5);
-  });
+    ctx.fillText("R", knobX, knobCenterY + 1 * s);
 
-  ctx.textBaseline = "alphabetic";
+    // 3c. Main Circular 3D Chrome Case
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.88)";
+    ctx.shadowBlur = 48 * s;
+    ctx.shadowOffsetY = 18 * s;
+    ctx.beginPath();
+    ctx.arc(caseCenterX, caseCenterY, caseRadius, 0, Math.PI * 2);
+    const caseGrad = ctx.createRadialGradient(
+      caseCenterX - caseRadius * 0.3,
+      caseCenterY - caseRadius * 0.44,
+      caseRadius * 0.06,
+      caseCenterX,
+      caseCenterY,
+      caseRadius
+    );
+    caseGrad.addColorStop(0, "#fafafa");
+    caseGrad.addColorStop(0.28, "#e4e4e7");
+    caseGrad.addColorStop(0.68, "#a1a1aa");
+    caseGrad.addColorStop(1, "#52525b");
+    ctx.fillStyle = caseGrad;
+    ctx.fill();
+    ctx.restore();
+
+    // Thick brushed chrome outer bevel
+    ctx.beginPath();
+    ctx.arc(caseCenterX, caseCenterY, caseRadius - 9 * s, 0, Math.PI * 2);
+    ctx.strokeStyle = "#d4d4d8";
+    ctx.lineWidth = 18 * s;
+    ctx.stroke();
+
+    // Subtle outer hairline & inner specular highlight
+    ctx.beginPath();
+    ctx.arc(caseCenterX, caseCenterY, caseRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
+    ctx.lineWidth = 2 * s;
+    ctx.stroke();
+
+    const glossR = caseRadius - 20 * s;
+    const glossGrad = ctx.createLinearGradient(
+      caseCenterX - glossR,
+      caseCenterY - glossR,
+      caseCenterX + glossR * 0.5,
+      caseCenterY + glossR * 0.5
+    );
+    glossGrad.addColorStop(0, "rgba(255, 255, 255, 0.46)");
+    glossGrad.addColorStop(0.45, "rgba(255, 255, 255, 0.08)");
+    glossGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
+    ctx.beginPath();
+    ctx.arc(caseCenterX, caseCenterY, glossR, 0, Math.PI * 2);
+    ctx.fillStyle = glossGrad;
+    ctx.fill();
+
+    // 3d. Top Center Chrome Clicker Lever
+    const leverW = 212 * s;
+    const leverH = 44 * s;
+    const leverX = caseCenterX - leverW / 2;
+    const leverY = caseCenterY - caseRadius + 28 * s;
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+    ctx.shadowBlur = 10 * s;
+    ctx.shadowOffsetY = 6 * s;
+    const leverGrad = ctx.createLinearGradient(leverX, leverY, leverX, leverY + leverH);
+    leverGrad.addColorStop(0, "#ffffff");
+    leverGrad.addColorStop(0.5, "#d4d4d8");
+    leverGrad.addColorStop(1, "#71717a");
+    ctx.fillStyle = leverGrad;
+    drawRoundedRect(ctx, leverX, leverY, leverW, leverH, 10 * s);
+    ctx.fill();
+    ctx.strokeStyle = "#a1a1aa";
+    ctx.lineWidth = 2 * s;
+    ctx.stroke();
+    ctx.restore();
+
+    // 3e. Recessed Dark Display Window + Roller Drums
+    const digitsStr = String(Math.max(0, Math.round(totalArrowsCount))).padStart(4, "0");
+    const digitsArr = digitsStr.split("");
+    const numDrums = digitsArr.length;
+    const winW = 386 * s;
+    const winH = 192 * s;
+    const winX = caseCenterX - winW / 2;
+    const winY = caseCenterY - winH / 2 + 12 * s;
+
+    // White bottom bevel highlight under window
+    ctx.save();
+    ctx.fillStyle = "rgba(255, 255, 255, 0.62)";
+    drawRoundedRect(ctx, winX - 2 * s, winY + 3 * s, winW + 4 * s, winH + 2 * s, 32 * s);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = "#09090b";
+    ctx.strokeStyle = "#3f3f46";
+    ctx.lineWidth = 8 * s;
+    drawRoundedRect(ctx, winX, winY, winW, winH, 30 * s);
+    ctx.fill();
+    ctx.stroke();
+
+    // Subtle top inner glass reflection
+    const winGlassGrad = ctx.createLinearGradient(winX, winY, winX, winY + winH * 0.55);
+    winGlassGrad.addColorStop(0, "rgba(255, 255, 255, 0.08)");
+    winGlassGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
+    ctx.fillStyle = winGlassGrad;
+    drawRoundedRect(ctx, winX + 4 * s, winY + 4 * s, winW - 8 * s, winH * 0.5, 26 * s);
+    ctx.fill();
+
+    const arrowsShotLabel =
+      ARROWS_SHOT_TITLE_BY_LANG[resolvedLang] ||
+      (resolvedLang.toLowerCase().startsWith("es") ? "FLECHAS LANZADAS" : "ARROWS SHOT");
+    ctx.font = `900 ${Math.round(20 * s)}px ${appFont}`;
+    ctx.fillStyle = "#00BFFF";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(arrowsShotLabel, caseCenterX, winY + 40 * s, winW - 36 * s);
+
+    // Roller Digits Board
+    const drumGap = 12 * s;
+    const totalInnerPad = 40 * s;
+    const drumW = Math.min(70 * s, (winW - totalInnerPad - drumGap * (numDrums - 1)) / numDrums);
+    const drumH = 102 * s;
+    const drumsTotalW = drumW * numDrums + drumGap * (numDrums - 1);
+    const drumsStartX = caseCenterX - drumsTotalW / 2;
+    const drumY = winY + 58 * s;
+
+    digitsArr.forEach((digit, idx) => {
+      const dx = drumsStartX + idx * (drumW + drumGap);
+      const drumGrad = ctx.createLinearGradient(dx, drumY, dx, drumY + drumH);
+      drumGrad.addColorStop(0, "#18181b");
+      drumGrad.addColorStop(0.5, "#09090b");
+      drumGrad.addColorStop(1, "#18181b");
+      ctx.fillStyle = drumGrad;
+      ctx.strokeStyle = "#27272a";
+      ctx.lineWidth = 2 * s;
+      drawRoundedRect(ctx, dx, drumY, drumW, drumH, 10 * s);
+      ctx.fill();
+      ctx.stroke();
+
+      // Horizontal roller seam line
+      ctx.strokeStyle = "rgba(63, 63, 70, 0.55)";
+      ctx.lineWidth = 1.5 * s;
+      ctx.beginPath();
+      ctx.moveTo(dx + 2 * s, drumY + drumH / 2);
+      ctx.lineTo(dx + drumW - 2 * s, drumY + drumH / 2);
+      ctx.stroke();
+
+      // Solid white numeral
+      ctx.font = `900 ${Math.round(62 * s)}px ${appFont}`;
+      ctx.fillStyle = "#FFFFFF";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(digit, dx + drumW / 2, drumY + drumH / 2 + 2 * s);
+    });
+
+    // 3f. Engraved Bottom Callout on Chrome Case ("VOLUMEN · 70 M")
+    const engravedText = `${volumeBadgeTitle} · ${displayShootDist.toUpperCase()}`;
+    const engravedY = winY + winH + 46 * s;
+    ctx.font = `900 ${Math.round(24 * s)}px ${appFont}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.68)";
+    ctx.fillText(engravedText, caseCenterX, engravedY + 2 * s, caseRadius * 1.45);
+    ctx.fillStyle = "#18181b";
+    ctx.fillText(engravedText, caseCenterX, engravedY, caseRadius * 1.45);
+
+    ctx.restore();
+    ctx.textBaseline = "alphabetic";
+  } else {
+    // Target shadow
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.88)";
+    ctx.shadowBlur = 42;
+    ctx.beginPath();
+    ctx.arc(targetCenterX, targetCenterY, targetRadius, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+    ctx.fill();
+    ctx.restore();
+
+    // Concentric WA rings
+    ctx.save();
+    ctx.globalAlpha = isPhotoMode ? 0.90 : isTransparentMode ? 0.96 : 1.0;
+    const rings = DIANA_PRESETS[presetType] || DIANA_PRESETS.WA_10_122;
+    rings.forEach((ring) => {
+      const currentR = (ring.r / 48) * targetRadius;
+      ctx.beginPath();
+      ctx.arc(targetCenterX, targetCenterY, currentR, 0, Math.PI * 2);
+      ctx.fillStyle = ring.fill;
+      ctx.fill();
+      ctx.strokeStyle = ring.stroke;
+      ctx.lineWidth = (ring.v === "X" ? 1.5 : 2) * targetScaleFactor;
+      ctx.stroke();
+    });
+    ctx.restore();
+
+    // Center spider (+)
+    const spiderHalf = 10 * targetScaleFactor;
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.65)";
+    ctx.lineWidth = 1.5 * targetScaleFactor;
+    ctx.beginPath();
+    ctx.moveTo(targetCenterX - spiderHalf, targetCenterY);
+    ctx.lineTo(targetCenterX + spiderHalf, targetCenterY);
+    ctx.moveTo(targetCenterX, targetCenterY - spiderHalf);
+    ctx.lineTo(targetCenterX, targetCenterY + spiderHalf);
+    ctx.stroke();
+
+    // 4. Plotted Arrow Impacts on Target
+    const outerHoleR = 11 * targetScaleFactor;
+    const innerArrowR = 9.5 * targetScaleFactor;
+    const arrowFontPx = Math.round(10 * targetScaleFactor * 10) / 10;
+
+    impacts.forEach((imp, idx) => {
+      const ix = targetCenterX + ((imp.x - 50) / 48) * targetRadius;
+      const iy = targetCenterY + ((imp.y - 50) / 48) * targetRadius;
+
+      ctx.save();
+      ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
+      ctx.shadowBlur = 7 * targetScaleFactor;
+      ctx.beginPath();
+      ctx.arc(ix, iy, outerHoleR, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
+      ctx.fill();
+      ctx.restore();
+
+      ctx.beginPath();
+      ctx.arc(ix, iy, innerArrowR, 0, Math.PI * 2);
+      ctx.fillStyle = "#FFD700";
+      ctx.fill();
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = 1.8 * targetScaleFactor;
+      ctx.stroke();
+
+      ctx.font = `900 ${arrowFontPx}px ${appFont}`;
+      ctx.fillStyle = "#000000";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(imp.value || String(idx + 1), ix, iy + 0.5);
+    });
+
+    ctx.textBaseline = "alphabetic";
+  }
 
   // 5. Official Brand Lockup ("ARCHERY 101010" + centered below "THE APP")
   // Shifts cleanly from y=1343 (without heart rate) to y=1290 (with heart rate) so there are zero empty gaps
