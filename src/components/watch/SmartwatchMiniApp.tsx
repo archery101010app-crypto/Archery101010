@@ -2206,10 +2206,6 @@ export default function SmartwatchMiniApp({
     );
   }
 
-  const isIosPlatform =
-    Boolean(watchConnStatus.isNativeIos) ||
-    (typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent || ""));
-
   // Show install CTA on native Android or iOS when no paired watch reports the companion app yet
   const showInstallOnWatch =
     (watchConnStatus.isNativeAndroid &&
@@ -2236,34 +2232,32 @@ export default function SmartwatchMiniApp({
       >
         <div
           dir="ltr"
-          className="w-full max-w-[384px] max-h-[95dvh] overflow-y-auto overscroll-contain overflow-x-hidden bg-[#06080C] border border-white/10 rounded-[26px] pt-[14px] pb-[14px] px-[14px] flex flex-col items-center gap-[10px] relative"
+          className="w-full max-w-[384px] max-h-[95dvh] overflow-y-auto overscroll-contain overflow-x-hidden bg-[#06080C] border border-white/12 rounded-[28px] pt-[16px] pb-[16px] px-[16px] flex flex-col items-center gap-[12px] relative shadow-[0_24px_64px_rgba(0,0,0,0.88)]"
         >
-          {/* Top 101010 tricolor line */}
+          {/* Razor-thin 101010 brand accent hairline (zero glow) */}
           <div
-            className="absolute top-0 left-12 right-12 h-[2px]"
+            className="absolute top-0 left-4 right-4 h-[2px] opacity-75"
             style={{
               background:
-                "linear-gradient(90deg, transparent, #00A8F3 25%, #FF1E1E 50%, #FFE500 75%, transparent)"
+                "linear-gradient(90deg, transparent 4%, #00BFFF 32%, #FF1E1E 54%, #FFE500 76%, transparent 96%)"
             }}
           />
 
-          {/* Compact Single-Line Header: Official Brand Logo + Honest Connection Pill + Sync + Close */}
+          {/* 1. Clean Single-Row Header: Official Retina Logo + Solid-White Status Pill + Sync Icon + Close Icon */}
           <div className="w-full flex items-center justify-between gap-[6px]">
-            <div className="flex items-center gap-[8px] min-w-0">
+            <div className="flex items-center gap-[7px] min-w-0">
               <img
                 src="/images/brand_logo_header.png"
                 srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
                 alt="ARCHERY 101010"
-                className={`${
-                  isEs ? "h-[11.5px]" : "h-[10px] min-[385px]:h-[11.5px]"
-                } w-auto object-contain shrink-0 select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]`}
+                className="h-[11.5px] w-auto object-contain shrink-0 select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]"
                 draggable={false}
               />
               <div
-                className={`inline-flex items-center gap-[4px] rounded-full px-[8px] py-[3px] shrink-0 border ${
+                className={`inline-flex items-center gap-[5px] rounded-full px-[8px] py-[4px] shrink-0 border ${
                   isWatchConnected
-                    ? "bg-[#04101C] border-[#00A8F3]/50"
-                    : "bg-[#0A0D13] border-white/12"
+                    ? "bg-[#04141F] border-[#00C853]/55"
+                    : "bg-[#10141C] border-white/15"
                 }`}
                 title={
                   isWatchConnected
@@ -2278,17 +2272,13 @@ export default function SmartwatchMiniApp({
                 }
               >
                 <span
-                  className={`w-[5px] h-[5px] rounded-full ${
-                    isWatchConnected ? "bg-[#00A8F3]" : "bg-[#6E7785]"
+                  className={`w-[6px] h-[6px] rounded-full shrink-0 ${
+                    isWatchConnected ? "bg-[#00C853]" : "bg-[#00BFFF]"
                   }`}
                 />
-                <span
-                  className={`text-[8px] font-extrabold tracking-[0.06em] uppercase leading-none ${
-                    isWatchConnected ? "text-white" : "text-[#8E96A4]"
-                  }`}
-                >
+                <span className="text-[9px] font-extrabold tracking-[0.08em] uppercase leading-none text-white whitespace-nowrap">
                   {isWatchConnected
-                    ? tx("CONECTADO", "CONNECTED")
+                    ? tx("LIVE", "LIVE")
                     : tx("EN ESPERA", "STANDBY")}
                 </span>
               </div>
@@ -2313,17 +2303,17 @@ export default function SmartwatchMiniApp({
                   }
                   setTimeout(() => setIsSyncingWatch(false), 700);
                 }}
-                aria-label={tx("SYNC · Sincronizar reloj", "SYNC · Sync watch")}
-                className="bg-[#081320] border border-[#00A8F3]/45 text-white rounded-full px-[10px] py-[5px] text-[8.5px] font-extrabold tracking-[0.06em] uppercase inline-flex items-center gap-[4px] whitespace-nowrap cursor-pointer active:scale-95 transition"
+                aria-label={tx("Sincronizar reloj", "Sync watch")}
+                title={tx("Sincronizar reloj", "Sync watch")}
+                className="w-[32px] h-[32px] rounded-full bg-[#12151C] border border-[#00BFFF]/35 text-[#00BFFF] flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition"
               >
-                <RefreshCw size={10} aria-hidden="true" className={isSyncingWatch ? "animate-spin" : ""} />
-                <span>SYNC</span>
+                <RefreshCw size={14} aria-hidden="true" className={isSyncingWatch ? "animate-spin" : ""} />
               </button>
               {onClose && (
                 <button
                   type="button"
                   onClick={onClose}
-                  className="w-[36px] h-[36px] rounded-full bg-white/[0.04] border border-white/[0.12] text-white flex items-center justify-center hover:bg-white/10 cursor-pointer shrink-0"
+                  className="w-[32px] h-[32px] rounded-full bg-[#12151C] border border-white/15 text-white flex items-center justify-center hover:bg-white/10 cursor-pointer shrink-0 transition"
                   aria-label={tx("Cerrar vista previa del reloj", "Close watch preview")}
                 >
                   <X size={15} aria-hidden="true" />
@@ -2332,67 +2322,20 @@ export default function SmartwatchMiniApp({
             </div>
           </div>
 
-          {/* 6-Digit Cloud Watch Pairing Bar (links Sports Smartwatch or /watch in 5 seconds) */}
-          <div className="w-full bg-[#07090E] border border-white/10 rounded-[13px] px-3 py-2 flex flex-col gap-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-[7.5px] font-extrabold tracking-[0.11em] text-[#8E96A4] uppercase leading-tight break-words">
-                  {tx("CÓDIGO NUBE · RELOJ DEPORTIVO", "CLOUD CODE · SPORTS WATCH")}
-                </div>
-                <div
-                  className={`text-[9.5px] font-bold break-words leading-tight ${
-                    hasCloudWatchLinked
-                      ? "text-[#00C853]"
-                      : cloudStatus.cloudSyncError
-                      ? "text-[#FFE500]"
-                      : "text-white/85"
-                  }`}
-                >
-                  {hasCloudWatchLinked
-                    ? tx("● Reloj vinculado en vivo", "● Watch linked live")
-                    : cloudStatus.cloudSyncError === "AUTH_REQUIRED"
-                    ? tx(
-                        "Inicia sesión para activar el código en nube",
-                        "Sign in to enable the cloud code"
-                      )
-                    : cloudStatus.cloudSyncError
-                    ? tx(
-                        "Sin conexión a nube · Toca ↻ para reintentar",
-                        "Cloud offline · Tap ↻ to retry"
-                      )
-                    : cloudStatus.cloudConnected && pairingCode
-                    ? tx(
-                        "● Código activo · ventana abierta en pantalla VINCULAR",
-                        "● Code active · window open on LINK screen"
-                      )
-                    : tx("Preparando código en nube", "Preparing cloud code")}
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {pairingCode && (
-                  <button
-                    type="button"
-                    onClick={handleCopyPairingCode}
-                    className="bg-[#020305] border border-[#FFE500]/45 rounded-[9px] px-2.5 py-1 inline-flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95 transition"
-                    title={tx("Copiar código de 6 dígitos", "Copy 6-digit code")}
-                    aria-label={`${tx("Copiar código", "Copy code")} ${pairingCode}`}
-                  >
-                    <span className="font-sans text-[13.5px] font-extrabold tracking-[0.16em] text-[#FFE500] tabular-nums">
-                      {pairingCode}
-                    </span>
-                    {copiedCode ? (
-                      <Check size={11} aria-hidden="true" className="text-[#00A8F3]" />
-                    ) : (
-                      <Copy size={11} aria-hidden="true" className="text-[#8E96A4]" />
-                    )}
-                  </button>
-                )}
+          {/* 2. Unified 2-Column Bento Control Strip (Zero walls of text, 100% solid white) */}
+          <div className="w-full grid grid-cols-[1.22fr_0.78fr] gap-[10px]">
+            {/* Left Bento Tile: 6-Digit Pairing Code */}
+            <div className="bg-[#0B0E14] border border-white/12 rounded-[18px] px-[12px] py-[11px] flex flex-col justify-between gap-[7px] min-w-0">
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="text-[9.5px] font-extrabold tracking-[0.12em] text-white uppercase leading-none">
+                  {tx("CÓDIGO RELOJ", "WATCH CODE")}
+                </span>
                 <button
                   type="button"
                   onClick={handleRegeneratePairingCode}
                   disabled={isRegeneratingCode || !auth.currentUser?.uid}
-                  className="w-[28px] h-[28px] rounded-[9px] bg-[#081320] border border-[#00A8F3]/45 text-white flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-40"
-                  title={tx("Generar nuevo código en nube", "Generate new cloud code")}
+                  className="w-[24px] h-[24px] rounded-[8px] bg-[#121722] border border-white/18 text-white flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-40"
+                  title={tx("Generar nuevo código", "Generate new code")}
                   aria-label={tx("Generar nuevo código de 6 dígitos", "Generate new 6-digit code")}
                 >
                   <RefreshCw
@@ -2402,137 +2345,153 @@ export default function SmartwatchMiniApp({
                   />
                 </button>
               </div>
+
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="font-sans text-[21px] font-black tracking-[0.10em] text-[#FFE500] tabular-nums leading-none">
+                  {pairingCode && pairingCode.length === 6
+                    ? `${pairingCode.slice(0, 3)} ${pairingCode.slice(3)}`
+                    : pairingCode || "------"}
+                </span>
+                {pairingCode && (
+                  <button
+                    type="button"
+                    onClick={handleCopyPairingCode}
+                    className="w-[26px] h-[26px] rounded-[8px] bg-[#FFE500]/12 border border-[#FFE500]/35 text-[#FFE500] flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition"
+                    title={tx("Copiar código", "Copy code")}
+                    aria-label={`${tx("Copiar código", "Copy code")} ${pairingCode}`}
+                  >
+                    {copiedCode ? (
+                      <Check size={13} aria-hidden="true" className="text-[#00BFFF]" />
+                    ) : (
+                      <Copy size={13} aria-hidden="true" />
+                    )}
+                  </button>
+                )}
+              </div>
+
+              <span
+                className={`text-[10.5px] font-semibold leading-tight ${
+                  hasCloudWatchLinked
+                    ? "text-[#00C853]"
+                    : cloudStatus.cloudSyncError
+                    ? "text-[#FFE500]"
+                    : "text-white"
+                }`}
+              >
+                {hasCloudWatchLinked
+                  ? tx("● Reloj vinculado", "● Watch linked")
+                  : cloudStatus.cloudSyncError === "AUTH_REQUIRED"
+                  ? tx("Inicia sesión", "Sign in first")
+                  : cloudStatus.cloudSyncError
+                  ? tx("Sin red · Reintentar", "Offline · Retry")
+                  : pairingCode
+                  ? tx("Ingresa en tu reloj", "Enter on your watch")
+                  : tx("Generando código", "Preparing code")}
+              </span>
             </div>
 
-            {!isWatchConnected && pairingCode && (
-              <div className="border-t border-white/[0.07] pt-1.5 text-[8.5px] font-semibold text-[#94A3B8] leading-snug break-words">
-                {isIosPlatform
-                  ? tx(
-                      "En iOS: abre la App Compañera del Reloj Inteligente en tu teléfono para instalar/activar ARCHERY 101010 en la muñeca, o ingresa estos 6 dígitos en la pantalla VINCULAR del reloj.",
-                      "On iOS: open the Companion Watch App on your phone to install/enable ARCHERY 101010 on your wrist, or enter these 6 digits on the watch LINK screen."
-                    )
-                  : tx(
-                      "Mantén activa la app compañera Bluetooth del teléfono, abre ARCHERY 101010 en tu Reloj Deportivo GPS o Reloj Inteligente e ingresa estos 6 dígitos en la pantalla VINCULAR.",
-                      "Keep your phone's Bluetooth companion app active, open ARCHERY 101010 on your GPS Sports Watch or Smartwatch, and enter these 6 digits on the LINK screen."
-                    )}
-              </div>
-            )}
-          </div>
-
-          {/* Universal Bluetooth Heart Rate Bar */}
-          <div className="w-full bg-[#07090E] border border-white/10 rounded-[13px] px-3 py-2.5 flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <div className="text-[11px] font-bold tracking-[0.08em] text-white uppercase whitespace-nowrap flex items-center gap-1.5">
+            {/* Right Bento Tile: Live Heart Rate */}
+            <div className="bg-[#0B0E14] border border-white/12 rounded-[18px] px-[11px] py-[11px] flex flex-col justify-between gap-[7px] min-w-0">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[9.5px] font-extrabold tracking-[0.12em] text-white uppercase leading-none">
+                  {tx("PULSO", "PULSE")}
+                </span>
                 <span
-                  className={`w-[6px] h-[6px] rounded-full shrink-0 ${
+                  className={`w-[7px] h-[7px] rounded-full shrink-0 ${
                     bleHrStatus.state === "connected" ? "bg-[#00C853]" : "bg-[#00BFFF]"
                   }`}
                 />
-                <span>{t("bleHrTitle")}</span>
               </div>
-              {bleHrStatus.state === "connected" && (
-                <div className="text-[10px] font-semibold text-white break-words leading-tight tabular-nums mt-0.5">
-                  {`${
-                    bleHrStatus.currentBpm >= 30 ? `${bleHrStatus.currentBpm} BPM · ` : ""
-                  }${bleHrStatus.deviceName || tx("Conectado en vivo", "Connected live")}`}
-                </div>
-              )}
+
+              <button
+                type="button"
+                onClick={() => setShowBleHrModal(true)}
+                className={`w-full py-[8px] px-[6px] rounded-[11px] text-[11px] font-extrabold uppercase tracking-[0.08em] text-center text-white tabular-nums cursor-pointer active:scale-95 transition ${
+                  bleHrStatus.state === "connected"
+                    ? "bg-[#061A12] border border-[#00C853]/55"
+                    : "bg-[#101A24] border border-[#00BFFF]/45"
+                }`}
+              >
+                {bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
+                  ? `${bleHrStatus.currentBpm} BPM`
+                  : t("bleHrConnect")}
+              </button>
+
+              <span className="text-[10px] font-semibold text-white text-center leading-tight">
+                {bleHrStatus.state === "connected"
+                  ? bleHrStatus.deviceName || tx("Conectado", "Connected")
+                  : tx("Sensor / Reloj", "Sensor / Watch")}
+              </span>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowBleHrModal(true)}
-              className={`rounded-[9px] px-2.5 py-1.5 text-[9px] font-extrabold uppercase tracking-[0.06em] shrink-0 cursor-pointer active:scale-95 transition tabular-nums ${
-                bleHrStatus.state === "connected"
-                  ? "bg-[#051810] border border-[#00C853]/55 text-white"
-                  : "bg-[#061523] border border-[#00A8F3]/60 text-white"
-              }`}
-            >
-              {bleHrStatus.state === "connected" && bleHrStatus.currentBpm >= 30
-                ? `${bleHrStatus.currentBpm} BPM`
-                : t("bleHrConnect")}
-            </button>
           </div>
 
-          {showInstallOnWatch && (
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic(25);
-                installAppOnWatch();
-              }}
-              className="w-full bg-[#081320] border border-[#00A8F3]/45 text-white rounded-full py-[7px] px-3 text-[9px] font-extrabold tracking-[0.08em] uppercase tabular-nums cursor-pointer active:scale-95 transition leading-tight"
-            >
-              {watchConnStatus.isNativeIos
-                ? tx(
-                    "● Abrir App Compañera del Reloj Inteligente",
-                    "● Open Companion Smartwatch App"
-                  )
-                : watchConnStatus.connectedNodesCount > 0
-                ? tx("● Instalar en mi reloj", "● Install on my watch")
-                : tx(
-                    "● Reloj no detectado · Abrir tienda",
-                    "● Watch not detected · Open store"
-                  )}
-            </button>
-          )}
+          {/* 3. Hero Smartwatch Centerpiece + Discreet Round/Square Corner Toggle */}
+          <div className="w-full relative flex items-center justify-center pt-[18px] pb-[4px]">
+            <div className="absolute top-0 right-0 flex items-center gap-[3px] p-[3px] rounded-[10px] bg-[#0D1118] border border-white/12 z-10">
+              <button
+                type="button"
+                onClick={() => setWatchShape("ROUND")}
+                aria-label={tx("Reloj redondo", "Round watch")}
+                title={tx("Redondo", "Round")}
+                className={`w-[26px] h-[24px] rounded-[7px] flex items-center justify-center cursor-pointer transition ${
+                  watchShape === "ROUND"
+                    ? "bg-[#151E2B] border border-[#00BFFF]/45 text-[#00BFFF]"
+                    : "text-white border border-transparent hover:bg-white/5"
+                }`}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
+                  <circle cx="12" cy="12" r="8" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => setWatchShape("SQUARE")}
+                aria-label={tx("Reloj cuadrado", "Square watch")}
+                title={tx("Cuadrado", "Square")}
+                className={`w-[26px] h-[24px] rounded-[7px] flex items-center justify-center cursor-pointer transition ${
+                  watchShape === "SQUARE"
+                    ? "bg-[#151E2B] border border-[#00BFFF]/45 text-[#00BFFF]"
+                    : "text-white border border-transparent hover:bg-white/5"
+                }`}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
+                  <rect x="4" y="4" width="16" height="16" rx="4" />
+                </svg>
+              </button>
+            </div>
 
-          {/* Minimal Mode Switch (Redondo / Cuadrado | Round / Square) */}
-          <div className="w-full grid grid-cols-2 gap-[4px] bg-[#030407] border border-white/[0.08] rounded-[12px] p-[3px]">
-            <button
-              type="button"
-              onClick={() => setWatchShape("ROUND")}
-              className={`text-center py-[5px] rounded-[9px] text-[9px] font-extrabold tracking-[0.08em] uppercase transition cursor-pointer ${
-                watchShape === "ROUND"
-                  ? "bg-[#0B1420] text-white border border-[#00A8F3]/50"
-                  : "text-[#6E7785] border border-transparent hover:text-white/80"
+            {/* Matte Titanium Hardware Bezel wrapping the 284x284 centered interactive watch screen */}
+            <div
+              className={`p-[10px] relative bg-[#12151C] border-[1.5px] border-[#262B36] shadow-[0_14px_34px_rgba(0,0,0,0.85)] transition-all ${
+                watchShape === "ROUND" ? "rounded-full" : "rounded-[58px]"
               }`}
             >
-              {tx("REDONDO", "ROUND")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setWatchShape("SQUARE")}
-              className={`text-center py-[5px] rounded-[9px] text-[9px] font-extrabold tracking-[0.08em] uppercase transition cursor-pointer ${
-                watchShape === "SQUARE"
-                  ? "bg-[#0B1420] text-white border border-[#00A8F3]/50"
-                  : "text-[#6E7785] border border-transparent hover:text-white/80"
-              }`}
-            >
-              {tx("CUADRADO", "SQUARE")}
-            </button>
+              {/* Physical Side Button / Digital Crown on right side of watch hardware */}
+              <button
+                type="button"
+                onClick={handlePhysicalWatchButton}
+                title={
+                  isAnalysisWatchMode
+                    ? tx("Botón físico del reloj (Inicio / Final)", "Physical watch button (Start / End)")
+                    : tx("Corona del reloj (+1 flecha)", "Watch crown (+1 arrow)")
+                }
+                aria-label={
+                  isAnalysisWatchMode
+                    ? tx("Botón físico: iniciar o finalizar análisis", "Physical button: start or end analysis")
+                    : tx("Corona del reloj: sumar 1 flecha", "Watch crown: add 1 arrow")
+                }
+                className={`absolute -right-[7px] top-1/2 -translate-y-1/2 w-[7px] h-[42px] rounded-r-[4px] border cursor-pointer active:scale-95 ${
+                  isAnalysisWatchMode && manualAnalysisStartMs
+                    ? "bg-[#FF1E1E] border-white/40"
+                    : "bg-[#1F242E] border-[#343B48]"
+                }`}
+              />
+              <WatchFaceContent {...watchFaceProps} />
+            </div>
           </div>
 
-          {/* Matte Titanium Hardware Bezel wrapping the 284x284 centered interactive watch screen */}
-          <div
-            className={`p-[10px] relative bg-[#12151C] border-[1.5px] border-[#262B36] shadow-[0_14px_34px_rgba(0,0,0,0.85)] transition-all ${
-              watchShape === "ROUND" ? "rounded-full" : "rounded-[58px]"
-            }`}
-          >
-            {/* Physical Side Button / Digital Crown on right side of watch hardware */}
-            <button
-              type="button"
-              onClick={handlePhysicalWatchButton}
-              title={
-                isAnalysisWatchMode
-                  ? tx("Botón físico del reloj (Inicio / Final)", "Physical watch button (Start / End)")
-                  : tx("Corona del reloj (+1 flecha)", "Watch crown (+1 arrow)")
-              }
-              aria-label={
-                isAnalysisWatchMode
-                  ? tx("Botón físico: iniciar o finalizar análisis", "Physical button: start or end analysis")
-                  : tx("Corona del reloj: sumar 1 flecha", "Watch crown: add 1 arrow")
-              }
-              className={`absolute -right-[7px] top-1/2 -translate-y-1/2 w-[7px] h-[42px] rounded-r-[4px] border cursor-pointer active:scale-95 ${
-                isAnalysisWatchMode && manualAnalysisStartMs
-                  ? "bg-[#FF1E1E] border-white/40"
-                  : "bg-[#1F242E] border-[#343B48]"
-              }`}
-            />
-            <WatchFaceContent {...watchFaceProps} />
-          </div>
-
-          {/* Clean Bottom Navigation Tabs (4 screens) */}
-          <div className="w-full grid grid-cols-4 gap-[4px]">
+          {/* 4. Unified 4-Tab Capsule (100% solid white) */}
+          <div className="w-full grid grid-cols-4 gap-[4px] p-[4px] bg-[#0B0E14] border border-white/10 rounded-[14px]">
             {[
               { idx: 0, label: tx("FLECHAS", "ARROWS") },
               { idx: 1, label: tx("PUNTOS", "SCORE") },
@@ -2543,16 +2502,47 @@ export default function SmartwatchMiniApp({
                 key={tab.idx}
                 type="button"
                 onClick={() => setScreenIdx(tab.idx)}
-                className={`py-[7px] px-[2px] rounded-[10px] text-[8.5px] font-extrabold uppercase tracking-[0.04em] text-center border transition cursor-pointer ${
+                className={`py-[8px] px-[2px] rounded-[10px] text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-center text-white border transition cursor-pointer ${
                   screenIdx === tab.idx
-                    ? "bg-[#0B1420] text-white border-[#00A8F3]/50"
-                    : "bg-[#04060A] text-[#6E7785] border-white/[0.06] hover:text-white"
+                    ? "bg-[#131B26] border-[#00BFFF]/55"
+                    : "bg-transparent border-transparent hover:bg-white/[0.04]"
                 }`}
               >
                 {tab.label}
               </button>
             ))}
           </div>
+
+          {/* 5. Calm 1-Line Companion App Action (replaces loud warning banner) */}
+          {showInstallOnWatch && (
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic(25);
+                installAppOnWatch();
+              }}
+              className="w-full flex items-center justify-between gap-2 px-[13px] py-[10px] rounded-[14px] bg-[#0B0E14] border border-white/12 text-white cursor-pointer active:scale-[0.99] transition"
+            >
+              <span className="inline-flex items-center gap-[8px] text-[11px] font-semibold text-white">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00BFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="6" />
+                  <polyline points="12 10 12 12 13 13" />
+                  <path d="m16.13 7.66-.81-4.05a2 2 0 0 0-2-1.61h-2.68a2 2 0 0 0-2 1.61l-.78 4.05" />
+                  <path d="m7.88 16.36.8 4a2 2 0 0 0 2 1.61h2.72a2 2 0 0 0 2-1.61l.81-4.05" />
+                </svg>
+                <span>
+                  {watchConnStatus.isNativeIos
+                    ? tx("App compañera del reloj", "Companion watch app")
+                    : tx("¿Sin app en tu reloj?", "No app on your watch?")}
+                </span>
+              </span>
+              <span className="text-[10.5px] font-extrabold tracking-[0.08em] uppercase text-[#00BFFF] shrink-0">
+                {watchConnStatus.isNativeIos
+                  ? tx("ABRIR →", "OPEN →")
+                  : tx("INSTALAR →", "INSTALL →")}
+              </span>
+            </button>
+          )}
         </div>
 
         <BleHeartRateModal
