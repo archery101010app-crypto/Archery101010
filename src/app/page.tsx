@@ -1653,6 +1653,7 @@ export default function Home() {
                 user={user}
                 onBack={() => setCurrentScreen("HOME")}
                 onStartSession={(config) => setSessionConfig(config)}
+                onOpenAnalysis={() => setCurrentScreen("ANALYSIS")}
               />
             </ErrorBoundary>
           ) : (

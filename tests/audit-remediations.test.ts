@@ -1177,5 +1177,18 @@ describe("M6 Audit Remediations — CI/CD, Portable Scripts, iOS/watchOS Version
       modalSrc.includes("isWatchWarmingUp") && modalSrc.includes("const isWatchSyncInFlight = isSyncingWatch;"),
       "BleHeartRateModal must never permanently disable Sync button while optical sensor warms up"
     );
+
+    const cfgSrc = fs.readFileSync(
+      path.resolve(process.cwd(), "src/components/scoring/SessionConfigView.tsx"),
+      "utf8"
+    );
+    assert.ok(
+      cfgSrc.includes("LAST_SETUP_STORAGE_PREFIX") &&
+        cfgSrc.includes('tx("Iniciar ahora", "Start now")') &&
+        cfgSrc.includes('tx("Volumen rápido", "Quick Volume")') &&
+        cfgSrc.includes('tx("Análisis de tiro", "Shot Analysis")') &&
+        cfgSrc.includes('t("bleHrConnect")'),
+      "SessionConfigView must render the 1-Tap Quick Shoot hero card + Quick Volume/Analysis shortcuts while preserving the top Heart Rate Quick Connect bar"
+    );
   });
 });
