@@ -169,7 +169,7 @@
         ]
       },
       {
-        "source": "/Archery101010-Mobile-v2.166.aab",
+        "source": "/Archery101010-Mobile-v2.167.aab",
         "headers": [
           {
             "key": "Content-Type",
@@ -177,7 +177,7 @@
           },
           {
             "key": "Content-Disposition",
-            "value": "attachment; filename=\"Archery101010-Mobile-v2.166.aab\""
+            "value": "attachment; filename=\"Archery101010-Mobile-v2.167.aab\""
           },
           {
             "key": "Cache-Control",
@@ -186,7 +186,7 @@
         ]
       },
       {
-        "source": "/Archery101010-WearOS-v2.166.aab",
+        "source": "/Archery101010-WearOS-v2.167.aab",
         "headers": [
           {
             "key": "Content-Type",
@@ -194,7 +194,7 @@
           },
           {
             "key": "Content-Disposition",
-            "value": "attachment; filename=\"Archery101010-WearOS-v2.166.aab\""
+            "value": "attachment; filename=\"Archery101010-WearOS-v2.167.aab\""
           },
           {
             "key": "Cache-Control",
@@ -272,12 +272,12 @@
       },
       {
         "source": "/download-aab",
-        "destination": "https://archery101010-c0bb4.firebaseapp.com/Archery101010-Mobile-v2.166.aab",
+        "destination": "https://archery101010-c0bb4.firebaseapp.com/Archery101010-Mobile-v2.167.aab",
         "type": 302
       },
       {
         "source": "/download-wear-aab",
-        "destination": "https://archery101010-c0bb4.firebaseapp.com/Archery101010-WearOS-v2.166.aab",
+        "destination": "https://archery101010-c0bb4.firebaseapp.com/Archery101010-WearOS-v2.167.aab",
         "type": 302
       }
     ],

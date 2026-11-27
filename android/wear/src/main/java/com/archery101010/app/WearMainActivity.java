@@ -695,6 +695,9 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
         // Active (< 90s): 5,000 ms standalone, or 20,000 ms if direct Bluetooth Wear Data Layer was active in last 30s
         // Warm Idle (90s..5m): 20,000 ms
         // Deep Idle (>= 5m): 45,000 ms
+        if (analysisMode && !wearDataLayerRecent) {
+            return 2_500L;
+        }
         if (idleMs < 90_000L) {
             return wearDataLayerRecent ? 20_000L : 5_000L;
         } else if (idleMs < 300_000L) {
@@ -704,6 +707,9 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
     }
 
     private long getAdaptiveHeartbeatDelayMs(long now) {
+        if (analysisMode) {
+            return 2_500L;
+        }
         long idleMs = Math.max(0L, now - lastActivityMs);
         if (idleMs < 90_000L) {
             return 5_000L;
@@ -771,12 +777,17 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
     }
 
     private void startManualAnalysisCapture(boolean notifyPhone) {
+        startManualAnalysisCaptureWithLag(notifyPhone, 0L);
+    }
+
+    private void startManualAnalysisCaptureWithLag(boolean notifyPhone, long lagMs) {
         if (!analysisMode) return;
         long now = System.currentTimeMillis();
         if (manualAnalysisRecording) return;
+        long safeLag = (lagMs > 0L && lagMs <= 12_000L) ? lagMs : 0L;
         isWatchSessionActive = true;
         manualAnalysisRecording = true;
-        manualAnalysisStartMs = now;
+        manualAnalysisStartMs = now - safeLag;
         pendingShotActive = false;
         analysisPage = 0;
         acquireOrRenewWakeLockIfNeeded();
@@ -799,9 +810,18 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
     }
 
     private void stopManualAnalysisCapture(boolean notifyPhoneStopIfNoSamples) {
+        stopManualAnalysisCaptureWithLag(notifyPhoneStopIfNoSamples, 0L);
+    }
+
+    private void stopManualAnalysisCaptureWithLag(boolean notifyPhoneStopIfNoSamples, long lagMs) {
         if (!manualAnalysisRecording) return;
-        long endMs = System.currentTimeMillis();
+        long now = System.currentTimeMillis();
+        long safeLag = (lagMs > 0L && lagMs <= 9_000L) ? lagMs : 0L;
+        long endMs = now - safeLag;
         long startMs = manualAnalysisStartMs;
+        if (endMs <= startMs + 350L) {
+            endMs = now;
+        }
         manualAnalysisRecording = false;
         manualAnalysisStartMs = 0L;
         heartbeatHandler.removeCallbacks(manualTimerRunnable);
@@ -2395,7 +2415,8 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                                             && (now - reqStartAt) <= 25_000L
                                             && reqStopAt < reqStartAt) {
                                         lastHandledManualStartAt = reqStartAt;
-                                        startManualAnalysisCapture(false);
+                                        long startLag = Math.max(0L, Math.min(12_000L, now - reqStartAt));
+                                        startManualAnalysisCaptureWithLag(false, startLag);
                                     }
                                     if (reqStopAt > 0L
                                             && reqStopAt != lastHandledManualStopAt
@@ -2404,7 +2425,8 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                                             lastHandledManualStopAt = reqStopAt;
                                         } else {
                                             lastHandledManualStopAt = reqStopAt;
-                                            stopManualAnalysisCapture(false);
+                                            long stopLag = Math.max(0L, Math.min(9_000L, now - reqStopAt));
+                                            stopManualAnalysisCaptureWithLag(false, stopLag);
                                         }
                                     }
                                     long reqManualAt = cal.optLong("manualCaptureAt", 0L);
@@ -3670,24 +3692,35 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
             }
 
             double refAx = 0.0, refAy = 0.0, refAz = 0.0;
+            double refGx = 0.0, refGy = 0.0, refGz = 0.0;
             int refN = 0;
             for (int i = 0; i < count; i++) {
                 if (ts[i] >= releaseMs - 900L && ts[i] <= releaseMs - 100L) {
                     refAx += axArr[i];
                     refAy += ayArr[i];
                     refAz += azArr[i];
+                    refGx += gxArr[i];
+                    refGy += gyArr[i];
+                    refGz += gzArr[i];
                     refN++;
                 }
             }
             if (refN < 4) {
-                refAx = 0.0; refAy = 0.0; refAz = 0.0; refN = 0;
+                refAx = 0.0; refAy = 0.0; refAz = 0.0;
+                refGx = 0.0; refGy = 0.0; refGz = 0.0;
+                refN = 0;
                 for (int i = Math.max(0, count - 8); i < count; i++) {
-                    refAx += axArr[i]; refAy += ayArr[i]; refAz += azArr[i]; refN++;
+                    refAx += axArr[i]; refAy += ayArr[i]; refAz += azArr[i];
+                    refGx += gxArr[i]; refGy += gyArr[i]; refGz += gzArr[i];
+                    refN++;
                 }
             }
             refAx /= Math.max(1, refN);
             refAy /= Math.max(1, refN);
             refAz /= Math.max(1, refN);
+            double biasGx = Math.max(-0.045, Math.min(0.045, refGx / Math.max(1, refN)));
+            double biasGy = Math.max(-0.045, Math.min(0.045, refGy / Math.max(1, refN)));
+            double biasGz = Math.max(-0.045, Math.min(0.045, refGz / Math.max(1, refN)));
             double anchorGravAx = refAx;
             double anchorGravAy = refAy;
             double anchorGravAz = refAz;
@@ -3755,10 +3788,17 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                 sAyArr[i] = sAy;
                 sAzArr[i] = sAz;
 
+                double calGx = gxArr[i] - biasGx;
+                double calGy = gyArr[i] - biasGy;
+                double calGz = gzArr[i] - biasGz;
+                gxArr[i] = (float) calGx;
+                gyArr[i] = (float) calGy;
+                gzArr[i] = (float) calGz;
+
                 double tiltH = ((sAy - refAy) / refNorm) * wristSign * 0.28;
                 double tiltV = (((sAz - refAz) + (sAx - refAx) * wristSign * forePitchWeight) / refNorm) * 0.28;
-                gYaw = 0.88 * (gYaw + gzArr[i] * dt * wristSign * 0.28) + 0.12 * tiltH;
-                gPitch = 0.88 * (gPitch + gyArr[i] * dt * 0.28) + 0.12 * tiltV;
+                gYaw = 0.88 * (gYaw + calGz * dt * wristSign * 0.28) + 0.12 * tiltH;
+                gPitch = 0.88 * (gPitch + calGy * dt * 0.28) + 0.12 * tiltV;
 
                 yawArr[i] = tiltH * 0.65 + gYaw * 0.35;
                 pitchArr[i] = tiltV * 0.65 + gPitch * 0.35;
@@ -3767,7 +3807,7 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                         + (ayArr[i] - sAy) * (ayArr[i] - sAy)
                         + (azArr[i] - sAz) * (azArr[i] - sAz)
                 );
-                double gMag = Math.sqrt(gxArr[i] * gxArr[i] + gyArr[i] * gyArr[i] + gzArr[i] * gzArr[i]);
+                double gMag = Math.sqrt(calGx * calGx + calGy * calGy + calGz * calGz);
                 gyroMagArr[i] = gMag;
                 energy[i] = linDelta + gMag * 1.6;
                 double dGx = sAx - anchorGravAx;
@@ -4006,6 +4046,57 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
             float swayCm = Math.max(0.3f, Math.min((float) faceRadiusCm, Math.round((float) Math.sqrt(sumSqRad / aimN) * 10f) / 10f));
             int stabPct = Math.max(38, Math.min(99, (int) Math.round(100.0 - (swayCm / faceRadiusCm) * 82.0)));
 
+            // Critical final 1.5s pre-release Hold Steadiness in MOA (distance-independent)
+            int critStart = settleIdx;
+            for (int i = count - 1; i >= settleIdx; i--) {
+                if ((ts[count - 1] - ts[i]) <= 1500L) {
+                    critStart = i;
+                }
+            }
+            double critMx = 0.0, critMy = 0.0;
+            int critN = Math.max(1, count - critStart);
+            for (int i = critStart; i < count; i++) {
+                critMx += ptX[i];
+                critMy += ptY[i];
+            }
+            critMx /= critN;
+            critMy /= critN;
+            double critSqCm = 0.0;
+            for (int i = critStart; i < count; i++) {
+                double rx = (ptX[i] - critMx) * faceRadiusCm;
+                double ry = (ptY[i] - critMy) * faceRadiusCm;
+                critSqCm += rx * rx + ry * ry;
+            }
+            double critRmsCm = Math.sqrt(critSqCm / critN);
+            double holdMoa = Math.max(0.4, Math.min(60.0, Math.round(Math.atan2(critRmsCm, distCm) * 3437.7468 * 10.0) / 10.0));
+
+            // Post-release [80ms..340ms] Follow-Through bow-arm stability
+            double fAx = 0.0, fAy = 0.0, fAz = 0.0;
+            int fN = 0;
+            for (int i = 0; i < motionCount; i++) {
+                int idx = (motionIdx - 1 - i + MOTION_BUF) % MOTION_BUF;
+                long t = motionT[idx];
+                if (t < releaseMs + 80L) break;
+                if (t <= releaseMs + 340L) {
+                    fAx += motionAx[idx];
+                    fAy += motionAy[idx];
+                    fAz += motionAz[idx];
+                    fN++;
+                }
+            }
+            int followThroughPct = 92;
+            if (fN >= 2) {
+                fAx /= fN;
+                fAy /= fN;
+                fAz /= fN;
+                double fDrift = Math.sqrt(
+                        (fAx - anchorGravAx) * (fAx - anchorGravAx)
+                        + (fAy - anchorGravAy) * (fAy - anchorGravAy)
+                        + (fAz - anchorGravAz) * (fAz - anchorGravAz)
+                );
+                followThroughPct = Math.max(42, Math.min(99, (int) Math.round(100.0 - Math.max(0.0, fDrift - 0.85) * 9.5)));
+            }
+
             int preRelIdx = count - 1;
             for (int i = count - 1; i >= 0; i--) {
                 if (ts[count - 1] - ts[i] >= 480L) {
@@ -4014,6 +4105,7 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
                 }
             }
             float relJumpCm = Math.max(0.1f, Math.min(20.0f, Math.round((float) (Math.hypot(ptX[count - 1] - ptX[preRelIdx], ptY[count - 1] - ptY[preRelIdx]) * faceRadiusCm) * 10f) / 10f));
+            String rdCode = (relJumpCm > faceRadiusCm * 0.16) ? "A" : ((followThroughPct < 72) ? "D" : "C");
 
             int prepOutN = Math.min(10, Math.max(2, settleIdx - prepStartIdx + 1));
             float[] pX = new float[prepOutN];
@@ -4084,7 +4176,10 @@ public class WearMainActivity extends ComponentActivity implements SensorEventLi
             compact.put("aimSec", Math.round(aimSec * 10.0) / 10.0);
             compact.put("stab", stabPct);
             compact.put("swayCm", Math.round(swayCm * 10.0) / 10.0);
+            compact.put("moa", holdMoa);
             compact.put("relCm", Math.round(relJumpCm * 10.0) / 10.0);
+            compact.put("ft", followThroughPct);
+            compact.put("rd", rdCode);
             if (lastShotHrBpm > 0) {
                 compact.put("bpm", lastShotHrBpm);
             }

@@ -46,6 +46,8 @@ export interface AnalysisMarkedImpact {
   ringNumber: number; // 10..0
 }
 
+export type AnalysisReleaseDiagnosis = "CLEAN" | "ANTICIPATION" | "DROP";
+
 export interface AnalysisShotRecord {
   id: string;
   shotNumber: number;
@@ -57,7 +59,11 @@ export interface AnalysisShotRecord {
   totalSeconds: number;
   stabilityPct: number;
   swayRadiusCm: number;
+  holdMoa?: number;
   releaseJumpCm: number;
+  preBreakCm?: number;
+  followThroughPct?: number;
+  releaseDiagnosis?: AnalysisReleaseDiagnosis;
   heartRateBpm?: number;
   prepPoints: NormalizedTargetPoint[];
   aimPoints: NormalizedTargetPoint[];
@@ -131,6 +137,11 @@ export function computeAnalysisSessionSummary(shots: AnalysisShotRecord[]): {
   avgPrepSeconds: number;
   avgAimSeconds: number;
   avgReleaseJumpCm: number;
+  avgHoldMoa: number;
+  avgFollowThroughPct?: number;
+  rhythmStdSeconds: number;
+  aimStdSeconds: number;
+  rhythmConsistencyPct: number;
   avgHeartRateBpm?: number;
   maxHeartRateBpm?: number;
 } {
@@ -140,13 +151,20 @@ export function computeAnalysisSessionSummary(shots: AnalysisShotRecord[]): {
       avgStabilityPct: 0,
       avgPrepSeconds: 0,
       avgAimSeconds: 0,
-      avgReleaseJumpCm: 0
+      avgReleaseJumpCm: 0,
+      avgHoldMoa: 0,
+      rhythmStdSeconds: 0,
+      aimStdSeconds: 0,
+      rhythmConsistencyPct: 0
     };
   }
   let sumStab = 0;
   let sumPrep = 0;
   let sumAim = 0;
   let sumRel = 0;
+  let sumMoa = 0;
+  let sumFt = 0;
+  let countFt = 0;
   let sumHr = 0;
   let countHr = 0;
   let maxHr = 0;
@@ -156,6 +174,16 @@ export function computeAnalysisSessionSummary(shots: AnalysisShotRecord[]): {
     sumPrep += Number(s.prepSeconds) || 0;
     sumAim += Number(s.aimSeconds) || 0;
     sumRel += Number(s.releaseJumpCm) || 0;
+    const distCm = Math.max(1000, (Number(s.distanceM) || 18) * 100);
+    const shotMoa =
+      typeof s.holdMoa === "number" && s.holdMoa > 0
+        ? s.holdMoa
+        : Math.atan2(Number(s.swayRadiusCm) || 1.5, distCm) * 3437.7468;
+    sumMoa += shotMoa;
+    if (typeof s.followThroughPct === "number" && s.followThroughPct > 0) {
+      sumFt += s.followThroughPct;
+      countFt += 1;
+    }
     if (typeof s.heartRateBpm === "number" && s.heartRateBpm >= 30 && s.heartRateBpm <= 245) {
       sumHr += s.heartRateBpm;
       countHr += 1;
@@ -164,13 +192,39 @@ export function computeAnalysisSessionSummary(shots: AnalysisShotRecord[]): {
   }
 
   const n = shots.length;
+  const meanAim = sumAim / n;
+  const meanTotal = (sumPrep + sumAim) / n;
+  let sqTotalDiff = 0;
+  let sqAimDiff = 0;
+  for (const s of shots) {
+    const tot = (Number(s.prepSeconds) || 0) + (Number(s.aimSeconds) || 0);
+    const dTot = tot - meanTotal;
+    const dAim = (Number(s.aimSeconds) || 0) - meanAim;
+    sqTotalDiff += dTot * dTot;
+    sqAimDiff += dAim * dAim;
+  }
+  const rhythmStdSeconds =
+    n >= 2 ? Number(Math.sqrt(sqTotalDiff / (n - 1)).toFixed(2)) : 0;
+  const aimStdSeconds =
+    n >= 2 ? Number(Math.sqrt(sqAimDiff / (n - 1)).toFixed(2)) : 0;
+  const rhythmConsistencyPct =
+    n >= 2
+      ? Math.round(clamp(100 - (rhythmStdSeconds * 22 + aimStdSeconds * 10), 35, 99))
+      : 99;
+
   const avgHr = countHr > 0 ? Math.round(sumHr / countHr) : undefined;
+  const avgFt = countFt > 0 ? Math.round(sumFt / countFt) : undefined;
   return {
     shotsCount: n,
     avgStabilityPct: Math.round(sumStab / n),
     avgPrepSeconds: Number((sumPrep / n).toFixed(1)),
     avgAimSeconds: Number((sumAim / n).toFixed(1)),
     avgReleaseJumpCm: Number((sumRel / n).toFixed(1)),
+    avgHoldMoa: Number(clamp(sumMoa / n, 0.4, 60).toFixed(1)),
+    ...(avgFt ? { avgFollowThroughPct: avgFt } : {}),
+    rhythmStdSeconds,
+    aimStdSeconds,
+    rhythmConsistencyPct,
     ...(avgHr ? { avgHeartRateBpm: avgHr } : {}),
     ...(maxHr >= 30 ? { maxHeartRateBpm: Math.round(maxHr) } : {})
   };
@@ -494,14 +548,24 @@ export function analyzeImuShotWindow(params: {
   let refAx = 0;
   let refAy = 0;
   let refAz = 0;
+  let refGx = 0;
+  let refGy = 0;
+  let refGz = 0;
   for (const s of refList) {
     refAx += s.ax;
     refAy += s.ay;
     refAz += s.az;
+    refGx += typeof s.gx === "number" ? s.gx : 0;
+    refGy += typeof s.gy === "number" ? s.gy : 0;
+    refGz += typeof s.gz === "number" ? s.gz : 0;
   }
   refAx /= refList.length;
   refAy /= refList.length;
   refAz /= refList.length;
+  // Dynamic thermal gyroscope zero-bias estimation from quiet pre-release anchor (clamped to ±2.6 deg/s)
+  const biasGx = clamp(refGx / refList.length, -0.045, 0.045);
+  const biasGy = clamp(refGy / refList.length, -0.045, 0.045);
+  const biasGz = clamp(refGz / refList.length, -0.045, 0.045);
   const anchorGravAx = refAx;
   const anchorGravAy = refAy;
   const anchorGravAz = refAz;
@@ -580,9 +644,9 @@ export function analyzeImuShotWindow(params: {
     const tiltVertRad =
       (((smoothAz - refAz) + (smoothAx - refAx) * wristSign * forePitchWeight) / refNorm) * 0.28;
 
-    const gx = typeof cur.gx === "number" ? cur.gx : 0;
-    const gy = typeof cur.gy === "number" ? cur.gy : 0;
-    const gz = typeof cur.gz === "number" ? cur.gz : 0;
+    const gx = (typeof cur.gx === "number" ? cur.gx : 0) - biasGx;
+    const gy = (typeof cur.gy === "number" ? cur.gy : 0) - biasGy;
+    const gz = (typeof cur.gz === "number" ? cur.gz : 0) - biasGz;
     gyroYaw = 0.88 * (gyroYaw + gz * dtSec * wristSign * 0.28) + 0.12 * tiltHorizRad;
     gyroPitch = 0.88 * (gyroPitch + gy * dtSec * 0.28) + 0.12 * tiltVertRad;
 
@@ -878,7 +942,29 @@ export function analyzeImuShotWindow(params: {
   const normalizedSwayRatio = rmsSwayCm / faceRadiusCm; // e.g. 1.5cm / 20cm = 0.075
   const stabilityPct = Math.round(clamp(100 - normalizedSwayRatio * 82, 38, 99));
 
-  // Release Jump (cm): peak displacement in the final 0.5s before release relative to pre-release 0.5s anchor
+  // Distance-independent Hold Steadiness in MOA (Minutes of Angle) across critical final 1.5s pre-release hold
+  const criticalSlice = targetTraj.filter((p) => p.t >= Math.max(tAimStart, tEnd - 1500));
+  const moaRefSlice = criticalSlice.length >= 3 ? criticalSlice : aimSlice;
+  let critMeanDx = 0;
+  let critMeanDy = 0;
+  if (moaRefSlice.length > 0) {
+    for (const p of moaRefSlice) {
+      critMeanDx += p.dxCm;
+      critMeanDy += p.dyCm;
+    }
+    critMeanDx /= moaRefSlice.length;
+    critMeanDy /= moaRefSlice.length;
+  }
+  let critSqCm = 0;
+  for (const p of moaRefSlice) {
+    const rx = p.dxCm - critMeanDx;
+    const ry = p.dyCm - critMeanDy;
+    critSqCm += rx * rx + ry * ry;
+  }
+  const critRmsCm = moaRefSlice.length > 0 ? Math.sqrt(critSqCm / moaRefSlice.length) : rmsSwayCm;
+  const holdMoa = Number(clamp(Math.atan2(critRmsCm, distCm) * 3437.7468, 0.4, 60).toFixed(1));
+
+  // Release Jump (cm) & Pre-Break vs Post-Release Follow-Through separation
   const lastHalfSec = targetTraj.filter((p) => p.t >= tEnd - 500);
   let releaseJumpCm = 0.6;
   if (lastHalfSec.length >= 2) {
@@ -890,6 +976,52 @@ export function analyzeImuShotWindow(params: {
     }
     releaseJumpCm = Number(clamp(maxDisp, 0.2, faceRadiusCm * 0.6).toFixed(1));
   }
+
+  const preBreakAnchor = targetTraj.filter((p) => p.t >= tEnd - 650 && p.t <= tEnd - 280);
+  let pbRefX = meanAimDx;
+  let pbRefY = meanAimDy;
+  if (preBreakAnchor.length >= 2) {
+    pbRefX = preBreakAnchor.reduce((s, p) => s + p.dxCm, 0) / preBreakAnchor.length;
+    pbRefY = preBreakAnchor.reduce((s, p) => s + p.dyCm, 0) / preBreakAnchor.length;
+  }
+  const breakSlice = targetTraj.filter((p) => p.t > tEnd - 280);
+  let maxPreBreak = 0.3;
+  for (const p of breakSlice) {
+    const d = Math.hypot(p.dxCm - pbRefX, p.dyCm - pbRefY);
+    if (d > maxPreBreak) maxPreBreak = d;
+  }
+  const preBreakCm = Number(clamp(maxPreBreak, 0.2, faceRadiusCm * 0.6).toFixed(1));
+
+  const postFollowSamples = sorted.filter((s) => s.t >= tEnd + 80 && s.t <= tEnd + 340);
+  let followThroughPct: number | undefined;
+  if (postFollowSamples.length >= 2) {
+    let fAx = 0;
+    let fAy = 0;
+    let fAz = 0;
+    for (const s of postFollowSamples) {
+      fAx += s.ax;
+      fAy += s.ay;
+      fAz += s.az;
+    }
+    fAx /= postFollowSamples.length;
+    fAy /= postFollowSamples.length;
+    fAz /= postFollowSamples.length;
+    const followGravDrift = Math.hypot(
+      fAx - anchorGravAx,
+      fAy - anchorGravAy,
+      fAz - anchorGravAz
+    );
+    followThroughPct = Math.round(
+      clamp(100 - Math.max(0, followGravDrift - 0.85) * 9.5, 42, 99)
+    );
+  }
+
+  const releaseDiagnosis: AnalysisReleaseDiagnosis =
+    preBreakCm > faceRadiusCm * 0.16
+      ? "ANTICIPATION"
+      : typeof followThroughPct === "number" && followThroughPct < 72
+      ? "DROP"
+      : "CLEAN";
 
   const rawPrepPts = targetTraj.slice(prepStartIdx, aimStartIdx + 1).map((p) => ({
     x: p.nx,
@@ -927,7 +1059,11 @@ export function analyzeImuShotWindow(params: {
     totalSeconds,
     stabilityPct,
     swayRadiusCm,
+    holdMoa,
     releaseJumpCm,
+    preBreakCm,
+    ...(typeof followThroughPct === "number" ? { followThroughPct } : {}),
+    releaseDiagnosis,
     ...(validHr ? { heartRateBpm: validHr } : {}),
     prepPoints: finalPrepPts,
     aimPoints: finalAimPts,
@@ -940,11 +1076,20 @@ export function analyzeImuShotWindow(params: {
 }
 
 export function normalizeShotRecord(raw: any, fallbackShotNumber = 1): AnalysisShotRecord {
+  const distanceM = Number(raw?.distanceM ?? raw?.d) || 18;
+  const bowType: AnalysisBowType =
+    raw?.bowType === "Compound" || raw?.bowType === "Recurve" || raw?.bowType === "Barebow"
+      ? raw.bowType
+      : "Barebow";
+  const faceRadiusCm = getTargetFaceRadiusCm(distanceM, bowType);
   const rawPrep = Number(raw?.prepSeconds ?? raw?.prepSec);
   const rawAim = Number(raw?.aimSeconds ?? raw?.aimSec);
   const rawStab = Number(raw?.stabilityPct ?? raw?.stab);
   const rawSway = Number(raw?.swayRadiusCm ?? raw?.swayCm);
   const rawRel = Number(raw?.releaseJumpCm ?? raw?.relCm);
+  const rawMoa = Number(raw?.holdMoa ?? raw?.moa);
+  const rawBrk = Number(raw?.preBreakCm ?? raw?.brk);
+  const rawFt = Number(raw?.followThroughPct ?? raw?.ft);
   const prepSeconds = Number(
     clamp(Number.isFinite(rawPrep) && rawPrep > 0 ? rawPrep : 0, 0, 20).toFixed(1)
   );
@@ -961,6 +1106,35 @@ export function normalizeShotRecord(raw: any, fallbackShotNumber = 1): AnalysisS
   const releaseJumpCm = Number(
     clamp(Number.isFinite(rawRel) && rawRel > 0 ? rawRel : 0, 0, 50).toFixed(1)
   );
+  const distCm = Math.max(1000, distanceM * 100);
+  const holdMoa = Number(
+    clamp(
+      Number.isFinite(rawMoa) && rawMoa > 0
+        ? rawMoa
+        : Math.atan2(Math.max(0.3, swayRadiusCm), distCm) * 3437.7468,
+      0.4,
+      60
+    ).toFixed(1)
+  );
+  const preBreakCm =
+    Number.isFinite(rawBrk) && rawBrk > 0
+      ? Number(clamp(rawBrk, 0.1, 50).toFixed(1))
+      : undefined;
+  const followThroughPct =
+    Number.isFinite(rawFt) && rawFt > 0
+      ? Math.round(clamp(rawFt, 35, 100))
+      : undefined;
+  const rdRaw = raw?.releaseDiagnosis ?? raw?.rd;
+  const releaseDiagnosis: AnalysisReleaseDiagnosis =
+    rdRaw === "ANTICIPATION" || rdRaw === "A"
+      ? "ANTICIPATION"
+      : rdRaw === "DROP" || rdRaw === "D"
+      ? "DROP"
+      : preBreakCm && preBreakCm > faceRadiusCm * 0.16
+      ? "ANTICIPATION"
+      : followThroughPct && followThroughPct < 72
+      ? "DROP"
+      : "CLEAN";
   const hrRaw = Number(raw?.heartRateBpm ?? raw?.bpm) || 0;
 
   const parsePts = (arr: any): NormalizedTargetPoint[] => {
@@ -991,17 +1165,18 @@ export function normalizeShotRecord(raw: any, fallbackShotNumber = 1): AnalysisS
     id: String(raw?.id || `SHOT-${raw?.timestamp || Date.now()}-${fallbackShotNumber}`),
     shotNumber: Number(raw?.shotNumber ?? raw?.n) || fallbackShotNumber,
     timestamp: Number(raw?.timestamp ?? raw?.ts) || Date.now(),
-    distanceM: Number(raw?.distanceM ?? raw?.d) || 18,
-    bowType:
-      raw?.bowType === "Compound" || raw?.bowType === "Recurve" || raw?.bowType === "Barebow"
-        ? raw.bowType
-        : "Barebow",
+    distanceM,
+    bowType,
     prepSeconds,
     aimSeconds,
     totalSeconds,
     stabilityPct,
     swayRadiusCm,
+    holdMoa,
     releaseJumpCm,
+    ...(typeof preBreakCm === "number" ? { preBreakCm } : {}),
+    ...(typeof followThroughPct === "number" ? { followThroughPct } : {}),
+    releaseDiagnosis,
     ...(hrRaw >= 30 && hrRaw <= 245 ? { heartRateBpm: Math.round(hrRaw) } : {}),
     prepPoints: prepPoints.length >= 2 ? prepPoints : [{ x: -0.35, y: 0.38 }, releasePoint],
     aimPoints: aimPoints.length >= 2 ? aimPoints : [releasePoint, releasePoint],
@@ -1012,6 +1187,12 @@ export function normalizeShotRecord(raw: any, fallbackShotNumber = 1): AnalysisS
 
 /** Encodes a shot into a < 1.2 KB compact JSON string for Wear OS / Cloud Watch transport. */
 export function encodeCompactShotAnalysis(shot: AnalysisShotRecord): string {
+  const rdCode =
+    shot.releaseDiagnosis === "ANTICIPATION"
+      ? "A"
+      : shot.releaseDiagnosis === "DROP"
+      ? "D"
+      : "C";
   const compact = {
     id: shot.id,
     n: shot.shotNumber,
@@ -1022,7 +1203,11 @@ export function encodeCompactShotAnalysis(shot: AnalysisShotRecord): string {
     aimSec: shot.aimSeconds,
     stab: shot.stabilityPct,
     swayCm: shot.swayRadiusCm,
+    ...(typeof shot.holdMoa === "number" ? { moa: shot.holdMoa } : {}),
     relCm: shot.releaseJumpCm,
+    ...(typeof shot.preBreakCm === "number" ? { brk: shot.preBreakCm } : {}),
+    ...(typeof shot.followThroughPct === "number" ? { ft: shot.followThroughPct } : {}),
+    rd: rdCode,
     ...(shot.heartRateBpm ? { bpm: shot.heartRateBpm } : {}),
     p: downsamplePoints(shot.prepPoints, 10).map((pt) => [
       Number(pt.x.toFixed(3)),

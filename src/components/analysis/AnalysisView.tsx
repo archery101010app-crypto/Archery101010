@@ -525,6 +525,10 @@ export default function AnalysisView({
           avgPrepSeconds: summary.avgPrepSeconds,
           avgAimSeconds: summary.avgAimSeconds,
           avgReleaseJumpCm: summary.avgReleaseJumpCm,
+          avgHoldMoa: summary.avgHoldMoa,
+          rhythmStdSeconds: summary.rhythmStdSeconds,
+          rhythmConsistencyPct: summary.rhythmConsistencyPct,
+          ...(summary.avgFollowThroughPct ? { avgFollowThroughPct: summary.avgFollowThroughPct } : {}),
           ...(summary.avgHeartRateBpm ? { avgHeartRateBpm: summary.avgHeartRateBpm } : {}),
           ...(summary.maxHeartRateBpm ? { maxHeartRateBpm: summary.maxHeartRateBpm } : {}),
           analysisShots: nextShots.slice(0, 120)
@@ -1753,6 +1757,15 @@ export default function AnalysisView({
           />
           <div className="flex-1 h-full rounded-full bg-[#00BFFF]" />
         </div>
+
+        {shots.length >= 2 && (
+          <div className="flex items-center justify-between pt-0.5 text-[11px] font-bold text-white tabular-nums">
+            <span>{tx("Consistencia de ciclo", "Cycle consistency")}</span>
+            <span className="font-extrabold text-[#00BFFF]">
+              {sessionSummary.rhythmConsistencyPct}% · ±{sessionSummary.rhythmStdSeconds.toFixed(1)} s
+            </span>
+          </div>
+        )}
       </div>
 
       {/* 3-Column Objective Telemetry Row */}
@@ -1765,8 +1778,14 @@ export default function AnalysisView({
             {activeShot ? activeShot.stabilityPct : "—"}
             {activeShot && <span className="text-[11.5px] font-bold ml-0.5">%</span>}
           </span>
-          <span className="text-[10.5px] font-bold text-white">
-            {activeShot ? `±${activeShot.swayRadiusCm.toFixed(1)} cm` : "—"}
+          <span className="text-[10.5px] font-bold text-white leading-tight break-words">
+            {activeShot
+              ? `±${activeShot.swayRadiusCm.toFixed(1)} cm${
+                  typeof activeShot.holdMoa === "number"
+                    ? ` · ${activeShot.holdMoa.toFixed(1)} MOA`
+                    : ""
+                }`
+              : "—"}
           </span>
         </div>
 
@@ -1778,8 +1797,18 @@ export default function AnalysisView({
             {activeShot ? activeShot.releaseJumpCm.toFixed(1) : "—"}
             {activeShot && <span className="text-[11.5px] font-bold ml-0.5">cm</span>}
           </span>
-          <span className="text-[10.5px] font-bold text-white">
-            {tx("Últ. 0.5 s", "Last 0.5 s")}
+          <span className="text-[10.5px] font-bold text-white leading-tight break-words">
+            {activeShot
+              ? activeShot.releaseDiagnosis === "ANTICIPATION"
+                ? tx("Anticipación", "Anticipation")
+                : activeShot.releaseDiagnosis === "DROP"
+                ? tx("Bajada rápida", "Early drop")
+                : `${tx("Limpia", "Clean")}${
+                    typeof activeShot.followThroughPct === "number"
+                      ? ` · FT ${activeShot.followThroughPct}%`
+                      : ""
+                  }`
+              : tx("Últ. 0.5 s", "Last 0.5 s")}
           </span>
         </div>
 

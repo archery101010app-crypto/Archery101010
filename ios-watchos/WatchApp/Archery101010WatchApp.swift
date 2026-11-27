@@ -674,9 +674,21 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                             }
                             // 100% IMU Biomechanical Shot Gate (Zero Microphone Recording)
                             if validFollow && (nowMs - self.lastShotTimeMs) > cooldownMs {
+                                let trigMs = self.pendingShotStartMs
                                 self.lastShotTimeMs = nowMs
                                 DispatchQueue.main.async { [weak self] in
-                                    self?.incrementArrow(delta: 1, source: "watch_auto")
+                                    guard let self = self else { return }
+                                    if self.analysisMode && !self.manualAnalysisRecording {
+                                        WKInterfaceDevice.current().play(.stop)
+                                        self.finalizeAnalysisWindow(
+                                            startMs: trigMs - 9_500,
+                                            endMs: nowMs,
+                                            notifyPhoneStopFallback: false,
+                                            isAutoShot: true
+                                        )
+                                    } else if !self.analysisMode {
+                                        self.incrementArrow(delta: 1, source: "watch_auto")
+                                    }
                                 }
                             }
                         }
@@ -1499,6 +1511,9 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
     // MARK: - Adaptive Cloud Polling (`watch_sessions/<cloudSessionToken>`)
 
     private func currentAdaptivePollIntervalMs(nowMs: Int64) -> Int64 {
+        if analysisMode {
+            return 3_000
+        }
         let idleMs = max(0, nowMs - lastActivityMs)
         if idleMs < 90_000 {
             return 8_000
@@ -1634,6 +1649,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                     let ptStr = ((fields["practiceType"] as? [String: Any])?["stringValue"] as? String) ?? ""
                     let btStr = ((fields["bowType"] as? [String: Any])?["stringValue"] as? String) ?? ""
                     let fsAnalysis = fsBool("analysisMode", ptStr == "Análisis")
+                    let fsAuto = fsBool("autoDetectEnabled", self.autoDetectEnabled)
                     let calJson = ((fields["analysisCalibrationJson"] as? [String: Any])?["stringValue"] as? String) ?? ""
 
                     let remoteSig = "\(sessionActive ? 1 : 0)|\(incomingSid)|\(fsArrows)|\(fsScore)|\(fsEnd)|\(endArrowsJoined)|\(fsDistM)|\(fsPerEnd)|\(fsEnds)|\(fsSens)"
@@ -1693,6 +1709,7 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                         self.bowTypeStr = btStr
                     }
 
+                    self.autoDetectEnabled = fsAuto
                     if self.analysisMode != fsAnalysis {
                         self.analysisMode = fsAnalysis
                         if !fsAnalysis {
@@ -1721,12 +1738,14 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
                         }
                         if reqStart > 0 && reqStart != self.lastHandledStartAt && (nowMs - reqStart) <= 25_000 && reqStop < reqStart {
                             self.lastHandledStartAt = reqStart
-                            self.startManualAnalysis(notifyPhone: false)
+                            let startLag = max(0, min(12_000, nowMs - reqStart))
+                            self.startManualAnalysis(notifyPhone: false, lagMs: startLag)
                         }
                         if reqStop > 0 && reqStop != self.lastHandledStopAt && (nowMs - reqStop) <= 15_000 {
                             self.lastHandledStopAt = reqStop
                             if self.manualAnalysisRecording {
-                                self.stopManualAnalysis(notifyPhone: false)
+                                let stopLag = max(0, min(9_000, nowMs - reqStop))
+                                self.stopManualAnalysis(notifyPhone: false, lagMs: stopLag)
                             }
                         }
                     }
@@ -1755,14 +1774,15 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
 
     // MARK: - Analysis Mode & Shot Recording
 
-    func startManualAnalysis(notifyPhone: Bool = true) {
+    func startManualAnalysis(notifyPhone: Bool = true, lagMs: Int64 = 0) {
         guard analysisMode, !manualAnalysisRecording else { return }
         startHeartRateStreamingIfSupported()
         syncShotDetectionMotionSensors()
         let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let safeLag = (lagMs > 0 && lagMs <= 12_000) ? lagMs : 0
         manualAnalysisRecording = true
-        manualAnalysisStartMs = nowMs
-        manualAnalysisElapsedSec = 0.0
+        manualAnalysisStartMs = nowMs - safeLag
+        manualAnalysisElapsedSec = Double(safeLag) / 1000.0
         screenIndex = 0
         markUserActivity(isWriteAction: true)
         WKInterfaceDevice.current().play(.start)
@@ -1785,23 +1805,41 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
         }
     }
 
-    func stopManualAnalysis(notifyPhone: Bool = true) {
+    func stopManualAnalysis(notifyPhone: Bool = true, lagMs: Int64 = 0) {
         guard manualAnalysisRecording else { return }
-        let endMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let safeLag = (lagMs > 0 && lagMs <= 9_000) ? lagMs : 0
+        var endMs = nowMs - safeLag
         let startMs = manualAnalysisStartMs
+        if endMs <= startMs + 350 {
+            endMs = nowMs
+        }
         manualAnalysisRecording = false
         manualAnalysisStartMs = 0
         manualTimer?.invalidate()
         manualTimer = nil
         markUserActivity(isWriteAction: true)
         WKInterfaceDevice.current().play(.stop)
+        finalizeAnalysisWindow(
+            startMs: startMs,
+            endMs: endMs,
+            notifyPhoneStopFallback: notifyPhone,
+            isAutoShot: false
+        )
+    }
 
+    private func finalizeAnalysisWindow(
+        startMs: Int64,
+        endMs: Int64,
+        notifyPhoneStopFallback: Bool,
+        isAutoShot: Bool
+    ) {
         imuLock.lock()
-        let windowSamples = motionBuf.filter { $0.t >= startMs && $0.t <= endMs - 40 }
+        let windowSamples = motionBuf.filter { $0.t >= startMs && $0.t <= endMs - 20 }
         imuLock.unlock()
 
         guard windowSamples.count >= 6 else {
-            if notifyPhone {
+            if notifyPhoneStopFallback {
                 sendCommandToPhone(["type": "ANALYSIS_MANUAL_STOP", "ts": endMs, "source": "watch_manual"])
             }
             return
@@ -1945,25 +1983,75 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
             }
         }
 
-        let prepSec = max(0.4, min(10.0, Double(trimmedSamples[settleIdx].t - trimmedSamples[prepStartIdx].t) / 1000.0))
-        let aimSec = max(0.5, min(24.0, Double(trimmedSamples[n - 1].t - trimmedSamples[settleIdx].t) / 1000.0))
+        let maxPrepCap = isAutoShot ? 6.5 : 10.0
+        let maxAimCap = isAutoShot ? 14.0 : 24.0
+        let prepSec = max(0.4, min(maxPrepCap, Double(trimmedSamples[settleIdx].t - trimmedSamples[prepStartIdx].t) / 1000.0))
+        let aimSec = max(0.5, min(maxAimCap, Double(trimmedSamples[n - 1].t - trimmedSamples[settleIdx].t) / 1000.0))
+
+        // Zero-centered RMS Sway across Aiming + Critical 1.5s Hold MOA (matching Web, Wear OS & Connect IQ 100%)
+        let aimCount = max(1, n - settleIdx)
+        var meanAimNx = 0.0
+        var meanAimNy = 0.0
+        for i in settleIdx..<n {
+            meanAimNx += nxArr[i]
+            meanAimNy += nyArr[i]
+        }
+        meanAimNx /= Double(aimCount)
+        meanAimNy /= Double(aimCount)
 
         var sumSq = 0.0
-        let aimCount = max(1, n - settleIdx)
         for i in settleIdx..<n {
-            let cxCm = nxArr[i] * faceRadiusCm
-            let cyCm = nyArr[i] * faceRadiusCm
+            let cxCm = (nxArr[i] - meanAimNx) * faceRadiusCm
+            let cyCm = (nyArr[i] - meanAimNy) * faceRadiusCm
             sumSq += cxCm * cxCm + cyCm * cyCm
         }
         let swayCm = max(0.3, min(faceRadiusCm, sqrt(sumSq / Double(aimCount))))
         let stabPct = max(38, min(99, Int(round(100.0 - (swayCm / faceRadiusCm) * 82.0))))
+
+        var critFrom = settleIdx
+        for i in stride(from: n - 1, through: settleIdx, by: -1) {
+            if (trimmedSamples[n - 1].t - trimmedSamples[i].t) <= 1500 {
+                critFrom = i
+            }
+        }
+        let critCount = max(1, n - critFrom)
+        var critMx = 0.0, critMy = 0.0
+        for i in critFrom..<n {
+            critMx += nxArr[i]
+            critMy += nyArr[i]
+        }
+        critMx /= Double(critCount)
+        critMy /= Double(critCount)
+        var critSqCm = 0.0
+        for i in critFrom..<n {
+            let rxC = (nxArr[i] - critMx) * faceRadiusCm
+            let ryC = (nyArr[i] - critMy) * faceRadiusCm
+            critSqCm += rxC * rxC + ryC * ryC
+        }
+        let critRmsCm = sqrt(critSqCm / Double(critCount))
+        let holdMoa = max(0.4, min(60.0, atan2(critRmsCm, distCm) * 3437.7468))
+
+        var ftPct = 92
+        if effCount < rawCount {
+            let followEnd = min(rawCount, effCount + 8)
+            let followSlice = windowSamples[effCount..<followEnd]
+            if !followSlice.isEmpty {
+                let fAx = followSlice.reduce(0.0) { $0 + $1.ax } / Double(followSlice.count)
+                let fAy = followSlice.reduce(0.0) { $0 + $1.ay } / Double(followSlice.count)
+                let fAz = followSlice.reduce(0.0) { $0 + $1.az } / Double(followSlice.count)
+                let fDriftMps2 = sqrt(pow(fAx - refAx, 2) + pow(fAy - refAy, 2) + pow(fAz - refAz, 2)) * 9.81
+                ftPct = max(42, min(99, Int(round(100.0 - max(0.0, fDriftMps2 - 0.85) * 9.5))))
+            }
+        }
+
         let preIdx = max(0, n - 8)
         let relJumpCm = max(0.2, hypot(nxArr[n - 1] - nxArr[preIdx], nyArr[n - 1] - nyArr[preIdx]) * faceRadiusCm)
+        let rdCode = (relJumpCm > faceRadiusCm * 0.16) ? "A" : ((ftPct < 72) ? "D" : "C")
 
-        let pCount = min(8, max(2, settleIdx + 1))
+        let pCount = min(8, max(2, settleIdx - prepStartIdx + 1))
         var pPts: [[Double]] = []
         for j in 0..<pCount {
-            let idx = min(n - 1, (j * settleIdx) / max(1, pCount - 1))
+            let idx = min(n - 1, prepStartIdx + (j * max(1, settleIdx - prepStartIdx)) / max(1, pCount - 1))
             pPts.append([
                 (nxArr[idx] * 1000.0).rounded() / 1000.0,
                 (nyArr[idx] * 1000.0).rounded() / 1000.0
@@ -1981,17 +2069,21 @@ final class WatchSessionViewModel: NSObject, ObservableObject, WCSessionDelegate
 
         arrowCount += 1
         lastAnalysisStabPct = stabPct
+        let shotTsMs = trimmedSamples[n - 1].t
         var compact: [String: Any] = [
-            "id": "SHOT-\(endMs)-\(arrowCount)",
+            "id": "SHOT-\(shotTsMs)-\(arrowCount)",
             "n": arrowCount,
-            "ts": endMs,
+            "ts": shotTsMs,
             "d": distanceM,
             "bowType": bowTypeStr,
             "prepSec": (prepSec * 10.0).rounded() / 10.0,
             "aimSec": (aimSec * 10.0).rounded() / 10.0,
             "stab": stabPct,
             "swayCm": (swayCm * 10.0).rounded() / 10.0,
+            "moa": (holdMoa * 10.0).rounded() / 10.0,
             "relCm": (relJumpCm * 10.0).rounded() / 10.0,
+            "ft": ftPct,
+            "rd": rdCode,
             "p": pPts,
             "a": aPts,
             "r": aPts.last ?? [0.0, 0.0]

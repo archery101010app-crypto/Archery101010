@@ -122,6 +122,7 @@ class Archery101010WatchView extends WatchUi.View {
     public var avgHeartRateBpm as Lang.Number = 0;
     public var maxHeartRateBpm as Lang.Number = 0;
     public var analysisMode as Lang.Boolean = false;
+    public var autoDetectEnabled as Lang.Boolean = false;
     public var manualAnalysisRecording as Lang.Boolean = false;
     public var manualAnalysisStartTimerMs as Lang.Number = 0;
     public var lastAnalysisStabPct as Lang.Number = 0;
@@ -183,19 +184,38 @@ class Archery101010WatchView extends WatchUi.View {
     hidden var mBaselineSteps as Lang.Number? = null;
     hidden var mLastObservedSteps as Lang.Number? = null;
     hidden var mHighFreqAccelActive as Lang.Boolean = false;
+    hidden var mHasHardwareGyro as Lang.Boolean = false;
 
-    // Scaled Analysis IMU Ring Buffer (60 samples on <=135KB low-RAM watches; 160 samples on high-RAM watches)
-    hidden var mAnaSize as Lang.Number = 60;
+    // Scaled Analysis IMU Ring Buffer (180 samples on <=135KB low-RAM watches; 240 samples + 6-axis gyro on high-RAM watches)
+    hidden var mAnaSize as Lang.Number = 180;
     hidden var mAnaT as Lang.Array<Lang.Number>? = null;
     hidden var mAnaAx as Lang.Array<Lang.Float>? = null;
     hidden var mAnaAy as Lang.Array<Lang.Float>? = null;
     hidden var mAnaAz as Lang.Array<Lang.Float>? = null;
+    hidden var mAnaPeak as Lang.Array<Lang.Float>? = null;
+    hidden var mAnaGy as Lang.Array<Lang.Float>? = null;
+    hidden var mAnaGz as Lang.Array<Lang.Float>? = null;
     hidden var mAnaIdx as Lang.Number = 0;
     hidden var mAnaCount as Lang.Number = 0;
     hidden var mLastAnaSampleMs as Lang.Number = 0;
     hidden var mLastSampleAx as Lang.Float = 0.0;
     hidden var mLastSampleAy as Lang.Float = 0.0;
     hidden var mLastSampleAz as Lang.Float = -1000.0;
+    hidden var mPrevRawMagMg as Lang.Float = 1000.0;
+    hidden var mBoxSumAx as Lang.Float = 0.0;
+    hidden var mBoxSumAy as Lang.Float = 0.0;
+    hidden var mBoxSumAz as Lang.Float = 0.0;
+    hidden var mBoxSumGy as Lang.Float = 0.0;
+    hidden var mBoxSumGz as Lang.Float = 0.0;
+    hidden var mBoxCnt as Lang.Number = 0;
+    hidden var mBoxPeakJerkMg as Lang.Float = 0.0;
+    hidden var mAutoQuietMs as Lang.Number = 0;
+    hidden var mAutoPendingMs as Lang.Number = 0;
+    hidden var mAutoFollowLinSum as Lang.Float = 0.0;
+    hidden var mAutoFollowAxSum as Lang.Float = 0.0;
+    hidden var mAutoFollowCnt as Lang.Number = 0;
+    hidden var mLastAutoShotMs as Lang.Number = 0;
+    hidden var mLastStepTickMs as Lang.Number = 0;
     hidden var mCalZeroVec as Lang.Array<Lang.Number>? = null;
     hidden var mLastCalibrateZeroTs as Lang.Long = 0l;
     hidden var mLastRemoteStartTs as Lang.Long = 0l;
@@ -280,6 +300,11 @@ class Archery101010WatchView extends WatchUi.View {
             mAnaAx = new [mAnaSize] as Lang.Array<Lang.Float>;
             mAnaAy = new [mAnaSize] as Lang.Array<Lang.Float>;
             mAnaAz = new [mAnaSize] as Lang.Array<Lang.Float>;
+            mAnaPeak = new [mAnaSize] as Lang.Array<Lang.Float>;
+            if (!isLowRamDevice) {
+                mAnaGy = new [mAnaSize] as Lang.Array<Lang.Float>;
+                mAnaGz = new [mAnaSize] as Lang.Array<Lang.Float>;
+            }
             mAnaIdx = 0;
             mAnaCount = 0;
         }
@@ -291,6 +316,9 @@ class Archery101010WatchView extends WatchUi.View {
             mAnaAx = null;
             mAnaAy = null;
             mAnaAz = null;
+            mAnaPeak = null;
+            mAnaGy = null;
+            mAnaGz = null;
             mAnaIdx = 0;
             mAnaCount = 0;
         }
@@ -331,6 +359,9 @@ class Archery101010WatchView extends WatchUi.View {
     function getAdaptiveCloudPollIntervalMs(now as Lang.Number) as Lang.Number {
         if (now < mLastActivityMs) {
             mLastActivityMs = now;
+        }
+        if (analysisMode) {
+            return 3000;
         }
         var idleMs = now - mLastActivityMs;
         if (idleMs < 90000) {
@@ -522,8 +553,29 @@ class Archery101010WatchView extends WatchUi.View {
             return;
         }
         if (Sensor has :registerSensorDataListener) {
+            var sampleHz = isLowRamDevice ? 15 : 25;
+            if (!isLowRamDevice) {
+                try {
+                    var optsGyro = {
+                        :period => 1,
+                        :accelerometer => {
+                            :enabled => true,
+                            :sampleRate => sampleHz
+                        },
+                        :gyroscope => {
+                            :enabled => true,
+                            :sampleRate => sampleHz
+                        }
+                    };
+                    Sensor.registerSensorDataListener(method(:onAccelBatch), optsGyro);
+                    mHighFreqAccelActive = true;
+                    mHasHardwareGyro = true;
+                    return;
+                } catch (exGyro) {
+                    mHasHardwareGyro = false;
+                }
+            }
             try {
-                var sampleHz = isLowRamDevice ? 15 : 25;
                 var opts = {
                     :period => 1,
                     :accelerometer => {
@@ -533,8 +585,10 @@ class Archery101010WatchView extends WatchUi.View {
                 };
                 Sensor.registerSensorDataListener(method(:onAccelBatch), opts);
                 mHighFreqAccelActive = true;
+                mHasHardwareGyro = false;
             } catch (ex) {
                 mHighFreqAccelActive = false;
+                mHasHardwareGyro = false;
             }
         }
     }
@@ -771,29 +825,132 @@ class Archery101010WatchView extends WatchUi.View {
         WatchUi.requestUpdate();
     }
 
-    function processAccelSampleMg(ax as Lang.Float, ay as Lang.Float, az as Lang.Float, now as Lang.Number) as Void {
+    function processInertialSample25Hz(
+        ax as Lang.Float,
+        ay as Lang.Float,
+        az as Lang.Float,
+        gyRad as Lang.Float,
+        gzRad as Lang.Float,
+        dtMs as Lang.Number,
+        now as Lang.Number
+    ) as Void {
         mLastSampleAx = ax;
         mLastSampleAy = ay;
         mLastSampleAz = az;
-        var sampleGapMs = isLowRamDevice ? 140 : 100;
-        if (analysisMode && (now < mLastAnaSampleMs || (now - mLastAnaSampleMs) >= sampleGapMs)) {
-            ensureAnalysisBuffersAllocated();
-            var tBuf = mAnaT;
-            var xBuf = mAnaAx;
-            var yBuf = mAnaAy;
-            var zBuf = mAnaAz;
-            if (tBuf != null && xBuf != null && yBuf != null && zBuf != null) {
-                mLastAnaSampleMs = now;
-                tBuf[mAnaIdx] = now;
-                xBuf[mAnaIdx] = ax;
-                yBuf[mAnaIdx] = ay;
-                zBuf[mAnaIdx] = az;
-                mAnaIdx = (mAnaIdx + 1) % mAnaSize;
-                if (mAnaCount < mAnaSize) {
-                    mAnaCount = mAnaCount + 1;
+
+        var rawMag = Math.sqrt(ax * ax + ay * ay + az * az).toFloat();
+        var jerkMg = (rawMag - mPrevRawMagMg).abs();
+        mPrevRawMagMg = rawMag;
+        var linDevMg = (rawMag - 1000.0).abs();
+        var gyroMag = Math.sqrt(gyRad * gyRad + gzRad * gzRad).toFloat();
+
+        // Hands-free 25Hz 4-stage AUTO shot detector (Raise -> Sustained Anchor -> Release Impulse -> 200ms Follow-Through)
+        if (analysisMode && autoDetectEnabled && !manualAnalysisRecording) {
+            var isWalking = (mLastStepTickMs > 0 && now >= mLastStepTickMs && (now - mLastStepTickMs) < 4800);
+            if (isWalking) {
+                mAutoQuietMs = 0;
+                mAutoPendingMs = 0;
+            } else if (mAutoPendingMs > 0) {
+                var elapsed = now - mAutoPendingMs;
+                if (elapsed >= 80 && elapsed <= 240) {
+                    mAutoFollowLinSum = mAutoFollowLinSum + linDevMg;
+                    mAutoFollowAxSum = mAutoFollowAxSum + ax.abs();
+                    mAutoFollowCnt = mAutoFollowCnt + 1;
+                }
+                if (elapsed >= 220) {
+                    var trigMs = mAutoPendingMs;
+                    mAutoPendingMs = 0;
+                    mAutoQuietMs = 0;
+                    var followOk = (mAutoFollowCnt >= 2)
+                        && ((mAutoFollowLinSum / mAutoFollowCnt) <= 820.0)
+                        && ((mAutoFollowAxSum / mAutoFollowCnt) <= 820.0);
+                    if (followOk && (mLastAutoShotMs == 0 || now < mLastAutoShotMs || (now - mLastAutoShotMs) >= 5500)) {
+                        mLastAutoShotMs = now;
+                        if (Attention has :vibrate) {
+                            Attention.vibrate([
+                                new Attention.VibeProfile(70, 50),
+                                new Attention.VibeProfile(0, 40),
+                                new Attention.VibeProfile(85, 75)
+                            ]);
+                        }
+                        finalizeAnalysisWindow(trigMs - 9500, now, false, true);
+                    }
+                }
+            } else {
+                var gNorm = (rawMag > 400.0) ? rawMag : 1000.0;
+                var perpG = Math.sqrt(ay * ay + az * az).toFloat();
+                var postureHoriz = ((ax.abs() / gNorm) <= 0.78) && (perpG >= 560.0);
+                if (postureHoriz && linDevMg <= 135.0 && gyroMag <= 0.48) {
+                    mAutoQuietMs = mAutoQuietMs + dtMs;
+                    if (mAutoQuietMs > 15000) { mAutoQuietMs = 15000; }
+                } else if (mAutoQuietMs >= 1000) {
+                    var minJerk = bowTypeStr.equals("Compound") ? 290.0 : (bowTypeStr.equals("Recurve") ? 225.0 : 255.0);
+                    var minImpulse = bowTypeStr.equals("Compound") ? 250.0 : (bowTypeStr.equals("Recurve") ? 195.0 : 220.0);
+                    if (jerkMg >= minJerk && (linDevMg + gyroMag * 110.0) >= minImpulse) {
+                        mAutoPendingMs = now;
+                        mAutoFollowLinSum = 0.0;
+                        mAutoFollowAxSum = 0.0;
+                        mAutoFollowCnt = 0;
+                    } else if (!postureHoriz || linDevMg > 260.0) {
+                        mAutoQuietMs = 0;
+                    }
+                } else {
+                    mAutoQuietMs = 0;
                 }
             }
         }
+
+        // Anti-aliasing boxcar filter + 25Hz peak shock preservation into circular trajectory buffer
+        if (analysisMode) {
+            mBoxSumAx = mBoxSumAx + ax;
+            mBoxSumAy = mBoxSumAy + ay;
+            mBoxSumAz = mBoxSumAz + az;
+            mBoxSumGy = mBoxSumGy + gyRad;
+            mBoxSumGz = mBoxSumGz + gzRad;
+            mBoxCnt = mBoxCnt + 1;
+            if (jerkMg > mBoxPeakJerkMg) {
+                mBoxPeakJerkMg = jerkMg;
+            }
+
+            var sampleGapMs = isLowRamDevice ? 125 : 95;
+            if (now < mLastAnaSampleMs || (now - mLastAnaSampleMs) >= sampleGapMs) {
+                ensureAnalysisBuffersAllocated();
+                var tBuf = mAnaT;
+                var xBuf = mAnaAx;
+                var yBuf = mAnaAy;
+                var zBuf = mAnaAz;
+                var pBuf = mAnaPeak;
+                if (tBuf != null && xBuf != null && yBuf != null && zBuf != null && pBuf != null && mBoxCnt > 0) {
+                    mLastAnaSampleMs = now;
+                    tBuf[mAnaIdx] = now;
+                    xBuf[mAnaIdx] = (mBoxSumAx / mBoxCnt).toFloat();
+                    yBuf[mAnaIdx] = (mBoxSumAy / mBoxCnt).toFloat();
+                    zBuf[mAnaIdx] = (mBoxSumAz / mBoxCnt).toFloat();
+                    pBuf[mAnaIdx] = mBoxPeakJerkMg;
+                    var gyBuf = mAnaGy;
+                    var gzBuf = mAnaGz;
+                    if (gyBuf != null && gzBuf != null) {
+                        gyBuf[mAnaIdx] = (mBoxSumGy / mBoxCnt).toFloat();
+                        gzBuf[mAnaIdx] = (mBoxSumGz / mBoxCnt).toFloat();
+                    }
+                    mAnaIdx = (mAnaIdx + 1) % mAnaSize;
+                    if (mAnaCount < mAnaSize) {
+                        mAnaCount = mAnaCount + 1;
+                    }
+                }
+                mBoxSumAx = 0.0;
+                mBoxSumAy = 0.0;
+                mBoxSumAz = 0.0;
+                mBoxSumGy = 0.0;
+                mBoxSumGz = 0.0;
+                mBoxCnt = 0;
+                mBoxPeakJerkMg = 0.0;
+            }
+        }
+    }
+
+    function processAccelSampleMg(ax as Lang.Float, ay as Lang.Float, az as Lang.Float, now as Lang.Number) as Void {
+        processInertialSample25Hz(ax, ay, az, 0.0, 0.0, 100, now);
     }
 
     (:typecheck(false))
@@ -808,12 +965,21 @@ class Archery101010WatchView extends WatchUi.View {
         if (xs == null || ys == null || zs == null) {
             return;
         }
+        var gys = null;
+        var gzs = null;
+        if (mHasHardwareGyro && (sensorData has :gyroscopeData) && sensorData.gyroscopeData != null) {
+            var gyr = sensorData.gyroscopeData;
+            gys = gyr.y;
+            gzs = gyr.z;
+        }
         var batchEndMs = System.getTimer();
         var n = xs.size();
         var dtMs = (n > 1) ? (1000 / n) : 40;
         for (var i = 0; i < n; i++) {
             var sampleMs = batchEndMs - ((n - 1 - i) * dtMs);
-            processAccelSampleMg(xs[i].toFloat(), ys[i].toFloat(), zs[i].toFloat(), sampleMs);
+            var gyRad = (gys != null && i < gys.size() && gys[i] != null) ? (gys[i].toFloat() * 0.0174533) : 0.0;
+            var gzRad = (gzs != null && i < gzs.size() && gzs[i] != null) ? (gzs[i].toFloat() * 0.0174533) : 0.0;
+            processInertialSample25Hz(xs[i].toFloat(), ys[i].toFloat(), zs[i].toFloat(), gyRad, gzRad, dtMs, sampleMs);
         }
     }
 
@@ -834,6 +1000,7 @@ class Archery101010WatchView extends WatchUi.View {
                     var lastObs = mLastObservedSteps;
                     if (lastObs != null && curMonSteps > lastObs) {
                         mLastObservedSteps = curMonSteps;
+                        mLastStepTickMs = now;
                         var deltaSteps = curMonSteps - baseSteps;
                         if (deltaSteps > stepsCount) {
                             stepsCount = deltaSteps;
@@ -1270,14 +1437,20 @@ class Archery101010WatchView extends WatchUi.View {
     }
 
     function startManualAnalysis(notifyPhone as Lang.Boolean) as Void {
+        startManualAnalysisWithLag(notifyPhone, 0);
+    }
+
+    function startManualAnalysisWithLag(notifyPhone as Lang.Boolean, lagMs as Lang.Number) as Void {
         if (!analysisMode || manualAnalysisRecording) {
             return;
         }
         ensureAnalysisBuffersAllocated();
         manualAnalysisRecording = true;
-        manualAnalysisStartTimerMs = System.getTimer();
+        var nowT = System.getTimer();
+        var safeLag = (lagMs > 0 && lagMs <= 12000) ? lagMs : 0;
+        manualAnalysisStartTimerMs = nowT - safeLag;
         screenIdx = 0;
-        mLastLocalActionMs = manualAnalysisStartTimerMs;
+        mLastLocalActionMs = nowT;
         markUserActivity(true);
         if (Attention has :vibrate) {
             Attention.vibrate([new Attention.VibeProfile(75, 70)]);
@@ -1290,14 +1463,24 @@ class Archery101010WatchView extends WatchUi.View {
 
     (:typecheck(false))
     function stopManualAnalysis(notifyPhone as Lang.Boolean) as Void {
+        stopManualAnalysisWithLag(notifyPhone, 0);
+    }
+
+    (:typecheck(false))
+    function stopManualAnalysisWithLag(notifyPhone as Lang.Boolean, lagMs as Lang.Number) as Void {
         if (!manualAnalysisRecording) {
             return;
         }
-        var endTimer = System.getTimer();
+        var nowT = System.getTimer();
+        var safeLag = (lagMs > 0 && lagMs <= 9000) ? lagMs : 0;
+        var endTimer = nowT - safeLag;
         var startTimer = manualAnalysisStartTimerMs;
+        if (endTimer <= startTimer + 350) {
+            endTimer = nowT;
+        }
         manualAnalysisRecording = false;
         manualAnalysisStartTimerMs = 0;
-        mLastLocalActionMs = endTimer;
+        mLastLocalActionMs = nowT;
         markUserActivity(true);
         if (Attention has :vibrate) {
             Attention.vibrate([
@@ -1306,13 +1489,25 @@ class Archery101010WatchView extends WatchUi.View {
                 new Attention.VibeProfile(90, 90)
             ]);
         }
+        finalizeAnalysisWindow(startTimer, endTimer, notifyPhone, false);
+    }
 
+    (:typecheck(false))
+    function finalizeAnalysisWindow(
+        startTimer as Lang.Number,
+        endTimer as Lang.Number,
+        notifyPhoneStopFallback as Lang.Boolean,
+        isAutoShot as Lang.Boolean
+    ) as Void {
         var tBuf = mAnaT;
         var xBuf = mAnaAx;
         var yBuf = mAnaAy;
         var zBuf = mAnaAz;
+        var pBuf = mAnaPeak;
+        var gyBuf = mAnaGy;
+        var gzBuf = mAnaGz;
         if (tBuf == null || xBuf == null || yBuf == null || zBuf == null) {
-            if (notifyPhone) {
+            if (notifyPhoneStopFallback) {
                 enqueueWatchCommand("ANALYSIS_MANUAL_STOP", "", 0);
             }
             WatchUi.requestUpdate();
@@ -1328,7 +1523,7 @@ class Archery101010WatchView extends WatchUi.View {
             }
         }
         if (count < 4) {
-            if (notifyPhone) {
+            if (notifyPhoneStopFallback) {
                 enqueueWatchCommand("ANALYSIS_MANUAL_STOP", "", 0);
             }
             WatchUi.requestUpdate();
@@ -1338,6 +1533,9 @@ class Archery101010WatchView extends WatchUi.View {
         var xs = new [count] as Lang.Array<Lang.Float>;
         var ys = new [count] as Lang.Array<Lang.Float>;
         var zs = new [count] as Lang.Array<Lang.Float>;
+        var pks = new [count] as Lang.Array<Lang.Float>;
+        var gys = new [count] as Lang.Array<Lang.Float>;
+        var gzs = new [count] as Lang.Array<Lang.Float>;
         var tsArr = new [count] as Lang.Array<Lang.Number>;
         var k = count - 1;
         for (var j = 0; j < mAnaCount && k >= 0; j++) {
@@ -1348,6 +1546,9 @@ class Archery101010WatchView extends WatchUi.View {
                 xs[k] = xBuf[rIdx];
                 ys[k] = yBuf[rIdx];
                 zs[k] = zBuf[rIdx];
+                pks[k] = (pBuf != null && pBuf[rIdx] != null) ? pBuf[rIdx] : 0.0;
+                gys[k] = (gyBuf != null && gyBuf[rIdx] != null) ? gyBuf[rIdx] : 0.0;
+                gzs[k] = (gzBuf != null && gzBuf[rIdx] != null) ? gzBuf[rIdx] : 0.0;
                 k = k - 1;
             }
         }
@@ -1408,7 +1609,7 @@ class Archery101010WatchView extends WatchUi.View {
             }
         }
 
-        // Step 2: Pinpoint exact bowstring release shock or onset of post-shot arm drop after aiming plateau
+        // Step 2: Pinpoint exact bowstring release shock (preserving 25Hz sub-sample peak jerk!) or onset of arm drop
         var effCount = (count >= 6) ? (count - 1) : count;
         if (bestPlatScore > 0.0) {
             effCount = (bestPlatIdx + 1 <= count) ? (bestPlatIdx + 1) : count;
@@ -1417,6 +1618,7 @@ class Archery101010WatchView extends WatchUi.View {
                 var magCur = Math.sqrt(xs[rScan] * xs[rScan] + ys[rScan] * ys[rScan] + zs[rScan] * zs[rScan]).toFloat();
                 var magPrev = Math.sqrt(xs[rScan - 1] * xs[rScan - 1] + ys[rScan - 1] * ys[rScan - 1] + zs[rScan - 1] * zs[rScan - 1]).toFloat();
                 var jerkMg = (magCur - magPrev).abs();
+                if (pks[rScan] > jerkMg) { jerkMg = pks[rScan]; }
                 var linDevMg = (magCur - 1000.0).abs();
                 var dPx = xs[rScan] - platAx;
                 var dPy = ys[rScan] - platAy;
@@ -1435,16 +1637,26 @@ class Archery101010WatchView extends WatchUi.View {
         var refAy = 0.0;
         var refAz = 0.0;
         var refAx = 0.0;
+        var refGy = 0.0;
+        var refGz = 0.0;
         var refN = 0;
         for (var r = refStart; r < effCount; r++) {
             refAx = refAx + xs[r];
             refAy = refAy + ys[r];
             refAz = refAz + zs[r];
+            refGy = refGy + gys[r];
+            refGz = refGz + gzs[r];
             refN = refN + 1;
         }
         refAx = refAx / refN;
         refAy = refAy / refN;
         refAz = refAz / refN;
+        var biasGy = refGy / refN;
+        var biasGz = refGz / refN;
+        if (biasGy > 0.045) { biasGy = 0.045; }
+        if (biasGy < -0.045) { biasGy = -0.045; }
+        if (biasGz > 0.045) { biasGz = 0.045; }
+        if (biasGz < -0.045) { biasGz = -0.045; }
         var refNorm = Math.sqrt(refAx * refAx + refAy * refAy + refAz * refAz).toFloat();
         if (refNorm < 400.0) { refNorm = 1000.0; }
 
@@ -1459,12 +1671,25 @@ class Archery101010WatchView extends WatchUi.View {
         var sAx = xs[0];
         var sAy = ys[0];
         var sAz = zs[0];
+        var gYaw = 0.0;
+        var gPitch = 0.0;
         for (var m = 0; m < effCount; m++) {
+            var dtSec = (m > 0) ? ((tsArr[m] - tsArr[m - 1]).toFloat() / 1000.0) : 0.10;
+            if (dtSec < 0.02) { dtSec = 0.02; }
+            if (dtSec > 0.20) { dtSec = 0.20; }
             sAx = 0.80 * sAx + 0.20 * xs[m];
             sAy = 0.80 * sAy + 0.20 * ys[m];
             sAz = 0.80 * sAz + 0.20 * zs[m];
-            var yawRad = ((sAy - refAy) / refNorm) * wristSign * 0.28;
-            var pitchRad = (((sAz - refAz) + (sAx - refAx) * wristSign * forePitchWeight) / refNorm) * 0.28;
+            var tiltH = ((sAy - refAy) / refNorm) * wristSign * 0.28;
+            var tiltV = (((sAz - refAz) + (sAx - refAx) * wristSign * forePitchWeight) / refNorm) * 0.28;
+            var yawRad = tiltH;
+            var pitchRad = tiltV;
+            if (mHasHardwareGyro && !isLowRamDevice) {
+                gYaw = 0.88 * (gYaw + (gzs[m] - biasGz) * dtSec * wristSign * 0.28) + 0.12 * tiltH;
+                gPitch = 0.88 * (gPitch + (gys[m] - biasGy) * dtSec * 0.28) + 0.12 * tiltV;
+                yawRad = tiltH * 0.65 + gYaw * 0.35;
+                pitchRad = tiltV * 0.65 + gPitch * 0.35;
+            }
             var dxCm = Math.tan(yawRad).toFloat() * distCm;
             var dyCm = Math.tan(pitchRad).toFloat() * distCm;
             nxArr[m] = (dxCm / faceRadiusCm).toFloat();
@@ -1526,20 +1751,33 @@ class Archery101010WatchView extends WatchUi.View {
             }
         }
 
+        var maxPrepCap = isAutoShot ? 6.5 : 10.0;
+        var maxAimCap = isAutoShot ? 14.0 : 24.0;
         var prepSec = ((tsArr[settleIdx] - tsArr[prepStartIdx]).toFloat() / 1000.0);
         if (prepSec < 0.4) { prepSec = 0.4; }
-        if (prepSec > 10.0) { prepSec = 10.0; }
+        if (prepSec > maxPrepCap) { prepSec = maxPrepCap; }
         var aimSec = ((tsArr[effCount - 1] - tsArr[settleIdx]).toFloat() / 1000.0);
         if (aimSec < 0.5) { aimSec = 0.5; }
-        if (aimSec > 24.0) { aimSec = 24.0; }
+        if (aimSec > maxAimCap) { aimSec = maxAimCap; }
 
-        var sumSqCm = 0.0;
+        // Zero-centered RMS Sway across Aiming + Critical 1.5s Hold MOA (matching Web & Wear OS 100%)
+        var meanAimNx = 0.0;
+        var meanAimNy = 0.0;
         var aimN = 0;
-        for (var a = settleIdx; a < effCount; a++) {
-            var cxCm = nxArr[a] * faceRadiusCm;
-            var cyCm = nyArr[a] * faceRadiusCm;
-            sumSqCm = sumSqCm + (cxCm * cxCm) + (cyCm * cyCm);
+        for (var a0 = settleIdx; a0 < effCount; a0++) {
+            meanAimNx = meanAimNx + nxArr[a0];
+            meanAimNy = meanAimNy + nyArr[a0];
             aimN = aimN + 1;
+        }
+        if (aimN > 0) {
+            meanAimNx = meanAimNx / aimN;
+            meanAimNy = meanAimNy / aimN;
+        }
+        var sumSqCm = 0.0;
+        for (var a = settleIdx; a < effCount; a++) {
+            var cxCm = (nxArr[a] - meanAimNx) * faceRadiusCm;
+            var cyCm = (nyArr[a] - meanAimNy) * faceRadiusCm;
+            sumSqCm = sumSqCm + (cxCm * cxCm) + (cyCm * cyCm);
         }
         var swayCm = (aimN > 0) ? Math.sqrt(sumSqCm / aimN).toFloat() : 1.5;
         if (swayCm < 0.3) { swayCm = 0.3; }
@@ -1548,12 +1786,68 @@ class Archery101010WatchView extends WatchUi.View {
         if (stabPct < 38) { stabPct = 38; }
         if (stabPct > 99) { stabPct = 99; }
 
+        var critFrom = settleIdx;
+        for (var cScan = effCount - 1; cScan >= settleIdx; cScan--) {
+            if ((tsArr[effCount - 1] - tsArr[cScan]) <= 1500) {
+                critFrom = cScan;
+            }
+        }
+        var critMx = 0.0;
+        var critMy = 0.0;
+        var critN = 0;
+        for (var c0 = critFrom; c0 < effCount; c0++) {
+            critMx = critMx + nxArr[c0];
+            critMy = critMy + nyArr[c0];
+            critN = critN + 1;
+        }
+        if (critN > 0) {
+            critMx = critMx / critN;
+            critMy = critMy / critN;
+        }
+        var critSqCm = 0.0;
+        for (var c1 = critFrom; c1 < effCount; c1++) {
+            var rxC = (nxArr[c1] - critMx) * faceRadiusCm;
+            var ryC = (nyArr[c1] - critMy) * faceRadiusCm;
+            critSqCm = critSqCm + (rxC * rxC) + (ryC * ryC);
+        }
+        var critRmsCm = (critN > 0) ? Math.sqrt(critSqCm / critN).toFloat() : swayCm;
+        var holdMoa = (Math.atan2(critRmsCm, distCm).toFloat() * 3437.75);
+        if (holdMoa < 0.4) { holdMoa = 0.4; }
+        if (holdMoa > 60.0) { holdMoa = 60.0; }
+
+        // Post-release 250ms Follow-Through stability
+        var ftPct = 92;
+        if (effCount < count) {
+            var fAx = 0.0;
+            var fAy = 0.0;
+            var fAz = 0.0;
+            var fN = 0;
+            var fLimit = (effCount + 3 <= count) ? (effCount + 3) : count;
+            for (var fi = effCount; fi < fLimit; fi++) {
+                fAx = fAx + xs[fi];
+                fAy = fAy + ys[fi];
+                fAz = fAz + zs[fi];
+                fN = fN + 1;
+            }
+            if (fN > 0) {
+                fAx = fAx / fN;
+                fAy = fAy / fN;
+                fAz = fAz / fN;
+                var fDriftG = Math.sqrt((fAx - refAx) * (fAx - refAx) + (fAy - refAy) * (fAy - refAy) + (fAz - refAz) * (fAz - refAz)).toFloat() / 100.0;
+                var adjDrift = (fDriftG > 0.85) ? (fDriftG - 0.85) : 0.0;
+                ftPct = (100.0 - adjDrift * 9.5 + 0.5).toNumber();
+                if (ftPct < 42) { ftPct = 42; }
+                if (ftPct > 99) { ftPct = 99; }
+            }
+        }
+
         var preIdx = (effCount >= 5) ? (effCount - 5) : 0;
         var relJumpCm = Math.sqrt(
             (nxArr[effCount - 1] - nxArr[preIdx]) * (nxArr[effCount - 1] - nxArr[preIdx]) +
             (nyArr[effCount - 1] - nyArr[preIdx]) * (nyArr[effCount - 1] - nyArr[preIdx])
         ).toFloat() * faceRadiusCm;
         if (relJumpCm < 0.2) { relJumpCm = 0.2; }
+        var rdStr = (relJumpCm > faceRadiusCm * 0.16) ? "A" : ((ftPct < 72) ? "D" : "C");
 
         var pOut = "[";
         var prepSpan = settleIdx - prepStartIdx;
@@ -1597,7 +1891,10 @@ class Archery101010WatchView extends WatchUi.View {
             ",\"aimSec\":" + fmtTenths1(aimSec) +
             ",\"stab\":" + stabPct.toString() +
             ",\"swayCm\":" + fmtTenths1(swayCm) +
+            ",\"moa\":" + fmtTenths1(holdMoa) +
             ",\"relCm\":" + fmtTenths1(relJumpCm) +
+            ",\"ft\":" + ftPct.toString() +
+            ",\"rd\":\"" + rdStr + "\"" +
             hrPart +
             ",\"p\":" + pOut +
             ",\"a\":" + aOut +
@@ -2184,7 +2481,9 @@ class Archery101010WatchView extends WatchUi.View {
             "&mask.fieldPaths=calibrateZeroAt" +
             "&mask.fieldPaths=zeroGravityVec" +
             "&mask.fieldPaths=bowPoundageLbs" +
-            "&mask.fieldPaths=bowType";
+            "&mask.fieldPaths=bowType" +
+            "&mask.fieldPaths=autoDetectEnabled" +
+            "&mask.fieldPaths=updatedAt";
 
         var url =
             "https://firestore.googleapis.com/v1/projects/archery101010-c0bb4/databases/(default)/documents/watch_sessions/" +
@@ -2336,10 +2635,12 @@ class Archery101010WatchView extends WatchUi.View {
             var fsPerEnd = extractFsInt(fields, "arrowsPerEnd", arrowsPerEnd);
             var fsTotalEnds = extractFsInt(fields, "totalEnds", endsCount);
             var fsAnalysis = extractFsBool(fields, "analysisMode", analysisMode);
+            var fsAutoDetect = extractFsBool(fields, "autoDetectEnabled", autoDetectEnabled);
             var fsBow = extractFsString(fields, "bowType", bowTypeStr);
             var fsCalJson = extractFsString(fields, "analysisCalibrationJson", "");
             var cloudLastCmdId = extractFsString(fields, "lastWatchCmdId", "");
             var calZeroTs = extractFsLong(fields, "calibrateZeroAt", 0l);
+            var fsUpdatedAt = extractFsLong(fields, "updatedAt", 0l);
 
             var hasEndArrowsField = false;
             var parsedEndArrows = [] as Lang.Array<Lang.String>;
@@ -2440,11 +2741,14 @@ class Archery101010WatchView extends WatchUi.View {
             }
             bowPoundageLbs = extractFsInt(fields, "bowPoundageLbs", bowPoundageLbs);
 
+            autoDetectEnabled = fsAutoDetect;
             if (fsAnalysis != analysisMode) {
                 analysisMode = fsAnalysis;
                 if (!analysisMode) {
                     manualAnalysisRecording = false;
                     manualAnalysisStartTimerMs = 0;
+                    mAutoQuietMs = 0;
+                    mAutoPendingMs = 0;
                 }
             }
 
@@ -2459,18 +2763,33 @@ class Archery101010WatchView extends WatchUi.View {
                 sendTelemetryPing();
             }
 
-            // AUD-GAR-03: Remote Analysis Shot #2+ Start/Stop via numeric timestamp comparison (reqStop == null || reqStop < reqStart)
+            // AUD-GAR-03 + v2.167 Cloud Latency Compensation: rewind ring-buffer window by exact phone-to-watch poll lag
             if (analysisMode && fsCalJson.length() > 0) {
                 var reqStart = extractJsonLong(fsCalJson, "\"manualStartAt\":");
                 var reqStop = extractJsonLong(fsCalJson, "\"manualStopAt\":");
+                var nowEpochMs = Time.now().value().toLong() * 1000l + (nowTimer % 1000);
                 if (reqStart != null && reqStart > 0l && reqStart > mLastRemoteStartTs && (reqStop == null || reqStop < reqStart)) {
                     mLastRemoteStartTs = reqStart;
-                    startManualAnalysis(false);
+                    var startDiff = nowEpochMs - reqStart;
+                    var startLagMs = 450;
+                    if (startDiff >= 0l && startDiff <= 12000l) {
+                        startLagMs = startDiff.toNumber();
+                    } else if (fsUpdatedAt > reqStart && (fsUpdatedAt - reqStart) <= 12000l) {
+                        startLagMs = (fsUpdatedAt - reqStart).toNumber() + 450;
+                    }
+                    startManualAnalysisWithLag(false, startLagMs);
                 }
                 if (reqStop != null && reqStop > 0l && reqStop > mLastRemoteStopTs && (reqStart == null || reqStop >= reqStart)) {
                     mLastRemoteStopTs = reqStop;
                     if (manualAnalysisRecording) {
-                        stopManualAnalysis(false);
+                        var stopDiff = nowEpochMs - reqStop;
+                        var stopLagMs = 450;
+                        if (stopDiff >= 0l && stopDiff <= 9000l) {
+                            stopLagMs = stopDiff.toNumber();
+                        } else if (fsUpdatedAt > reqStop && (fsUpdatedAt - reqStop) <= 9000l) {
+                            stopLagMs = (fsUpdatedAt - reqStop).toNumber() + 450;
+                        }
+                        stopManualAnalysisWithLag(false, stopLagMs);
                     }
                 }
             }

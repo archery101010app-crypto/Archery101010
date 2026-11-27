@@ -696,6 +696,136 @@ describe("M6 Audit Remediations — shotAnalysisEngine.ts 3D Pitch, Hysteresis, 
       "watchOS buildShotRecord must trim post-release FINAL delay and preserve Set-Up pauses"
     );
   });
+
+  it("enforces v2.167 tournament-grade consistency: distance-invariant MOA, gyro-bias zeroing, Follow-Through vs Early Drop, Cycle Rhythm SD, and 25Hz/AUTO/Cloud-Lag parity", () => {
+    const baseTs = 800_000;
+    const buildThermalBiasedShot = (holdFollowThrough: boolean): RawImuSample[] => {
+      const list: RawImuSample[] = [];
+      // Inject realistic +0.028 rad/s thermal gyro offset on Y and -0.024 rad/s on Z
+      const thermalGy = 0.028;
+      const thermalGz = -0.024;
+      for (let ms = 0; ms <= 8200; ms += 20) {
+        const t = baseTs + ms;
+        const s = ms / 1000;
+        if (s < 1.0) {
+          list.push({ t, ax: 7.5, ay: 5.8, az: 2.6, gx: 0, gy: thermalGy, gz: thermalGz });
+        } else if (s < 3.2) {
+          const p = (s - 1.0) / 2.2;
+          list.push({
+            t,
+            ax: 7.5 * (1 - p) + 0.24 * p,
+            ay: 5.8 * (1 - p) + 9.6 * p,
+            az: 2.6 * (1 - p) + 1.92 * p,
+            gx: 0.04,
+            gy: -0.35 * (1 - p * 0.75) + thermalGy,
+            gz: 0.18 * (1 - p * 0.75) + thermalGz
+          });
+        } else if (s >= 6.80 && s <= 6.84) {
+          list.push({ t, ax: 4.2, ay: 14.0, az: 2.5, gx: 0.55, gy: 1.45 + thermalGy, gz: -0.9 + thermalGz });
+        } else if (s > 6.84 && s <= 7.25) {
+          if (holdFollowThrough) {
+            // Solid 350ms post-release horizontal follow-through
+            list.push({ t, ax: 0.35, ay: 9.52, az: 1.98, gx: 0.02, gy: thermalGy, gz: thermalGz });
+          } else {
+            // Immediate post-release bow-arm collapse within 150ms
+            list.push({ t, ax: 6.8, ay: 4.5, az: 4.2, gx: 0.8, gy: 1.7, gz: 0.9 });
+          }
+        } else if (s > 7.25) {
+          list.push({ t, ax: 7.4, ay: 5.7, az: 2.8, gx: 0.2, gy: 0.5, gz: 0.3 });
+        } else {
+          list.push({
+            t,
+            ax: 0.24 + Math.sin(s * 5) * 0.02,
+            ay: 9.6 + Math.cos(s * 6) * 0.022,
+            az: 1.92 + Math.sin(s * 4) * 0.02,
+            gx: 0.004,
+            gy: thermalGy,
+            gz: thermalGz
+          });
+        }
+      }
+      return list;
+    };
+
+    const cleanSamples = buildThermalBiasedShot(true);
+    const shot18m = analyzeImuShotWindow({
+      samples: cleanSamples,
+      manualStartTimestampMs: baseTs,
+      releaseTimestampMs: baseTs + 8200,
+      shotNumber: 1,
+      distanceM: 18,
+      bowType: "Compound",
+      bowWrist: "LEFT"
+    });
+    const shot70m = analyzeImuShotWindow({
+      samples: cleanSamples,
+      manualStartTimestampMs: baseTs,
+      releaseTimestampMs: baseTs + 8200,
+      shotNumber: 2,
+      distanceM: 70,
+      bowType: "Recurve",
+      bowWrist: "LEFT"
+    });
+    assert.ok(shot18m && shot70m, "18m and 70m shots must reconstruct cleanly with thermal gyro bias zeroed");
+    assert.ok(
+      typeof shot18m.holdMoa === "number" && typeof shot70m.holdMoa === "number",
+      "holdMoa must be computed on every shot"
+    );
+    assert.ok(
+      Math.abs(shot18m.holdMoa! - shot70m.holdMoa!) <= 0.3,
+      `Angular holdMoa must be distance-invariant across 18m (${shot18m.holdMoa}) vs 70m (${shot70m.holdMoa})`
+    );
+    assert.ok((shot18m.followThroughPct ?? 0) >= 85, `Expected clean followThroughPct >= 85%, got ${shot18m.followThroughPct}`);
+    assert.equal(shot18m.releaseDiagnosis, "CLEAN");
+
+    const dropShot = analyzeImuShotWindow({
+      samples: buildThermalBiasedShot(false),
+      manualStartTimestampMs: baseTs,
+      releaseTimestampMs: baseTs + 8200,
+      shotNumber: 3,
+      distanceM: 18,
+      bowType: "Compound",
+      bowWrist: "LEFT"
+    });
+    assert.ok(dropShot);
+    assert.ok((dropShot.followThroughPct ?? 100) < 72, `Immediate arm collapse must score < 72% FT, got ${dropShot.followThroughPct}`);
+    assert.equal(dropShot.releaseDiagnosis, "DROP");
+
+    // Rhythm Consistency: 3 identical-timing shots vs erratic shots
+    const consistentSummary = computeAnalysisSessionSummary([
+      shot18m,
+      { ...shot18m, shotNumber: 2, prepSeconds: shot18m.prepSeconds + 0.1 },
+      { ...shot18m, shotNumber: 3, aimSeconds: shot18m.aimSeconds - 0.1 }
+    ]);
+    const erraticSummary = computeAnalysisSessionSummary([
+      shot18m,
+      { ...shot18m, shotNumber: 2, prepSeconds: 1.2, aimSeconds: 1.8 },
+      { ...shot18m, shotNumber: 3, prepSeconds: 4.5, aimSeconds: 7.4 }
+    ]);
+    assert.ok(consistentSummary.rhythmConsistencyPct >= 92 && consistentSummary.rhythmStdSeconds <= 0.2);
+    assert.ok(erraticSummary.rhythmConsistencyPct < consistentSummary.rhythmConsistencyPct - 20);
+
+    // Cross-platform source guards (Garmin 25Hz + gyro + boxcar peak + AUTO + cloud lag, Wear OS & watchOS)
+    const garminMc = fs.readFileSync(
+      path.join(process.cwd(), "garmin-ciq", "source", "Archery101010WatchApp.mc"),
+      "utf8"
+    );
+    assert.ok(garminMc.includes(":gyroscope") && garminMc.includes("processInertialSample25Hz"));
+    assert.ok(garminMc.includes("mBoxPeakJerkMg") && garminMc.includes("startManualAnalysisWithLag"));
+    assert.ok(garminMc.includes("meanAimNx") && garminMc.includes("holdMoa"));
+
+    const wearJava = fs.readFileSync(
+      path.join(process.cwd(), "android", "wear", "src", "main", "java", "com", "archery101010", "app", "WearMainActivity.java"),
+      "utf8"
+    );
+    assert.ok(wearJava.includes("startManualAnalysisCaptureWithLag") && wearJava.includes("biasGx") && wearJava.includes("holdMoa"));
+
+    const watchSwift = fs.readFileSync(
+      path.join(process.cwd(), "ios-watchos", "WatchApp", "Archery101010WatchApp.swift"),
+      "utf8"
+    );
+    assert.ok(watchSwift.includes("finalizeAnalysisWindow") && watchSwift.includes("meanAimNx") && watchSwift.includes("holdMoa"));
+  });
 });
 
 describe("M6 Audit Remediations — biometricsEngine.ts Watch Security & HR Invariants (AUD-FB-01 / AUD-QA-01)", () => {
