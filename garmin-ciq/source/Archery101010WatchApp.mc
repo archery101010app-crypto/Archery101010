@@ -49,7 +49,7 @@ class Archery101010WatchApp extends Application.AppBase {
     // if the previous launch died mid-stage, that stage is skipped on next launch
     // and its code is shown on screen so the exact cause is visible on device.
     // =========================================================================
-    hidden const BOOT_GUARD_VER = "2.178";
+    hidden const BOOT_GUARD_VER = "2.179";
     public var mBootPrevStage as Lang.String = "";
     public var mBootSkips as Lang.String = ",";
     public var mBootOk as Lang.Boolean = false;
@@ -1663,67 +1663,14 @@ class Archery101010WatchView extends WatchUi.View {
     }
 
     (:typecheck(false))
-    function finalizeAnalysisWindow(
-        startTimer as Lang.Number,
-        endTimer as Lang.Number,
-        notifyPhoneStopFallback as Lang.Boolean,
-        isAutoShot as Lang.Boolean
-    ) as Void {
-        var tBuf = mAnaT;
-        var xBuf = mAnaAx;
-        var yBuf = mAnaAy;
-        var zBuf = mAnaAz;
-        var pBuf = mAnaPeak;
-        var gyBuf = mAnaGy;
-        var gzBuf = mAnaGz;
-        if (tBuf == null || xBuf == null || yBuf == null || zBuf == null) {
-            if (notifyPhoneStopFallback) {
-                enqueueWatchCommand("ANALYSIS_MANUAL_STOP", "", 0);
-            }
-            WatchUi.requestUpdate();
-            return;
-        }
-
-        var count = 0;
-        for (var i = 0; i < mAnaCount; i++) {
-            var idx = (mAnaIdx - 1 - i + mAnaSize) % mAnaSize;
-            var st = tBuf[idx];
-            if (st != null && st >= startTimer && st <= endTimer) {
-                count = count + 1;
-            }
-        }
-        if (count < 4) {
-            if (notifyPhoneStopFallback) {
-                enqueueWatchCommand("ANALYSIS_MANUAL_STOP", "", 0);
-            }
-            WatchUi.requestUpdate();
-            return;
-        }
-
-        var xs = new [count] as Lang.Array<Lang.Float>;
-        var ys = new [count] as Lang.Array<Lang.Float>;
-        var zs = new [count] as Lang.Array<Lang.Float>;
-        var pks = new [count] as Lang.Array<Lang.Float>;
-        var gys = new [count] as Lang.Array<Lang.Float>;
-        var gzs = new [count] as Lang.Array<Lang.Float>;
-        var tsArr = new [count] as Lang.Array<Lang.Number>;
-        var k = count - 1;
-        for (var j = 0; j < mAnaCount && k >= 0; j++) {
-            var rIdx = (mAnaIdx - 1 - j + mAnaSize) % mAnaSize;
-            var rt = tBuf[rIdx];
-            if (rt != null && rt >= startTimer && rt <= endTimer) {
-                tsArr[k] = rt;
-                xs[k] = xBuf[rIdx];
-                ys[k] = yBuf[rIdx];
-                zs[k] = zBuf[rIdx];
-                pks[k] = (pBuf != null && pBuf[rIdx] != null) ? pBuf[rIdx] : 0.0;
-                gys[k] = (gyBuf != null && gyBuf[rIdx] != null) ? gyBuf[rIdx] : 0.0;
-                gzs[k] = (gzBuf != null && gzBuf[rIdx] != null) ? gzBuf[rIdx] : 0.0;
-                k = k - 1;
-            }
-        }
-
-        // Step 1: Locate sustained horizontal aiming plateau & trim post-release arm lowering / FINAL tap delay
+    function findReleaseEffectiveCount(
+        xs as Lang.Array<Lang.Float>,
+        ys as Lang.Array<Lang.Float>,
+        zs as Lang.Array<Lang.Float>,
+        pks as Lang.Array<Lang.Float>,
+        tsArr as Lang.Array<Lang.Number>,
+        count as Lang.Number
+    ) as Lang.Number {
         var bestPlatIdx = (count >= 6) ? (count - 2) : (count - 1);
         var bestPlatScore = -1.0;
         var curRunLen = 0;
@@ -1739,8 +1686,8 @@ class Archery101010WatchView extends WatchUi.View {
             var maxY = -99999.0;
             var minZ = 99999.0;
             var maxZ = -99999.0;
-            var wCnt = 0;
             var wFrom = (pScan >= 4) ? (pScan - 4) : 0;
+            var wCnt = (pScan - wFrom) + 1;
             for (var w = wFrom; w <= pScan; w++) {
                 var magW = Math.sqrt(xs[w] * xs[w] + ys[w] * ys[w] + zs[w] * zs[w]).toFloat();
                 sumLin = sumLin + (magW - 1000.0).abs();
@@ -1751,7 +1698,6 @@ class Archery101010WatchView extends WatchUi.View {
                 if (ys[w] > maxY) { maxY = ys[w]; }
                 if (zs[w] < minZ) { minZ = zs[w]; }
                 if (zs[w] > maxZ) { maxZ = zs[w]; }
-                wCnt = wCnt + 1;
             }
             mAx = mAx / wCnt;
             mAy = mAy / wCnt;
@@ -1764,8 +1710,7 @@ class Archery101010WatchView extends WatchUi.View {
             if (postureOk && spanOk && (sumLin / wCnt) <= 135.0) {
                 curRunLen = curRunLen + 1;
                 if (curRunLen >= 4 && (tsArr[pScan] - tsArr[0]) >= 600) {
-                    var recBonus = ((pScan.toFloat() / count.toFloat()) * 3.5);
-                    var pScore = curRunLen.toFloat() + recBonus;
+                    var pScore = curRunLen.toFloat() + ((pScan.toFloat() / count.toFloat()) * 3.5);
                     if (pScore >= bestPlatScore) {
                         bestPlatScore = pScore;
                         bestPlatIdx = pScan;
@@ -1779,7 +1724,6 @@ class Archery101010WatchView extends WatchUi.View {
             }
         }
 
-        // Step 2: Pinpoint exact bowstring release shock (preserving 25Hz sub-sample peak jerk!) or onset of arm drop
         var effCount = (count >= 6) ? (count - 1) : count;
         if (bestPlatScore > 0.0) {
             effCount = (bestPlatIdx + 1 <= count) ? (bestPlatIdx + 1) : count;
@@ -1802,6 +1746,27 @@ class Archery101010WatchView extends WatchUi.View {
         }
         if (effCount > count) { effCount = count; }
         if (effCount < 4) { effCount = (count >= 4) ? 4 : count; }
+        return effCount;
+    }
+
+    (:typecheck(false))
+    function projectAimingTrajectory(
+        imu as Lang.Array,
+        tsArr as Lang.Array<Lang.Number>,
+        effCount as Lang.Number,
+        geom as Lang.Array<Lang.Float>,
+        outBufs as Lang.Array
+    ) as Lang.Array<Lang.Float> {
+        var xs = imu[0] as Lang.Array<Lang.Float>;
+        var ys = imu[1] as Lang.Array<Lang.Float>;
+        var zs = imu[2] as Lang.Array<Lang.Float>;
+        var gys = imu[3] as Lang.Array<Lang.Float>;
+        var gzs = imu[4] as Lang.Array<Lang.Float>;
+        var faceRadiusCm = geom[0];
+        var distCm = geom[1];
+        var nxArr = outBufs[0] as Lang.Array<Lang.Float>;
+        var nyArr = outBufs[1] as Lang.Array<Lang.Float>;
+        var gdArr = outBufs[2] as Lang.Array<Lang.Float>;
 
         var refStart = (effCount > 6) ? (effCount - 6) : 0;
         var refAy = 0.0;
@@ -1809,14 +1774,14 @@ class Archery101010WatchView extends WatchUi.View {
         var refAx = 0.0;
         var refGy = 0.0;
         var refGz = 0.0;
-        var refN = 0;
+        var refN = effCount - refStart;
+        if (refN < 1) { refN = 1; }
         for (var r = refStart; r < effCount; r++) {
             refAx = refAx + xs[r];
             refAy = refAy + ys[r];
             refAz = refAz + zs[r];
             refGy = refGy + gys[r];
             refGz = refGz + gzs[r];
-            refN = refN + 1;
         }
         refAx = refAx / refN;
         refAy = refAy / refN;
@@ -1830,14 +1795,8 @@ class Archery101010WatchView extends WatchUi.View {
         var refNorm = Math.sqrt(refAx * refAx + refAy * refAy + refAz * refAz).toFloat();
         if (refNorm < 400.0) { refNorm = 1000.0; }
 
-        var faceRadiusCm = (distanceM <= 20) ? 20.0 : ((distanceM <= 26) ? 30.0 : ((distanceM <= 36) ? 40.0 : 61.0));
-        var distCm = (distanceM * 100.0 > 1000.0) ? (distanceM * 100.0) : 1000.0;
         var wristSign = bowWristStr.equals("RIGHT") ? -1.0 : 1.0;
         var forePitchWeight = (refAz.abs() < 750.0) ? 0.85 : 0.35;
-
-        var nxArr = new [effCount] as Lang.Array<Lang.Float>;
-        var nyArr = new [effCount] as Lang.Array<Lang.Float>;
-        var gdArr = new [effCount] as Lang.Array<Lang.Float>;
         var sAx = xs[0];
         var sAy = ys[0];
         var sAz = zs[0];
@@ -1860,16 +1819,25 @@ class Archery101010WatchView extends WatchUi.View {
                 yawRad = tiltH * 0.65 + gYaw * 0.35;
                 pitchRad = tiltV * 0.65 + gPitch * 0.35;
             }
-            var dxCm = Math.tan(yawRad).toFloat() * distCm;
-            var dyCm = Math.tan(pitchRad).toFloat() * distCm;
-            nxArr[m] = (dxCm / faceRadiusCm).toFloat();
-            nyArr[m] = (dyCm / faceRadiusCm).toFloat();
+            nxArr[m] = ((Math.tan(yawRad).toFloat() * distCm) / faceRadiusCm).toFloat();
+            nyArr[m] = ((Math.tan(pitchRad).toFloat() * distCm) / faceRadiusCm).toFloat();
             var dGx = sAx - refAx;
             var dGy = sAy - refAy;
             var dGz = sAz - refAz;
             gdArr[m] = Math.sqrt(dGx * dGx + dGy * dGy + dGz * dGz).toFloat();
         }
+        return [refAx, refAy, refAz] as Lang.Array<Lang.Float>;
+    }
 
+    (:typecheck(false))
+    function findSettleAndPrepIndices(
+        nxArr as Lang.Array<Lang.Float>,
+        nyArr as Lang.Array<Lang.Float>,
+        gdArr as Lang.Array<Lang.Float>,
+        tsArr as Lang.Array<Lang.Number>,
+        effCount as Lang.Number
+    ) as Lang.Array<Lang.Number> {
+        var refStart = (effCount > 6) ? (effCount - 6) : 0;
         var baseGd = 0.0;
         var baseN = 0;
         for (var b = refStart; b < effCount; b++) {
@@ -1920,15 +1888,27 @@ class Archery101010WatchView extends WatchUi.View {
                 break;
             }
         }
+        return [prepStartIdx, settleIdx] as Lang.Array<Lang.Number>;
+    }
 
-        var maxPrepCap = isAutoShot ? 6.5 : 10.0;
-        var maxAimCap = isAutoShot ? 14.0 : 24.0;
-        var prepSec = ((tsArr[settleIdx] - tsArr[prepStartIdx]).toFloat() / 1000.0);
-        if (prepSec < 0.4) { prepSec = 0.4; }
-        if (prepSec > maxPrepCap) { prepSec = maxPrepCap; }
-        var aimSec = ((tsArr[effCount - 1] - tsArr[settleIdx]).toFloat() / 1000.0);
-        if (aimSec < 0.5) { aimSec = 0.5; }
-        if (aimSec > maxAimCap) { aimSec = maxAimCap; }
+    (:typecheck(false))
+    function computeAimAndFollowMetrics(
+        vecs as Lang.Array,
+        tsArr as Lang.Array<Lang.Number>,
+        bounds as Lang.Array<Lang.Number>,
+        refVec as Lang.Array<Lang.Float>,
+        geom as Lang.Array<Lang.Float>
+    ) as Lang.Array<Lang.Float> {
+        var nxArr = vecs[0] as Lang.Array<Lang.Float>;
+        var nyArr = vecs[1] as Lang.Array<Lang.Float>;
+        var xs = vecs[2] as Lang.Array<Lang.Float>;
+        var ys = vecs[3] as Lang.Array<Lang.Float>;
+        var zs = vecs[4] as Lang.Array<Lang.Float>;
+        var settleIdx = bounds[0];
+        var effCount = bounds[1];
+        var count = bounds[2];
+        var faceRadiusCm = geom[0];
+        var distCm = geom[1];
 
         // Zero-centered RMS Sway across Aiming + Critical 1.5s Hold MOA (matching Web & Wear OS 100%)
         var meanAimNx = 0.0;
@@ -1985,7 +1965,6 @@ class Archery101010WatchView extends WatchUi.View {
         if (holdMoa < 0.4) { holdMoa = 0.4; }
         if (holdMoa > 60.0) { holdMoa = 60.0; }
 
-        // Post-release 250ms Follow-Through stability
         var ftPct = 92;
         if (effCount < count) {
             var fAx = 0.0;
@@ -2003,7 +1982,7 @@ class Archery101010WatchView extends WatchUi.View {
                 fAx = fAx / fN;
                 fAy = fAy / fN;
                 fAz = fAz / fN;
-                var fDriftG = Math.sqrt((fAx - refAx) * (fAx - refAx) + (fAy - refAy) * (fAy - refAy) + (fAz - refAz) * (fAz - refAz)).toFloat() / 100.0;
+                var fDriftG = Math.sqrt((fAx - refVec[0]) * (fAx - refVec[0]) + (fAy - refVec[1]) * (fAy - refVec[1]) + (fAz - refVec[2]) * (fAz - refVec[2])).toFloat() / 100.0;
                 var adjDrift = (fDriftG > 0.85) ? (fDriftG - 0.85) : 0.0;
                 ftPct = (100.0 - adjDrift * 9.5 + 0.5).toNumber();
                 if (ftPct < 42) { ftPct = 42; }
@@ -2017,38 +1996,52 @@ class Archery101010WatchView extends WatchUi.View {
             (nyArr[effCount - 1] - nyArr[preIdx]) * (nyArr[effCount - 1] - nyArr[preIdx])
         ).toFloat() * faceRadiusCm;
         if (relJumpCm < 0.2) { relJumpCm = 0.2; }
+        return [stabPct.toFloat(), swayCm, holdMoa, ftPct.toFloat(), relJumpCm] as Lang.Array<Lang.Float>;
+    }
+
+    function buildSampledPolylineJson(
+        nxArr as Lang.Array<Lang.Float>,
+        nyArr as Lang.Array<Lang.Float>,
+        fromIdx as Lang.Number,
+        span as Lang.Number,
+        maxSteps as Lang.Number,
+        effCount as Lang.Number
+    ) as Lang.String {
+        var safeSpan = (span >= 1) ? span : 1;
+        var steps = (safeSpan >= maxSteps) ? maxSteps : (safeSpan + 1);
+        if (steps < 2) { steps = 2; }
+        var out = "[";
+        for (var i = 0; i < steps; i++) {
+            var srcIdx = fromIdx + ((i * safeSpan) / (steps - 1));
+            if (srcIdx >= effCount) { srcIdx = effCount - 1; }
+            if (i > 0) { out = out + ","; }
+            out = out + "[" + fmtMilli3(nxArr[srcIdx]) + "," + fmtMilli3(nyArr[srcIdx]) + "]";
+        }
+        return out + "]";
+    }
+
+    (:typecheck(false))
+    function emitAnalysisShotPayload(
+        endTimer as Lang.Number,
+        prepSec as Lang.Float,
+        aimSec as Lang.Float,
+        metrics as Lang.Array<Lang.Float>,
+        faceRadiusCm as Lang.Float,
+        pOut as Lang.String,
+        aOut as Lang.String,
+        rPair as Lang.String
+    ) as Void {
+        var stabPct = metrics[0].toNumber();
+        var swayCm = metrics[1];
+        var holdMoa = metrics[2];
+        var ftPct = metrics[3].toNumber();
+        var relJumpCm = metrics[4];
         var rdStr = (relJumpCm > faceRadiusCm * 0.16) ? "A" : ((ftPct < 72) ? "D" : "C");
-
-        var pOut = "[";
-        var prepSpan = settleIdx - prepStartIdx;
-        if (prepSpan < 1) { prepSpan = 1; }
-        var pSteps = (prepSpan >= 6) ? 6 : (prepSpan + 1);
-        if (pSteps < 2) { pSteps = 2; }
-        for (var pi = 0; pi < pSteps; pi++) {
-            var srcP = prepStartIdx + ((pi * prepSpan) / (pSteps - 1));
-            if (srcP >= effCount) { srcP = effCount - 1; }
-            if (pi > 0) { pOut = pOut + ","; }
-            pOut = pOut + "[" + fmtMilli3(nxArr[srcP]) + "," + fmtMilli3(nyArr[srcP]) + "]";
-        }
-        pOut = pOut + "]";
-
-        var aOut = "[";
-        var aimSpan = effCount - 1 - settleIdx;
-        var aSteps = (aimSpan >= 10) ? 10 : (aimSpan + 1);
-        if (aSteps < 2) { aSteps = 2; }
-        for (var ai = 0; ai < aSteps; ai++) {
-            var srcA = settleIdx + ((ai * aimSpan) / (aSteps - 1));
-            if (srcA >= effCount) { srcA = effCount - 1; }
-            if (ai > 0) { aOut = aOut + ","; }
-            aOut = aOut + "[" + fmtMilli3(nxArr[srcA]) + "," + fmtMilli3(nyArr[srcA]) + "]";
-        }
-        aOut = aOut + "]";
 
         arrowsCount = arrowsCount + 1;
         mAwaitingPhoneSync = true;
         lastAnalysisStabPct = stabPct;
         var epochMsStr = (Time.now().value().toLong() * 1000l + (endTimer % 1000)).toString();
-        var rPair = "[" + fmtMilli3(nxArr[effCount - 1]) + "," + fmtMilli3(nyArr[effCount - 1]) + "]";
         var hrPart = (heartRateBpm >= 35 && heartRateBpm <= 240) ? (",\"bpm\":" + heartRateBpm.toString()) : "";
         var safeBow = (bowTypeStr.length() > 30) ? bowTypeStr.substring(0, 30) : bowTypeStr;
         var shotJson =
@@ -2070,7 +2063,6 @@ class Archery101010WatchView extends WatchUi.View {
             ",\"a\":" + aOut +
             ",\"r\":" + rPair + "}";
 
-        // Enforce Firestore rule bound: analysisShotJson <= 3500 chars
         if (shotJson.length() > 3500) {
             shotJson =
                 "{\"id\":\"SHOT-" + epochMsStr + "-" + arrowsCount.toString() + "\"" +
@@ -2090,6 +2082,87 @@ class Archery101010WatchView extends WatchUi.View {
         enqueueWatchCommand("ANALYSIS_SHOT", shotJson, 1);
         saveStateToStorage();
         WatchUi.requestUpdate();
+    }
+
+    (:typecheck(false))
+    function finalizeAnalysisWindow(
+        startTimer as Lang.Number,
+        endTimer as Lang.Number,
+        notifyPhoneStopFallback as Lang.Boolean,
+        isAutoShot as Lang.Boolean
+    ) as Void {
+        if (mAnaT == null || mAnaAx == null || mAnaAy == null || mAnaAz == null) {
+            if (notifyPhoneStopFallback) {
+                enqueueWatchCommand("ANALYSIS_MANUAL_STOP", "", 0);
+            }
+            WatchUi.requestUpdate();
+            return;
+        }
+
+        var count = 0;
+        for (var i = 0; i < mAnaCount; i++) {
+            var idx = (mAnaIdx - 1 - i + mAnaSize) % mAnaSize;
+            var st = mAnaT[idx];
+            if (st != null && st >= startTimer && st <= endTimer) {
+                count = count + 1;
+            }
+        }
+        if (count < 4) {
+            if (notifyPhoneStopFallback) {
+                enqueueWatchCommand("ANALYSIS_MANUAL_STOP", "", 0);
+            }
+            WatchUi.requestUpdate();
+            return;
+        }
+
+        var xs = new [count] as Lang.Array<Lang.Float>;
+        var ys = new [count] as Lang.Array<Lang.Float>;
+        var zs = new [count] as Lang.Array<Lang.Float>;
+        var pks = new [count] as Lang.Array<Lang.Float>;
+        var gys = new [count] as Lang.Array<Lang.Float>;
+        var gzs = new [count] as Lang.Array<Lang.Float>;
+        var tsArr = new [count] as Lang.Array<Lang.Number>;
+        var k = count - 1;
+        for (var j = 0; j < mAnaCount && k >= 0; j++) {
+            var rIdx = (mAnaIdx - 1 - j + mAnaSize) % mAnaSize;
+            var rt = mAnaT[rIdx];
+            if (rt != null && rt >= startTimer && rt <= endTimer) {
+                tsArr[k] = rt;
+                xs[k] = mAnaAx[rIdx];
+                ys[k] = mAnaAy[rIdx];
+                zs[k] = mAnaAz[rIdx];
+                pks[k] = (mAnaPeak != null && mAnaPeak[rIdx] != null) ? mAnaPeak[rIdx] : 0.0;
+                gys[k] = (mAnaGy != null && mAnaGy[rIdx] != null) ? mAnaGy[rIdx] : 0.0;
+                gzs[k] = (mAnaGz != null && mAnaGz[rIdx] != null) ? mAnaGz[rIdx] : 0.0;
+                k = k - 1;
+            }
+        }
+
+        var effCount = findReleaseEffectiveCount(xs, ys, zs, pks, tsArr, count);
+        var faceRadiusCm = (distanceM <= 20) ? 20.0 : ((distanceM <= 26) ? 30.0 : ((distanceM <= 36) ? 40.0 : 61.0));
+        var distCm = (distanceM * 100.0 > 1000.0) ? (distanceM * 100.0) : 1000.0;
+
+        var geom = [faceRadiusCm, distCm] as Lang.Array<Lang.Float>;
+        var nxArr = new [effCount] as Lang.Array<Lang.Float>;
+        var nyArr = new [effCount] as Lang.Array<Lang.Float>;
+        var gdArr = new [effCount] as Lang.Array<Lang.Float>;
+        var refVec = projectAimingTrajectory([xs, ys, zs, gys, gzs], tsArr, effCount, geom, [nxArr, nyArr, gdArr]);
+        var idxPair = findSettleAndPrepIndices(nxArr, nyArr, gdArr, tsArr, effCount);
+        var prepStartIdx = idxPair[0];
+        var settleIdx = idxPair[1];
+
+        var prepSec = ((tsArr[settleIdx] - tsArr[prepStartIdx]).toFloat() / 1000.0);
+        if (prepSec < 0.4) { prepSec = 0.4; }
+        if (prepSec > (isAutoShot ? 6.5 : 10.0)) { prepSec = isAutoShot ? 6.5 : 10.0; }
+        var aimSec = ((tsArr[effCount - 1] - tsArr[settleIdx]).toFloat() / 1000.0);
+        if (aimSec < 0.5) { aimSec = 0.5; }
+        if (aimSec > (isAutoShot ? 14.0 : 24.0)) { aimSec = isAutoShot ? 14.0 : 24.0; }
+
+        var metrics = computeAimAndFollowMetrics([nxArr, nyArr, xs, ys, zs], tsArr, [settleIdx, effCount, count] as Lang.Array<Lang.Number>, refVec, geom);
+        var pOut = buildSampledPolylineJson(nxArr, nyArr, prepStartIdx, settleIdx - prepStartIdx, 6, effCount);
+        var aOut = buildSampledPolylineJson(nxArr, nyArr, settleIdx, (effCount - 1) - settleIdx, 10, effCount);
+        var rPair = "[" + fmtMilli3(nxArr[effCount - 1]) + "," + fmtMilli3(nyArr[effCount - 1]) + "]";
+        emitAnalysisShotPayload(endTimer, prepSec, aimSec, metrics, faceRadiusCm, pOut, aOut, rPair);
     }
 
     function toggleManualAnalysisFromHardware() as Void {
@@ -3026,6 +3099,26 @@ class Archery101010WatchView extends WatchUi.View {
         }
     }
 
+    function getMicroFont() as Graphics.FontType {
+        var f = mFontMicro;
+        return (f != null && !mApp.isBootSkipped("U_FONT")) ? f : Graphics.FONT_XTINY;
+    }
+
+    function getLabelFont() as Graphics.FontType {
+        var f = mFontLabel;
+        return (f != null && !mApp.isBootSkipped("U_FONT")) ? f : Graphics.FONT_XTINY;
+    }
+
+    function getValueFont() as Graphics.FontType {
+        var f = mFontValue;
+        return (f != null && !mApp.isBootSkipped("U_FONT")) ? f : Graphics.FONT_SMALL;
+    }
+
+    function getHeroFont() as Graphics.FontType {
+        var f = mFontHero;
+        return (f != null && !mApp.isBootSkipped("U_FONT")) ? f : Graphics.FONT_NUMBER_MEDIUM;
+    }
+
     (:typecheck(false))
     function drawArchery101010Header(
         dc as Graphics.Dc,
@@ -3036,13 +3129,9 @@ class Archery101010WatchView extends WatchUi.View {
         compact as Lang.Boolean,
         isMono as Lang.Boolean
     ) as Void {
-        var strokePx = (w >= 340) ? 2 : 1;
-        var fMicro = (mFontMicro != null && !mApp.isBootSkipped("U_FONT")) ? mFontMicro : Graphics.FONT_XTINY;
-
-        // Instinct 2 / 2S / 2X physical circular subscreen sits at top-right (x >= w - 62, y < 62)
+        var fMicro = getMicroFont();
         var safeTopRightX = isMono ? (w - 63) : w;
-        var leftPad = isMono ? 6 : 12;
-        var topCx = isMono ? ((leftPad + safeTopRightX) / 2) : (w / 2);
+        var topCx = isMono ? ((6 + safeTopRightX) / 2) : (w / 2);
 
         var logoTopY = isMono ? 6 : ((compact ? 19.0 : 22.0) * s).toNumber();
         var logoBottomY = logoTopY + (isMono ? 11 : (12.0 * s).toNumber());
@@ -3052,14 +3141,11 @@ class Archery101010WatchView extends WatchUi.View {
             bootMark("U_LOGO");
             try {
                 var lw = logoRes.getWidth();
-                var lh = logoRes.getHeight();
                 var lx = topCx - (lw / 2);
-                if (isMono && (lx + lw) > safeTopRightX) {
-                    lx = safeTopRightX - lw;
-                }
+                if (isMono && (lx + lw) > safeTopRightX) { lx = safeTopRightX - lw; }
                 if (lx < 4) { lx = 4; }
                 dc.drawBitmap(lx, logoTopY, logoRes);
-                logoBottomY = logoTopY + lh;
+                logoBottomY = logoTopY + logoRes.getHeight();
                 drewLogo = true;
             } catch (ex) {
                 drewLogo = false;
@@ -3071,47 +3157,39 @@ class Archery101010WatchView extends WatchUi.View {
             dc.drawText(topCx, logoTopY + 5, fMicro, "ARCHERY 101010", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         }
 
-        bootMark("B_PILL");
         var pillY = logoBottomY + (isMono ? 3 : ((compact ? 4.0 : 6.0) * s).toNumber());
-        var fontH = dc.getFontHeight(fMicro);
         var minPillH = isMono ? 15 : ((compact ? 15.0 : 17.0) * s).toNumber();
-        var pillH = fontH + (isMono ? 2 : (1.0 * s).toNumber());
-        if (pillH < minPillH) {
-            pillH = minPillH;
-        }
+        var pillH = dc.getFontHeight(fMicro) + (isMono ? 2 : (1.0 * s).toNumber());
+        if (pillH < minPillH) { pillH = minPillH; }
 
-        var maxPillW = isMono ? (safeTopRightX - leftPad) : ((compact ? 162.0 : 176.0) * s).toNumber();
+        var maxPillW = isMono ? (safeTopRightX - 6) : ((compact ? 162.0 : 176.0) * s).toNumber();
         var minPillW = isMono ? 64 : ((compact ? 96.0 : 112.0) * s).toNumber();
-        var dispLbl = statusLabel;
-        var textW = dc.getTextWidthInPixels(dispLbl, fMicro);
-        var pillW = textW + (isMono ? 10 : (20.0 * s).toNumber());
+        var pillW = dc.getTextWidthInPixels(statusLabel, fMicro) + (isMono ? 10 : (20.0 * s).toNumber());
         if (pillW < minPillW) { pillW = minPillW; }
         if (pillW > maxPillW) { pillW = maxPillW; }
         var pillX = topCx - (pillW / 2);
-        if (isMono && (pillX + pillW) > safeTopRightX) {
-            pillX = safeTopRightX - pillW;
-        }
+        if (isMono && (pillX + pillW) > safeTopRightX) { pillX = safeTopRightX - pillW; }
         if (pillX < 4) { pillX = 4; }
 
-        var isYellow = (dispLbl.find("EDIT") != null)
-            || (dispLbl.find("ENVIADO") != null)
-            || (dispLbl.find("SAVED") != null)
-            || (dispLbl.find("CONFIRMAR") != null)
-            || (dispLbl.find("CONFIRM") != null)
-            || (dispLbl.find("ATRÁS") != null)
-            || (dispLbl.find("BACK") != null);
-        var isDanger = (dispLbl.find("EXPIRADO") != null)
-            || (dispLbl.find("EXPIRED") != null)
-            || (dispLbl.find("INVÁLIDO") != null)
-            || (dispLbl.find("INVALID") != null)
-            || (dispLbl.find("VINCULA") != null);
-        var isMuted = (dispLbl.find("MANUAL") != null)
-            || (dispLbl.find("SIN ") != null)
-            || (dispLbl.find("NO ") != null)
-            || (dispLbl.find("TOCA") != null)
-            || (dispLbl.find("PULSA") != null)
-            || (dispLbl.find("TAP") != null)
-            || (dispLbl.find("PRESS") != null);
+        var isYellow = (statusLabel.find("EDIT") != null)
+            || (statusLabel.find("ENVIADO") != null)
+            || (statusLabel.find("SAVED") != null)
+            || (statusLabel.find("CONFIRMAR") != null)
+            || (statusLabel.find("CONFIRM") != null)
+            || (statusLabel.find("ATRÁS") != null)
+            || (statusLabel.find("BACK") != null);
+        var isDanger = (statusLabel.find("EXPIRADO") != null)
+            || (statusLabel.find("EXPIRED") != null)
+            || (statusLabel.find("INVÁLIDO") != null)
+            || (statusLabel.find("INVALID") != null)
+            || (statusLabel.find("VINCULA") != null);
+        var isMuted = (statusLabel.find("MANUAL") != null)
+            || (statusLabel.find("SIN ") != null)
+            || (statusLabel.find("NO ") != null)
+            || (statusLabel.find("TOCA") != null)
+            || (statusLabel.find("PULSA") != null)
+            || (statusLabel.find("TAP") != null)
+            || (statusLabel.find("PRESS") != null);
 
         var fillCol = isMono
             ? ((isYellow || isDanger) ? 0xFFFFFF : 0x000000)
@@ -3121,9 +3199,9 @@ class Archery101010WatchView extends WatchUi.View {
             : (isDanger ? 0xFF1E1E : (isYellow ? 0xFFE500 : (isMuted ? 0x475569 : 0x00A8F3)));
         var txtCol = (isMono && (isYellow || isDanger)) ? 0x000000 : Graphics.COLOR_WHITE;
 
-        drawCrispBox(dc, pillX, pillY, pillW, pillH, pillH / 2, fillCol, borderCol, strokePx);
+        drawCrispBox(dc, pillX, pillY, pillW, pillH, pillH / 2, fillCol, borderCol, (w >= 340) ? 2 : 1);
         dc.setColor(txtCol, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(pillX + (pillW / 2), pillY + (pillH / 2), fMicro, dispLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(pillX + (pillW / 2), pillY + (pillH / 2), fMicro, statusLabel, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
     }
 
     function drawPagerDots(dc as Graphics.Dc, w as Lang.Number, h as Lang.Number, s as Lang.Float, isMono as Lang.Boolean) as Void {
@@ -3153,28 +3231,31 @@ class Archery101010WatchView extends WatchUi.View {
         }
     }
 
+    function drawBootDiagOverlayIfAny(dc as Graphics.Dc) as Void {
+        var diag = mApp.bootDiagLabel();
+        if (diag.length() > 0) {
+            var dw = dc.getWidth();
+            var dh = dc.getHeight();
+            dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(dw / 2, dh - (dh / 9), Graphics.FONT_XTINY, "SAFE " + diag, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        }
+    }
+
     (:typecheck(false))
     function onUpdate(dc as Graphics.Dc) as Void {
-        var bootNow = System.getTimer();
         var inBoot = isInBootWindow();
-        if (mApp.isBootSkipped("U_BODY") || mApp.mBootSkips.find(",B_") != null) {
+        if (mApp.isBootSkipped("U_BODY")) {
             drawSafeModeScreen(dc);
         } else {
             mDrawStage = mApp.isBootSkipped("U_FONT") ? "U_BODY" : "U_FONT";
             if (inBoot) { mApp.bootStage(mDrawStage); }
             drawMainScreen(dc);
-            var diag = mApp.bootDiagLabel();
-            if (diag.length() > 0) {
-                var dw = dc.getWidth();
-                var dh = dc.getHeight();
-                dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(dw / 2, dh - (dh / 9), Graphics.FONT_XTINY, "SAFE " + diag, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            }
+            drawBootDiagOverlayIfAny(dc);
         }
         if (inBoot) {
             mApp.bootStage("U_DONE");
             if (mApp.isBootSkipped("S_TIMER")) {
-                closeBootWindowIfElapsed(bootNow);
+                closeBootWindowIfElapsed(System.getTimer());
             }
         }
     }
@@ -3199,570 +3280,730 @@ class Archery101010WatchView extends WatchUi.View {
     }
 
     (:typecheck(false))
-    function drawMainScreen(dc as Graphics.Dc) as Void {
-        bootMark("B_PRE");
-        recalculateMetrics();
-        var now = System.getTimer();
-        var w = dc.getWidth();
-        var h = dc.getHeight();
-        lastScreenWidth = w;
-        lastScreenHeight = h;
-        var minDim = (w < h) ? w : h;
-        var isMono = (w <= 180 || h <= 180);
-        var isCompactMono = (h <= 160);
-        var s = minDim / 240.0;
+    function drawScreen0Analysis(
+        dc as Graphics.Dc,
+        w as Lang.Number,
+        h as Lang.Number,
+        s as Lang.Float,
+        isMono as Lang.Boolean,
+        now as Lang.Number
+    ) as Void {
+        var fMicro = getMicroFont();
         var cx = w / 2;
         var strokePx = (w >= 340) ? 2 : 1;
-        var isConnectedNow = (isCloudSynced || isBleConnected);
-
-        var fMicro = (mFontMicro != null && !mApp.isBootSkipped("U_FONT")) ? mFontMicro : Graphics.FONT_XTINY;
-        var fLabel = (mFontLabel != null && !mApp.isBootSkipped("U_FONT")) ? mFontLabel : Graphics.FONT_XTINY;
-        var fValue = (mFontValue != null && !mApp.isBootSkipped("U_FONT")) ? mFontValue : Graphics.FONT_SMALL;
-        var fHero = (mFontHero != null && !mApp.isBootSkipped("U_FONT")) ? mFontHero : Graphics.FONT_NUMBER_MEDIUM;
-
-        dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
-        dc.clear();
-
-        var mts = distanceWalkedM;
-        var walkedPrimaryStr = formatWalkedPrimary(mts);
-        var walkedDualStr = formatWalkedDual(mts);
-        var maxPillTxtW = isMono ? (w - 76) : (152.0 * s).toNumber();
+        var isCompactMono = (h <= 160);
         var exitArmed = (mConfirmExitUntilMs > 0 && now < mConfirmExitUntilMs);
+        var maxPillTxtW = isMono ? (w - 76) : (152.0 * s).toNumber();
 
-        if (screenIdx == 0 && analysisMode) {
-            var elapsedSec = manualAnalysisRecording
-                ? ((now - manualAnalysisStartTimerMs) / 1000)
-                : 0;
-            if (elapsedSec < 0) { elapsedSec = 0; }
-            var anaPill = exitArmed
+        var elapsedSec = manualAnalysisRecording ? ((now - manualAnalysisStartTimerMs) / 1000) : 0;
+        if (elapsedSec < 0) { elapsedSec = 0; }
+        var anaPill = exitArmed
+            ? tr("ATRÁS: SALIR", "BACK: EXIT")
+            : (manualAnalysisRecording
+                ? (tr("GRABANDO · ", "REC · ") + elapsedSec.toString() + "S")
+                : ((arrowsCount > 0)
+                    ? (tr("TIRO ", "SHOT ") + arrowsCount.toString() + " · " + distanceM.toString() + "M")
+                    : (tr("ANÁLISIS · ", "ANALYSIS · ") + distanceM.toString() + "M")));
+        if (dc.getTextWidthInPixels(anaPill, fMicro) > maxPillTxtW) {
+            anaPill = exitArmed ? tr("SALIR", "EXIT") : (manualAnalysisRecording ? "REC" : tr("ANÁLISIS", "ANALYSIS"));
+        }
+        drawArchery101010Header(dc, w, h, s, anaPill, !manualAnalysisRecording, isMono);
+
+        var statBoxW = isMono ? (w - 14) : (160.0 * s).toNumber();
+        var statBoxH = isMono ? (isCompactMono ? 34 : 38) : (48.0 * s).toNumber();
+        var statBoxX = cx - (statBoxW / 2);
+        var statBoxY = isMono ? 62 : (60.0 * s).toNumber();
+        var statFill = isMono
+            ? (manualAnalysisRecording ? 0xFFFFFF : 0x000000)
+            : (manualAnalysisRecording ? 0x151105 : 0x0B0E15);
+        var statBorder = isMono ? 0xFFFFFF : (manualAnalysisRecording ? 0xFFE500 : 0x00A8F3);
+        var statTxtCol = isMono
+            ? (manualAnalysisRecording ? 0x000000 : 0xFFFFFF)
+            : (manualAnalysisRecording ? 0xFFE500 : Graphics.COLOR_WHITE);
+
+        drawCrispBox(dc, statBoxX, statBoxY, statBoxW, statBoxH, isMono ? 5 : (8.0 * s).toNumber(), statFill, statBorder, strokePx);
+        var centerTitle = manualAnalysisRecording
+            ? (tr("EN CURSO · ", "ACTIVE · ") + elapsedSec.toString() + " s")
+            : ((lastAnalysisStabPct > 0)
+                ? (tr("ESTAB. ", "STAB. ") + lastAnalysisStabPct.toString() + "%")
+                : tr("LISTO · BOTÓN", "READY · BUTTON"));
+        var statFont = pickFittingFont(dc, centerTitle, statBoxW - 10, getValueFont(), getLabelFont(), fMicro);
+        dc.setColor(statTxtCol, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, statBoxY + (statBoxH / 2), statFont, centerTitle, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        var aRowY = isMono ? (statBoxY + statBoxH + 5) : (118.0 * s).toNumber();
+        var aGap = isMono ? 5 : (7.0 * s).toNumber();
+        var aBtnW = (statBoxW - aGap) / 2;
+        var aBtnH = isMono ? (isCompactMono ? 25 : 28) : (36.0 * s).toNumber();
+        var aRad = isMono ? 5 : (10.0 * s).toNumber();
+
+        var startBtnX = cx - (statBoxW / 2);
+        var startInv = isMono && !manualAnalysisRecording;
+        drawCrispBox(
+            dc,
+            startBtnX,
+            aRowY,
+            aBtnW,
+            aBtnH,
+            aRad,
+            isMono ? (startInv ? 0xFFFFFF : 0x000000) : (manualAnalysisRecording ? 0x09131E : 0x061523),
+            isMono ? 0xFFFFFF : 0x00A8F3,
+            strokePx
+        );
+        dc.setColor(isMono ? (startInv ? 0x000000 : 0xFFFFFF) : (manualAnalysisRecording ? 0x94A3B8 : 0x00BFFF), Graphics.COLOR_TRANSPARENT);
+        dc.drawText(startBtnX + (aBtnW / 2), aRowY + (aBtnH / 2), fMicro, tr("INICIO", "START"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        var stopBtnX = cx + (statBoxW / 2) - aBtnW;
+        var stopInv = isMono && manualAnalysisRecording;
+        drawCrispBox(
+            dc,
+            stopBtnX,
+            aRowY,
+            aBtnW,
+            aBtnH,
+            aRad,
+            isMono ? (stopInv ? 0xFFFFFF : 0x000000) : (manualAnalysisRecording ? 0x260709 : 0x0E121B),
+            isMono ? 0xFFFFFF : (manualAnalysisRecording ? 0xFF1E1E : 0x334155),
+            strokePx
+        );
+        dc.setColor(isMono ? (stopInv ? 0x000000 : 0xFFFFFF) : (manualAnalysisRecording ? Graphics.COLOR_WHITE : 0x64748B), Graphics.COLOR_TRANSPARENT);
+        dc.drawText(stopBtnX + (aBtnW / 2), aRowY + (aBtnH / 2), fMicro, tr("FINAL", "END"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        if (!isMono) {
+            dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, (172.0 * s).toNumber(), fMicro, tr("BOTÓN ARRIBA-DER: INICIO/FINAL", "TOP-RIGHT BTN: START/END"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        }
+    }
+
+    (:typecheck(false))
+    function drawScreen0Counter(
+        dc as Graphics.Dc,
+        w as Lang.Number,
+        h as Lang.Number,
+        s as Lang.Float,
+        isMono as Lang.Boolean,
+        now as Lang.Number
+    ) as Void {
+        var fMicro = getMicroFont();
+        var fValue = getValueFont();
+        var fHero = getHeroFont();
+        var cx = w / 2;
+        var strokePx = (w >= 340) ? 2 : 1;
+        var isCompactMono = (h <= 160);
+        var isConnectedNow = (isCloudSynced || isBleConnected);
+        var exitArmed = (mConfirmExitUntilMs > 0 && now < mConfirmExitUntilMs);
+        var maxPillTxtW = isMono ? (w - 76) : (152.0 * s).toNumber();
+
+        var qCount = mPendingCmdQueue.size();
+        var pillTxt = exitArmed
+            ? tr("ATRÁS OTRA VEZ", "PRESS BACK AGAIN")
+            : (isConnectedNow
+                ? ((qCount > 0) ? ("SYNC · " + qCount.toString()) : tr("CONECTADO · LIVE", "SYNCED · LIVE"))
+                : ((qCount > 0) ? (tr("COLA · ", "QUEUE · ") + qCount.toString()) : tr("MODO MANUAL", "MANUAL MODE")));
+        if (dc.getTextWidthInPixels(pillTxt, fMicro) > maxPillTxtW) {
+            pillTxt = exitArmed
                 ? tr("ATRÁS: SALIR", "BACK: EXIT")
-                : (manualAnalysisRecording
-                    ? (tr("GRABANDO · ", "REC · ") + elapsedSec.toString() + "S")
-                    : ((arrowsCount > 0)
-                        ? (tr("TIRO ", "SHOT ") + arrowsCount.toString() + " · " + distanceM.toString() + "M")
-                        : (tr("ANÁLISIS · ", "ANALYSIS · ") + distanceM.toString() + "M")));
-            if (dc.getTextWidthInPixels(anaPill, fMicro) > maxPillTxtW) {
-                anaPill = exitArmed ? tr("SALIR", "EXIT") : (manualAnalysisRecording ? "REC" : tr("ANÁLISIS", "ANALYSIS"));
+                : (isConnectedNow ? "LIVE" : "MANUAL");
+        }
+        drawArchery101010Header(dc, w, h, s, pillTxt, true, isMono);
+
+        var digits = [
+            (arrowsCount / 1000) % 10,
+            (arrowsCount / 100) % 10,
+            (arrowsCount / 10) % 10,
+            arrowsCount % 10
+        ] as Lang.Array<Lang.Number>;
+
+        var boxW = isMono ? (isCompactMono ? 34 : 36) : (37.0 * s).toNumber();
+        var boxH = isMono ? (isCompactMono ? 34 : 38) : (50.0 * s).toNumber();
+        var gap = isMono ? 4 : (5.0 * s).toNumber();
+        var totalW = (boxW * 4) + (gap * 3);
+        var startX = cx - (totalW / 2);
+        var startY = isMono ? 62 : (60.0 * s).toNumber();
+
+        for (var i = 0; i < 4; i++) {
+            var rx = startX + i * (boxW + gap);
+            var cellFill = isMono ? 0x000000 : ((i == 3) ? 0x121107 : 0x0B0E15);
+            var cellBorder = isMono ? 0xFFFFFF : ((i == 3) ? 0xFFE500 : 0x3E4756);
+            drawCrispBox(dc, rx, startY, boxW, boxH, isMono ? 4 : (7.0 * s).toNumber(), cellFill, cellBorder, (isMono && i == 3) ? 2 : strokePx);
+
+            dc.setColor(isMono ? 0xFFFFFF : ((i == 3) ? 0xFFE500 : Graphics.COLOR_WHITE), Graphics.COLOR_TRANSPARENT);
+            dc.drawText(rx + (boxW / 2), startY + (boxH / 2), fHero, digits[i].toString(), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        }
+
+        var rowY = isMono ? (startY + boxH + 4) : (118.0 * s).toNumber();
+        var btnGap = isMono ? 5 : (7.0 * s).toNumber();
+        var btnW = (totalW - btnGap) / 2;
+        var btnH = isMono ? (isCompactMono ? 23 : 26) : (36.0 * s).toNumber();
+        var btnRad = isMono ? 5 : (10.0 * s).toNumber();
+
+        var minusX = cx - (totalW / 2);
+        drawCrispBox(dc, minusX, rowY, btnW, btnH, btnRad, isMono ? 0x000000 : 0x180709, isMono ? 0xFFFFFF : 0xFF1E1E, strokePx);
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(minusX + (btnW / 2), rowY + (btnH / 2), fValue, "-1", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        var plusX = cx + (totalW / 2) - btnW;
+        drawCrispBox(dc, plusX, rowY, btnW, btnH, btnRad, isMono ? 0xFFFFFF : 0x061523, isMono ? 0xFFFFFF : 0x00A8F3, strokePx);
+        dc.setColor(isMono ? 0x000000 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(plusX + (btnW / 2), rowY + (btnH / 2), fValue, "+1", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        var telemStr = formatWalkedPrimary(distanceWalkedM) + " · " + activeKcal.toString() + " kcal";
+        var telemY = isMono ? (rowY + btnH + (isCompactMono ? 9 : 11)) : (168.0 * s).toNumber();
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, telemY, fMicro, telemStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        if (!isMono) {
+            var endDistStr = tr("TANDA ", "END ") + currentEnd.toString() + " · " + distanceM.toString() + " M";
+            dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, (186.0 * s).toNumber(), fMicro, endDistStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        }
+    }
+
+    (:typecheck(false))
+    function drawScreen1HeaderMono(
+        dc as Graphics.Dc,
+        w as Lang.Number,
+        ptsStr as Lang.String,
+        slotCount as Lang.Number
+    ) as Lang.Number {
+        var fMicro = getMicroFont();
+        var safeRight = w - 63;
+        var topAvailW = safeRight - 5;
+        var topCenter = 5 + (topAvailW / 2);
+
+        var logoRes1 = mApp.isBootSkipped("U_LOGO") ? null : mBrandLogo;
+        var logoBot1 = 16;
+        if (logoRes1 != null) {
+            bootMark("U_LOGO");
+            try {
+                var lw1 = logoRes1.getWidth();
+                var lx1 = topCenter - (lw1 / 2);
+                if ((lx1 + lw1) > safeRight) { lx1 = safeRight - lw1; }
+                if (lx1 < 4) { lx1 = 4; }
+                dc.drawBitmap(lx1, 5, logoRes1);
+                logoBot1 = 5 + logoRes1.getHeight();
+            } catch (ex) {}
+            bootMark(mDrawStage);
+        }
+
+        var tagY = logoBot1 + 2;
+        var tagW = dc.getTextWidthInPixels(ptsStr, fMicro) + 8;
+        if (tagW > topAvailW) { tagW = topAvailW; }
+        var tagX = topCenter - (tagW / 2);
+        drawCrispBox(dc, tagX, tagY, tagW, 15, 4, isPadCursorActive ? 0xFFFFFF : 0x000000, 0xFFFFFF, 1);
+        dc.setColor(isPadCursorActive ? 0x000000 : 0xFFFFFF, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(tagX + (tagW / 2), tagY + 7, fMicro, ptsStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        var mSlotW = (topAvailW - ((slotCount - 1) * 2)) / slotCount;
+        if (mSlotW > 14) { mSlotW = 14; }
+        if (mSlotW < 10) { mSlotW = 10; }
+        var mSlotsTotal = (slotCount * mSlotW) + ((slotCount - 1) * 2);
+        var mSlotStartX = topCenter - (mSlotsTotal / 2);
+        var mSlotY = tagY + 17;
+        for (var msi = 0; msi < slotCount; msi++) {
+            var msx = mSlotStartX + msi * (mSlotW + 2);
+            var msVal = (msi < currentEndArrows.size()) ? currentEndArrows[msi] : "-";
+            drawCrispBox(dc, msx, mSlotY, mSlotW, 15, 2, 0x000000, 0xFFFFFF, 1);
+            dc.setColor(0xFFFFFF, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(msx + (mSlotW / 2), mSlotY + 7, fMicro, msVal, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        }
+        return 62;
+    }
+
+    (:typecheck(false))
+    function drawScreen1HeaderColor(
+        dc as Graphics.Dc,
+        w as Lang.Number,
+        s as Lang.Float,
+        ptsStr as Lang.String,
+        slotCount as Lang.Number,
+        microH as Lang.Number
+    ) as Lang.Number {
+        var fMicro = getMicroFont();
+        var cx = w / 2;
+        var strokePx = (w >= 340) ? 2 : 1;
+        var logoTopY = (19.0 * s).toNumber();
+        var logoBottomY = logoTopY + (11.0 * s).toNumber();
+        var logoResC = mApp.isBootSkipped("U_LOGO") ? null : mBrandLogo;
+        var drewLogoC = false;
+        if (logoResC != null) {
+            bootMark("U_LOGO");
+            try {
+                dc.drawBitmap(cx - (logoResC.getWidth() / 2), logoTopY, logoResC);
+                logoBottomY = logoTopY + logoResC.getHeight();
+                drewLogoC = true;
+            } catch (ex) {
+                drewLogoC = false;
             }
-            drawArchery101010Header(dc, w, h, s, anaPill, !manualAnalysisRecording, isMono);
-
-            var statBoxW = isMono ? (w - 14) : (160.0 * s).toNumber();
-            var statBoxH = isMono ? (isCompactMono ? 34 : 38) : (48.0 * s).toNumber();
-            var statBoxX = cx - (statBoxW / 2);
-            var statBoxY = isMono ? 62 : (60.0 * s).toNumber();
-            var statFill = isMono
-                ? (manualAnalysisRecording ? 0xFFFFFF : 0x000000)
-                : (manualAnalysisRecording ? 0x151105 : 0x0B0E15);
-            var statBorder = isMono ? 0xFFFFFF : (manualAnalysisRecording ? 0xFFE500 : 0x00A8F3);
-            var statTxtCol = isMono
-                ? (manualAnalysisRecording ? 0x000000 : 0xFFFFFF)
-                : (manualAnalysisRecording ? 0xFFE500 : Graphics.COLOR_WHITE);
-
-            drawCrispBox(dc, statBoxX, statBoxY, statBoxW, statBoxH, isMono ? 5 : (8.0 * s).toNumber(), statFill, statBorder, strokePx);
-            var centerTitle = manualAnalysisRecording
-                ? (tr("EN CURSO · ", "ACTIVE · ") + elapsedSec.toString() + " s")
-                : ((lastAnalysisStabPct > 0)
-                    ? (tr("ESTAB. ", "STAB. ") + lastAnalysisStabPct.toString() + "%")
-                    : tr("LISTO · BOTÓN", "READY · BUTTON"));
-            var statFont = pickFittingFont(dc, centerTitle, statBoxW - 10, fValue, fLabel, fMicro);
-            dc.setColor(statTxtCol, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, statBoxY + (statBoxH / 2), statFont, centerTitle, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-
-            var aRowY = isMono ? (statBoxY + statBoxH + 5) : (118.0 * s).toNumber();
-            var aRowW = statBoxW;
-            var aGap = isMono ? 5 : (7.0 * s).toNumber();
-            var aBtnW = (aRowW - aGap) / 2;
-            var aBtnH = isMono ? (isCompactMono ? 25 : 28) : (36.0 * s).toNumber();
-            var aRad = isMono ? 5 : (10.0 * s).toNumber();
-
-            var startBtnX = cx - (aRowW / 2);
-            var startInv = isMono && !manualAnalysisRecording;
-            drawCrispBox(
-                dc,
-                startBtnX,
-                aRowY,
-                aBtnW,
-                aBtnH,
-                aRad,
-                isMono ? (startInv ? 0xFFFFFF : 0x000000) : (manualAnalysisRecording ? 0x09131E : 0x061523),
-                isMono ? 0xFFFFFF : 0x00A8F3,
-                strokePx
-            );
-            dc.setColor(isMono ? (startInv ? 0x000000 : 0xFFFFFF) : (manualAnalysisRecording ? 0x94A3B8 : 0x00BFFF), Graphics.COLOR_TRANSPARENT);
-            dc.drawText(startBtnX + (aBtnW / 2), aRowY + (aBtnH / 2), fMicro, tr("INICIO", "START"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-
-            var stopBtnX = cx + (aRowW / 2) - aBtnW;
-            var stopInv = isMono && manualAnalysisRecording;
-            drawCrispBox(
-                dc,
-                stopBtnX,
-                aRowY,
-                aBtnW,
-                aBtnH,
-                aRad,
-                isMono ? (stopInv ? 0xFFFFFF : 0x000000) : (manualAnalysisRecording ? 0x260709 : 0x0E121B),
-                isMono ? 0xFFFFFF : (manualAnalysisRecording ? 0xFF1E1E : 0x334155),
-                strokePx
-            );
-            dc.setColor(isMono ? (stopInv ? 0x000000 : 0xFFFFFF) : (manualAnalysisRecording ? Graphics.COLOR_WHITE : 0x64748B), Graphics.COLOR_TRANSPARENT);
-            dc.drawText(stopBtnX + (aBtnW / 2), aRowY + (aBtnH / 2), fMicro, tr("FINAL", "END"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-
-            if (!isMono) {
-                dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(cx, (172.0 * s).toNumber(), fMicro, tr("BOTÓN ARRIBA-DER: INICIO/FINAL", "TOP-RIGHT BTN: START/END"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            }
-        } else if (screenIdx == 0) {
-            var qCount = mPendingCmdQueue.size();
-            var pillTxt = exitArmed
-                ? tr("ATRÁS OTRA VEZ", "PRESS BACK AGAIN")
-                : (isConnectedNow
-                    ? ((qCount > 0) ? ("SYNC · " + qCount.toString()) : tr("CONECTADO · LIVE", "SYNCED · LIVE"))
-                    : ((qCount > 0) ? (tr("COLA · ", "QUEUE · ") + qCount.toString()) : tr("MODO MANUAL", "MANUAL MODE")));
-            if (dc.getTextWidthInPixels(pillTxt, fMicro) > maxPillTxtW) {
-                pillTxt = exitArmed
-                    ? tr("ATRÁS: SALIR", "BACK: EXIT")
-                    : (isConnectedNow ? "LIVE" : "MANUAL");
-            }
-            drawArchery101010Header(dc, w, h, s, pillTxt, true, isMono);
-
-            bootMark("B_DIGIT");
-            var d3 = (arrowsCount / 1000) % 10;
-            var d2 = (arrowsCount / 100) % 10;
-            var d1 = (arrowsCount / 10) % 10;
-            var d0 = arrowsCount % 10;
-            var digits = [d3, d2, d1, d0] as Lang.Array<Lang.Number>;
-
-            var boxW = isMono ? (isCompactMono ? 34 : 36) : (37.0 * s).toNumber();
-            var boxH = isMono ? (isCompactMono ? 34 : 38) : (50.0 * s).toNumber();
-            var gap = isMono ? 4 : (5.0 * s).toNumber();
-            var totalW = (boxW * 4) + (gap * 3);
-            var startX = cx - (totalW / 2);
-            var startY = isMono ? 62 : (60.0 * s).toNumber();
-
-            for (var i = 0; i < 4; i++) {
-                var rx = startX + i * (boxW + gap);
-                var cellFill = isMono ? 0x000000 : ((i == 3) ? 0x121107 : 0x0B0E15);
-                var cellBorder = isMono ? 0xFFFFFF : ((i == 3) ? 0xFFE500 : 0x3E4756);
-                drawCrispBox(dc, rx, startY, boxW, boxH, isMono ? 4 : (7.0 * s).toNumber(), cellFill, cellBorder, (isMono && i == 3) ? 2 : strokePx);
-
-                dc.setColor(isMono ? 0xFFFFFF : ((i == 3) ? 0xFFE500 : Graphics.COLOR_WHITE), Graphics.COLOR_TRANSPARENT);
-                dc.drawText(rx + (boxW / 2), startY + (boxH / 2), fHero, digits[i].toString(), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            }
-
-            bootMark("B_BTN");
-            var rowY = isMono ? (startY + boxH + 4) : (118.0 * s).toNumber();
-            var rowW = totalW;
-            var btnGap = isMono ? 5 : (7.0 * s).toNumber();
-            var btnW = (rowW - btnGap) / 2;
-            var btnH = isMono ? (isCompactMono ? 23 : 26) : (36.0 * s).toNumber();
-            var btnRad = isMono ? 5 : (10.0 * s).toNumber();
-
-            var minusX = cx - (rowW / 2);
-            drawCrispBox(dc, minusX, rowY, btnW, btnH, btnRad, isMono ? 0x000000 : 0x180709, isMono ? 0xFFFFFF : 0xFF1E1E, strokePx);
+            bootMark(mDrawStage);
+        }
+        if (!drewLogoC) {
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(minusX + (btnW / 2), rowY + (btnH / 2), fValue, "-1", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(cx, logoTopY + (5.0 * s).toNumber(), fMicro, "ARCHERY 101010", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        }
 
-            var plusX = cx + (rowW / 2) - btnW;
-            drawCrispBox(dc, plusX, rowY, btnW, btnH, btnRad, isMono ? 0xFFFFFF : 0x061523, isMono ? 0xFFFFFF : 0x00A8F3, strokePx);
-            dc.setColor(isMono ? 0x000000 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(plusX + (btnW / 2), rowY + (btnH / 2), fValue, "+1", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        var barY = logoBottomY + (3.5 * s).toNumber();
+        var barH = (16.5 * s).toNumber();
+        if (barH < (microH + 2)) { barH = microH + 2; }
 
-            bootMark("B_TELEM");
-            var telemStr = walkedPrimaryStr + " · " + activeKcal.toString() + " kcal";
-            var telemY = isMono ? (rowY + btnH + (isCompactMono ? 9 : 11)) : (168.0 * s).toNumber();
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, telemY, fMicro, telemStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        var ptsLabel = ptsStr;
+        var ptsTagW = dc.getTextWidthInPixels(ptsLabel, fMicro) + (9.0 * s).toNumber();
+        if (ptsTagW > (68.0 * s).toNumber()) {
+            ptsLabel = tr("T", "E") + currentEnd.toString() + "·" + totalScore.toString();
+            ptsTagW = dc.getTextWidthInPixels(ptsLabel, fMicro) + (8.0 * s).toNumber();
+        }
 
-            if (!isMono) {
-                var endDistStr = tr("TANDA ", "END ") + currentEnd.toString() + " · " + distanceM.toString() + " M";
-                dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(cx, (186.0 * s).toNumber(), fMicro, endDistStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            }
+        var barGap = (4.0 * s).toNumber();
+        if (barGap < 2) { barGap = 2; }
+        var sGap = (2.5 * s).toNumber();
+        if (sGap < 2) { sGap = 2; }
 
-        } else if (screenIdx == 1) {
-            // SCREEN 1: XL 4x3 Score Keypad + Full 5-Button Cursor Navigation (0..11 keys, 12 BORRAR, 13 SIG. TANDA)
-            var microH = dc.getFontHeight(fMicro);
-            var slotCount = (arrowsPerEnd < 6) ? arrowsPerEnd : 6;
-            if (slotCount < 1) { slotCount = 6; }
-            var endTagPrefix = tr("T", "E");
-            var ptsStr = isPadCursorActive
-                ? ("< " + endTagPrefix + currentEnd.toString() + "·" + totalScore.toString() + " >")
-                : ((!isTouchScreen && currentEndArrows.size() == 0)
-                    ? ("OK·" + endTagPrefix + currentEnd.toString() + "·" + totalScore.toString())
-                    : (endTagPrefix + currentEnd.toString() + "·" + totalScore.toString() + "P"));
+        var slotsAvailW = (158.0 * s).toNumber() - ptsTagW - barGap;
+        var slotW = (slotsAvailW - ((slotCount - 1) * sGap)) / slotCount;
+        var maxSlotW = (22.0 * s).toNumber();
+        if (slotW > maxSlotW) { slotW = maxSlotW; }
+        if (slotW < 10) { slotW = 10; }
 
-            var kStartY = 0;
-            if (isMono) {
-                // Instinct 2 / 2S / 2X: keep top header + 6 arrow slots strictly left of top-right subscreen (x < w - 62 in y < 62)
-                var safeRight = w - 63;
-                var leftX = 5;
-                var topAvailW = safeRight - leftX;
-                var topCenter = leftX + (topAvailW / 2);
+        var totalBarW = ptsTagW + barGap + (slotCount * slotW) + ((slotCount - 1) * sGap);
+        var barStartX = cx - (totalBarW / 2);
 
-                var logoRes1 = mApp.isBootSkipped("U_LOGO") ? null : mBrandLogo;
-                var logoBot1 = 16;
-                if (logoRes1 != null) {
-                    bootMark("U_LOGO");
-                    try {
-                        var lw1 = logoRes1.getWidth();
-                        var lh1 = logoRes1.getHeight();
-                        var lx1 = topCenter - (lw1 / 2);
-                        if ((lx1 + lw1) > safeRight) { lx1 = safeRight - lw1; }
-                        if (lx1 < 4) { lx1 = 4; }
-                        dc.drawBitmap(lx1, 5, logoRes1);
-                        logoBot1 = 5 + lh1;
-                    } catch (ex) {}
-                    bootMark(mDrawStage);
-                }
+        drawCrispBox(
+            dc,
+            barStartX,
+            barY,
+            ptsTagW,
+            barH,
+            barH / 2,
+            isPadCursorActive ? 0x121106 : 0x050D17,
+            isPadCursorActive ? 0xFFE500 : 0x00A8F3,
+            strokePx
+        );
+        dc.setColor(isPadCursorActive ? 0xFFE500 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(barStartX + (ptsTagW / 2), barY + (barH / 2), fMicro, ptsLabel, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-                var tagY = logoBot1 + 2;
-                var tagH = 15;
-                var tagW = dc.getTextWidthInPixels(ptsStr, fMicro) + 8;
-                if (tagW > topAvailW) { tagW = topAvailW; }
-                var tagX = topCenter - (tagW / 2);
-                drawCrispBox(dc, tagX, tagY, tagW, tagH, 4, isPadCursorActive ? 0xFFFFFF : 0x000000, 0xFFFFFF, 1);
-                dc.setColor(isPadCursorActive ? 0x000000 : 0xFFFFFF, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(tagX + (tagW / 2), tagY + (tagH / 2), fMicro, ptsStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        var slotsStartX = barStartX + ptsTagW + barGap;
+        for (var si = 0; si < slotCount; si++) {
+            var sx = slotsStartX + si * (slotW + sGap);
+            var hasVal = (si < currentEndArrows.size());
+            var sVal = hasVal ? currentEndArrows[si] : "-";
+            var sBorder = hasVal
+                ? ((sVal.equals("X") || sVal.equals("10") || sVal.equals("9")) ? 0xFFE500 : ((sVal.equals("8") || sVal.equals("7")) ? 0xFF1E1E : ((sVal.equals("6") || sVal.equals("5")) ? 0x00A8F3 : 0x94A3B8)))
+                : 0x334155;
+            var sTxtCol = hasVal ? ((sVal.equals("X") || sVal.equals("10") || sVal.equals("9")) ? 0xFFE500 : Graphics.COLOR_WHITE) : 0x64748B;
+            drawCrispBox(dc, sx, barY, slotW, barH, (3.8 * s).toNumber(), 0x07090E, sBorder, 1);
+            dc.setColor(sTxtCol, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(sx + (slotW / 2), barY + (barH / 2), fMicro, sVal, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        }
+        return barY + barH + (4.2 * s).toNumber();
+    }
 
-                var mSlotGap = 2;
-                var mSlotW = (topAvailW - ((slotCount - 1) * mSlotGap)) / slotCount;
-                if (mSlotW > 14) { mSlotW = 14; }
-                if (mSlotW < 10) { mSlotW = 10; }
-                var mSlotsTotal = (slotCount * mSlotW) + ((slotCount - 1) * mSlotGap);
-                var mSlotStartX = topCenter - (mSlotsTotal / 2);
-                var mSlotY = tagY + tagH + 2;
-                var mSlotH = 15;
-                for (var msi = 0; msi < slotCount; msi++) {
-                    var msx = mSlotStartX + msi * (mSlotW + mSlotGap);
-                    var mHasVal = (msi < currentEndArrows.size());
-                    var msVal = mHasVal ? currentEndArrows[msi] : "-";
-                    drawCrispBox(dc, msx, mSlotY, mSlotW, mSlotH, 2, 0x000000, 0xFFFFFF, 1);
-                    dc.setColor(0xFFFFFF, Graphics.COLOR_TRANSPARENT);
-                    dc.drawText(msx + (mSlotW / 2), mSlotY + (mSlotH / 2), fMicro, msVal, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-                }
-                kStartY = 62;
-            } else {
-                var logoTopY = (19.0 * s).toNumber();
-                var logoBottomY = logoTopY + (11.0 * s).toNumber();
-                var logoResC = mApp.isBootSkipped("U_LOGO") ? null : mBrandLogo;
-                var drewLogoC = false;
-                if (logoResC != null) {
-                    bootMark("U_LOGO");
-                    try {
-                        var lw = logoResC.getWidth();
-                        var lh = logoResC.getHeight();
-                        dc.drawBitmap(cx - (lw / 2), logoTopY, logoResC);
-                        logoBottomY = logoTopY + lh;
-                        drewLogoC = true;
-                    } catch (ex) {
-                        drewLogoC = false;
-                    }
-                    bootMark(mDrawStage);
-                }
-                if (!drewLogoC) {
-                    dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-                    dc.drawText(cx, logoTopY + (5.0 * s).toNumber(), fMicro, "ARCHERY 101010", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-                }
+    (:typecheck(false))
+    function drawScreen1Scorepad(
+        dc as Graphics.Dc,
+        w as Lang.Number,
+        h as Lang.Number,
+        s as Lang.Float,
+        isMono as Lang.Boolean
+    ) as Void {
+        var fMicro = getMicroFont();
+        var fLabel = getLabelFont();
+        var fValue = getValueFont();
+        var cx = w / 2;
+        var strokePx = (w >= 340) ? 2 : 1;
+        var isCompactMono = (h <= 160);
+        var microH = dc.getFontHeight(fMicro);
+        var slotCount = (arrowsPerEnd < 6) ? arrowsPerEnd : 6;
+        if (slotCount < 1) { slotCount = 6; }
+        var endTagPrefix = tr("T", "E");
+        var ptsStr = isPadCursorActive
+            ? ("< " + endTagPrefix + currentEnd.toString() + "·" + totalScore.toString() + " >")
+            : ((!isTouchScreen && currentEndArrows.size() == 0)
+                ? ("OK·" + endTagPrefix + currentEnd.toString() + "·" + totalScore.toString())
+                : (endTagPrefix + currentEnd.toString() + "·" + totalScore.toString() + "P"));
 
-                var barY = logoBottomY + (3.5 * s).toNumber();
-                var barH = (16.5 * s).toNumber();
-                if (barH < (microH + 2)) {
-                    barH = microH + 2;
-                }
+        var kStartY = isMono
+            ? drawScreen1HeaderMono(dc, w, ptsStr, slotCount)
+            : drawScreen1HeaderColor(dc, w, s, ptsStr, slotCount, microH);
 
-                var maxBarW = (158.0 * s).toNumber();
-                var ptsTextW = dc.getTextWidthInPixels(ptsStr, fMicro);
-                var ptsTagW = ptsTextW + (9.0 * s).toNumber();
-                var maxPtsTagW = (68.0 * s).toNumber();
-                if (ptsTagW > maxPtsTagW) {
-                    ptsStr = endTagPrefix + currentEnd.toString() + "·" + totalScore.toString();
-                    ptsTextW = dc.getTextWidthInPixels(ptsStr, fMicro);
-                    ptsTagW = ptsTextW + (8.0 * s).toNumber();
-                }
+        var actH = isMono ? (isCompactMono ? 19 : 21) : (26.0 * s).toNumber();
+        if (!isMono && actH < (microH + 4)) { actH = microH + 4; }
+        var actY = h - (isMono ? 13 : (33.0 * s).toNumber()) - actH;
 
-                var barGap = (4.0 * s).toNumber();
-                if (barGap < 2) { barGap = 2; }
-                var sGap = (2.5 * s).toNumber();
-                if (sGap < 2) { sGap = 2; }
+        var padW = isMono ? (w - 12) : (190.0 * s).toNumber();
+        var kGap = isMono ? 2 : (4.0 * s).toNumber();
+        if (kGap < 2) { kGap = 2; }
+        var gridAvailH = (actY - (isMono ? 3 : (4.2 * s).toNumber())) - kStartY;
+        var keyW = (padW - (3 * kGap)) / 4;
+        var keyH = (gridAvailH - (2 * kGap)) / 3;
+        var minKeyH = isMono ? 17 : (18.0 * s).toNumber();
+        if (keyH < minKeyH) { keyH = minKeyH; }
+        var kStartX = cx - (padW / 2);
 
-                var slotsAvailW = maxBarW - ptsTagW - barGap;
-                var slotW = (slotsAvailW - ((slotCount - 1) * sGap)) / slotCount;
-                var maxSlotW = (22.0 * s).toNumber();
-                if (slotW > maxSlotW) { slotW = maxSlotW; }
-                if (slotW < 10) { slotW = 10; }
+        lastPadStartX = kStartX;
+        lastPadStartY = kStartY;
+        lastKeyW = keyW;
+        lastKeyH = keyH;
+        lastKeyGap = kGap;
+        lastActY = actY;
+        lastActH = actH;
 
-                var slotsActualW = (slotCount * slotW) + ((slotCount - 1) * sGap);
-                var totalBarW = ptsTagW + barGap + slotsActualW;
-                var barStartX = cx - (totalBarW / 2);
+        for (var k = 0; k < 12; k++) {
+            var kx = kStartX + (k % 4) * (keyW + kGap);
+            var ky = kStartY + (k / 4) * (keyH + kGap);
+            var isSel = isPadCursorActive && (k == selectedScoreIdx);
+            var bgCol = isMono
+                ? (isSel ? 0xFFFFFF : 0x000000)
+                : (isSel ? 0x1E293B : ((k < 3) ? 0x121107 : ((k < 5) ? 0x160708 : ((k < 7) ? 0x061320 : 0x0B0E15))));
+            var borderCol = isMono
+                ? 0xFFFFFF
+                : (isSel ? 0xFFFFFF : ((k < 3) ? 0xFFE500 : ((k < 5) ? 0xFF1E1E : ((k < 7) ? 0x00A8F3 : 0x475569))));
+            var txtCol = isMono
+                ? (isSel ? 0x000000 : 0xFFFFFF)
+                : (isSel ? 0xFFFFFF : ((k < 3) ? 0xFFE500 : ((k == 11) ? 0xCBD5E1 : Graphics.COLOR_WHITE)));
+            drawCrispBox(dc, kx, ky, keyW, keyH, isMono ? 3 : (6.5 * s).toNumber(), bgCol, borderCol, (!isMono && isSel) ? (strokePx + 1) : strokePx);
+            var keyFont = pickFittingFont(dc, scoreLabels[k], keyW - 4, fValue, fLabel, fMicro);
+            dc.setColor(txtCol, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(kx + (keyW / 2), ky + (keyH / 2), keyFont, scoreLabels[k], Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        }
 
-                drawCrispBox(
-                    dc,
-                    barStartX,
-                    barY,
-                    ptsTagW,
-                    barH,
-                    barH / 2,
-                    isPadCursorActive ? 0x121106 : 0x050D17,
-                    isPadCursorActive ? 0xFFE500 : 0x00A8F3,
-                    strokePx
-                );
-                dc.setColor(isPadCursorActive ? 0xFFE500 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(barStartX + (ptsTagW / 2), barY + (barH / 2), fMicro, ptsStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        var actGap = isMono ? 5 : (6.0 * s).toNumber();
+        var actWTotal = isMono ? (w - 14) : (158.0 * s).toNumber();
+        var actStartX = cx - (actWTotal / 2);
+        var actW = (actWTotal - actGap) / 2;
 
-                var slotsStartX = barStartX + ptsTagW + barGap;
-                for (var si = 0; si < slotCount; si++) {
-                    var sx = slotsStartX + si * (slotW + sGap);
-                    var hasVal = (si < currentEndArrows.size());
-                    var sVal = hasVal ? currentEndArrows[si] : "-";
-                    var sBorder = hasVal
-                        ? ((sVal.equals("X") || sVal.equals("10") || sVal.equals("9")) ? 0xFFE500 : ((sVal.equals("8") || sVal.equals("7")) ? 0xFF1E1E : ((sVal.equals("6") || sVal.equals("5")) ? 0x00A8F3 : 0x94A3B8)))
-                        : 0x334155;
-                    var sTxtCol = hasVal ? ((sVal.equals("X") || sVal.equals("10") || sVal.equals("9")) ? 0xFFE500 : Graphics.COLOR_WHITE) : 0x64748B;
-                    drawCrispBox(dc, sx, barY, slotW, barH, (3.8 * s).toNumber(), 0x07090E, sBorder, 1);
-                    dc.setColor(sTxtCol, Graphics.COLOR_TRANSPARENT);
-                    dc.drawText(sx + (slotW / 2), barY + (barH / 2), fMicro, sVal, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-                }
-                kStartY = barY + barH + (4.2 * s).toNumber();
-            }
+        var selDel = isPadCursorActive && (selectedScoreIdx == 12);
+        drawCrispBox(
+            dc,
+            actStartX,
+            actY,
+            actW,
+            actH,
+            actH / 2,
+            isMono ? (selDel ? 0xFFFFFF : 0x000000) : (selDel ? 0x260709 : 0x0B0E15),
+            isMono ? 0xFFFFFF : (selDel ? 0xFFFFFF : 0x475569),
+            (!isMono && selDel) ? (strokePx + 1) : strokePx
+        );
+        dc.setColor((isMono && selDel) ? 0x000000 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(actStartX + (actW / 2), actY + (actH / 2), fMicro, tr("BORRAR", "DEL"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-            var actH = isMono ? (isCompactMono ? 19 : 21) : (26.0 * s).toNumber();
-            if (!isMono && actH < (microH + 4)) { actH = microH + 4; }
-            var pagerClearance = isMono ? 13 : (33.0 * s).toNumber();
-            var actY = h - pagerClearance - actH;
+        var selNext = isPadCursorActive && (selectedScoreIdx == 13);
+        var nextFull = tr("SIG. TANDA", "NEXT END");
+        var nextLbl = (dc.getTextWidthInPixels(nextFull, fMicro) <= (actW - 8)) ? nextFull : tr("SIG.", "NEXT");
+        var nextX = actStartX + actW + actGap;
+        drawCrispBox(
+            dc,
+            nextX,
+            actY,
+            actW,
+            actH,
+            actH / 2,
+            isMono ? (selNext ? 0xFFFFFF : 0x000000) : (selNext ? 0x0B253C : 0x061523),
+            isMono ? 0xFFFFFF : (selNext ? 0xFFFFFF : 0x00A8F3),
+            (!isMono && selNext) ? (strokePx + 1) : strokePx
+        );
+        dc.setColor((isMono && selNext) ? 0x000000 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(nextX + (actW / 2), actY + (actH / 2), fMicro, nextLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+    }
 
-            var padW = isMono ? (w - 12) : (190.0 * s).toNumber();
-            var kGap = isMono ? 2 : (4.0 * s).toNumber();
-            if (kGap < 2) { kGap = 2; }
-            var kEndY = actY - (isMono ? 3 : (4.2 * s).toNumber());
-            var gridAvailH = kEndY - kStartY;
-            var keyW = (padW - (3 * kGap)) / 4;
-            var keyH = (gridAvailH - (2 * kGap)) / 3;
-            var minKeyH = isMono ? 17 : (18.0 * s).toNumber();
-            if (keyH < minKeyH) {
-                keyH = minKeyH;
-            }
-            var kStartX = cx - (padW / 2);
+    (:typecheck(false))
+    function drawScreen2Biometrics(
+        dc as Graphics.Dc,
+        w as Lang.Number,
+        h as Lang.Number,
+        s as Lang.Float,
+        isMono as Lang.Boolean
+    ) as Void {
+        var fMicro = getMicroFont();
+        var fLabel = getLabelFont();
+        var fValue = getValueFont();
+        var cx = w / 2;
+        var strokePx = (w >= 340) ? 2 : 1;
+        var isCompactMono = (h <= 160);
 
-            lastPadStartX = kStartX;
-            lastPadStartY = kStartY;
-            lastKeyW = keyW;
-            lastKeyH = keyH;
-            lastKeyGap = kGap;
-            lastActY = actY;
-            lastActH = actH;
+        drawArchery101010Header(dc, w, h, s, tr("BIOMETRÍA", "BIOMETRICS"), false, isMono);
 
-            for (var k = 0; k < 12; k++) {
-                var r = k / 4;
-                var c = k % 4;
-                var kx = kStartX + c * (keyW + kGap);
-                var ky = kStartY + r * (keyH + kGap);
-                var isSel = isPadCursorActive && (k == selectedScoreIdx);
+        var cardW = isMono ? (w - 12) : (164.0 * s).toNumber();
+        var cardH = isMono ? (isCompactMono ? 34 : 38) : (44.0 * s).toNumber();
+        var cardX = cx - (cardW / 2);
+        var card1Y = isMono ? 62 : (68.0 * s).toNumber();
+        var card2Y = isMono ? (card1Y + cardH + 3) : (119.0 * s).toNumber();
+        var innerMaxW = cardW - 10;
 
-                var bgCol = isMono
-                    ? (isSel ? 0xFFFFFF : 0x000000)
-                    : (isSel ? 0x1E293B : ((k < 3) ? 0x121107 : ((k < 5) ? 0x160708 : ((k < 7) ? 0x061320 : 0x0B0E15))));
-                var borderCol = isMono
-                    ? 0xFFFFFF
-                    : (isSel ? 0xFFFFFF : ((k < 3) ? 0xFFE500 : ((k < 5) ? 0xFF1E1E : ((k < 7) ? 0x00A8F3 : 0x475569))));
-                var txtCol = isMono
-                    ? (isSel ? 0x000000 : 0xFFFFFF)
-                    : (isSel ? 0xFFFFFF : ((k < 3) ? 0xFFE500 : ((k == 11) ? 0xCBD5E1 : Graphics.COLOR_WHITE)));
-                var kStroke = (!isMono && isSel) ? (strokePx + 1) : strokePx;
+        drawCrispBox(dc, cardX, card1Y, cardW, cardH, isMono ? 5 : (9.0 * s).toNumber(), isMono ? 0x000000 : 0x07090E, isMono ? 0xFFFFFF : 0x00A8F3, strokePx);
+        var distHdrFull = tr("DISTANCIA · ", "DISTANCE · ") + stepsCount.toString() + tr(" PASOS", " STEPS");
+        var distHdr = (dc.getTextWidthInPixels(distHdrFull, fMicro) <= innerMaxW) ? distHdrFull : (stepsCount.toString() + tr(" PASOS", " STEPS"));
+        dc.setColor(isMono ? 0xFFFFFF : 0x94A3B8, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, card1Y + (isMono ? 10 : (13.0 * s).toNumber()), fMicro, distHdr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        var walkedDualStr = formatWalkedDual(distanceWalkedM);
+        var distFont = pickFittingFont(dc, walkedDualStr, innerMaxW, fValue, fLabel, fMicro);
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, card1Y + (isMono ? (cardH - 11) : (30.0 * s).toNumber()), distFont, walkedDualStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-                drawCrispBox(dc, kx, ky, keyW, keyH, isMono ? 3 : (6.5 * s).toNumber(), bgCol, borderCol, kStroke);
-                var keyFont = pickFittingFont(dc, scoreLabels[k], keyW - 4, fValue, fLabel, fMicro);
-                dc.setColor(txtCol, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(kx + (keyW / 2), ky + (keyH / 2), keyFont, scoreLabels[k], Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            }
+        drawCrispBox(dc, cardX, card2Y, cardW, cardH, isMono ? 5 : (9.0 * s).toNumber(), isMono ? 0x000000 : 0x07090E, isMono ? 0xFFFFFF : 0xFF1E1E, strokePx);
+        dc.setColor(isMono ? 0xFFFFFF : 0x94A3B8, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, card2Y + (isMono ? 10 : (13.0 * s).toNumber()), fMicro, tr("ENERGÍA", "ENERGY"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        var kcalStr = activeKcal.toString() + " kcal";
+        var kcalFont = pickFittingFont(dc, kcalStr, innerMaxW, fValue, fLabel, fMicro);
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, card2Y + (isMono ? (cardH - 11) : (30.0 * s).toNumber()), kcalFont, kcalStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-            // Bottom Actions: [ 12: BORRAR / DEL ]   [ 13: SIG. TANDA / NEXT END ]
-            var actGap = isMono ? 5 : (6.0 * s).toNumber();
-            var actWTotal = isMono ? (w - 14) : (158.0 * s).toNumber();
-            var actStartX = cx - (actWTotal / 2);
-            var actW = (actWTotal - actGap) / 2;
-            var actBtnInnerW = actW - 8;
+        var bioFootFull = (heartRateBpm >= 35)
+            ? (heartRateBpm.toString() + " BPM · " + arrowsCount.toString() + tr(" FLECHAS", " ARROWS"))
+            : (arrowsCount.toString() + tr(" FLECHAS · ", " ARROWS · ") + bowPoundageLbs.toString() + " LBS");
+        var bioFootShort = (heartRateBpm >= 35)
+            ? (heartRateBpm.toString() + " BPM · " + arrowsCount.toString() + tr(" FL", " AR"))
+            : (arrowsCount.toString() + tr(" FL · ", " AR · ") + bowPoundageLbs.toString() + " LBS");
+        var bioFoot = (dc.getTextWidthInPixels(bioFootFull, fMicro) <= innerMaxW) ? bioFootFull : bioFootShort;
+        var bioFootY = isMono ? (card2Y + cardH + (isCompactMono ? 8 : 11)) : (177.0 * s).toNumber();
+        dc.setColor(isMono ? 0xFFFFFF : 0x94A3B8, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, bioFootY, fMicro, bioFoot, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+    }
 
-            var selDel = isPadCursorActive && (selectedScoreIdx == 12);
-            var delLbl = tr("BORRAR", "DEL");
-            drawCrispBox(
-                dc,
-                actStartX,
-                actY,
-                actW,
-                actH,
-                actH / 2,
-                isMono ? (selDel ? 0xFFFFFF : 0x000000) : (selDel ? 0x260709 : 0x0B0E15),
-                isMono ? 0xFFFFFF : (selDel ? 0xFFFFFF : 0x475569),
-                (!isMono && selDel) ? (strokePx + 1) : strokePx
-            );
-            dc.setColor((isMono && selDel) ? 0x000000 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(actStartX + (actW / 2), actY + (actH / 2), fMicro, delLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+    (:typecheck(false))
+    function drawScreen3Summary(
+        dc as Graphics.Dc,
+        w as Lang.Number,
+        h as Lang.Number,
+        s as Lang.Float,
+        isMono as Lang.Boolean,
+        now as Lang.Number
+    ) as Void {
+        var fMicro = getMicroFont();
+        var fLabel = getLabelFont();
+        var fValue = getValueFont();
+        var cx = w / 2;
+        var strokePx = (w >= 340) ? 2 : 1;
+        var isCompactMono = (h <= 160);
+        var isConnectedNow = (isCloudSynced || isBleConnected);
+        var maxPillTxtW = isMono ? (w - 76) : (152.0 * s).toNumber();
 
-            var selNext = isPadCursorActive && (selectedScoreIdx == 13);
-            var nextFull = tr("SIG. TANDA", "NEXT END");
-            var nextShort = tr("SIG.", "NEXT");
-            var nextLbl = (dc.getTextWidthInPixels(nextFull, fMicro) <= actBtnInnerW) ? nextFull : nextShort;
-            var nextX = actStartX + actW + actGap;
-            drawCrispBox(
-                dc,
-                nextX,
-                actY,
-                actW,
-                actH,
-                actH / 2,
-                isMono ? (selNext ? 0xFFFFFF : 0x000000) : (selNext ? 0x0B253C : 0x061523),
-                isMono ? 0xFFFFFF : (selNext ? 0xFFFFFF : 0x00A8F3),
-                (!isMono && selNext) ? (strokePx + 1) : strokePx
-            );
-            dc.setColor((isMono && selNext) ? 0x000000 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(nextX + (actW / 2), actY + (actH / 2), fMicro, nextLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        var justSaved = (lastSavedFeedbackMs > 0) && (now < lastSavedFeedbackMs);
+        var warnUnlinked = (mFinishWarnUntilMs > 0) && (now < mFinishWarnUntilMs);
+        var confirmFinishArmed = (mConfirmFinishUntilMs > 0) && (now < mConfirmFinishUntilMs);
+        var confirmResetArmed = (mConfirmResetUntilMs > 0) && (now < mConfirmResetUntilMs);
 
-        } else if (screenIdx == 2) {
-            drawArchery101010Header(dc, w, h, s, tr("BIOMETRÍA", "BIOMETRICS"), false, isMono);
+        var sumStatus = warnUnlinked
+            ? (isMono ? tr("VINCULA APP", "LINK APP") : tr("VINCULA ANTES DE BORRAR", "LINK BEFORE SAVING"))
+            : (confirmFinishArmed
+                ? (isMono ? tr("CONFIRMAR", "CONFIRM") : tr("CONFIRMAR GUARDAR", "CONFIRM SAVE"))
+                : (confirmResetArmed
+                    ? (isMono ? tr("CONFIRMAR", "CONFIRM") : tr("CONFIRMAR NUEVA", "CONFIRM RESET"))
+                    : (justSaved
+                        ? tr("ENVIADO", "SAVED")
+                        : (isConnectedNow ? tr("RESUMEN · SYNC", "SUMMARY · SYNC") : tr("RESUMEN", "SUMMARY")))));
+        if (dc.getTextWidthInPixels(sumStatus, fMicro) > maxPillTxtW) {
+            sumStatus = warnUnlinked
+                ? tr("VINCULA ANTES", "LINK FIRST")
+                : (confirmFinishArmed ? tr("CONFIRMAR", "CONFIRM") : tr("RESUMEN", "SUMMARY"));
+        }
+        drawArchery101010Header(dc, w, h, s, sumStatus, false, isMono);
 
-            var cardW = isMono ? (w - 12) : (164.0 * s).toNumber();
-            var cardH = isMono ? (isCompactMono ? 34 : 38) : (44.0 * s).toNumber();
-            var cardX = cx - (cardW / 2);
-            var card1Y = isMono ? 62 : (68.0 * s).toNumber();
-            var card2Y = isMono ? (card1Y + cardH + 3) : (119.0 * s).toNumber();
-            var innerMaxW = cardW - 10;
+        var sumW = isMono ? (w - 12) : (164.0 * s).toNumber();
+        var sumX = cx - (sumW / 2);
+        var sumY = isMono ? 62 : (70.0 * s).toNumber();
+        var sumH = isMono ? (isCompactMono ? 55 : 62) : (72.0 * s).toNumber();
+        var halfW = (sumW / 2) - 6;
+        var leftColCx = sumX + (sumW / 4);
+        var rightColCx = sumX + ((sumW * 3) / 4);
 
-            drawCrispBox(dc, cardX, card1Y, cardW, cardH, isMono ? 5 : (9.0 * s).toNumber(), isMono ? 0x000000 : 0x07090E, isMono ? 0xFFFFFF : 0x00A8F3, strokePx);
-            var distHdrFull = tr("DISTANCIA · ", "DISTANCE · ") + stepsCount.toString() + tr(" PASOS", " STEPS");
-            var distHdrShort = stepsCount.toString() + tr(" PASOS", " STEPS");
-            var distHdr = (dc.getTextWidthInPixels(distHdrFull, fMicro) <= innerMaxW) ? distHdrFull : distHdrShort;
-            dc.setColor(isMono ? 0xFFFFFF : 0x94A3B8, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, card1Y + (isMono ? 10 : (13.0 * s).toNumber()), fMicro, distHdr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            var distFont = pickFittingFont(dc, walkedDualStr, innerMaxW, fValue, fLabel, fMicro);
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, card1Y + (isMono ? (cardH - 11) : (30.0 * s).toNumber()), distFont, walkedDualStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        drawCrispBox(dc, sumX, sumY, sumW, sumH, isMono ? 5 : (10.0 * s).toNumber(), isMono ? 0x000000 : 0x07090E, isMono ? 0xFFFFFF : (isConnectedNow ? 0x00A8F3 : 0xFFE500), strokePx);
 
-            drawCrispBox(dc, cardX, card2Y, cardW, cardH, isMono ? 5 : (9.0 * s).toNumber(), isMono ? 0x000000 : 0x07090E, isMono ? 0xFFFFFF : 0xFF1E1E, strokePx);
-            dc.setColor(isMono ? 0xFFFFFF : 0x94A3B8, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, card2Y + (isMono ? 10 : (13.0 * s).toNumber()), fMicro, tr("ENERGÍA", "ENERGY"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            var kcalStr = activeKcal.toString() + " kcal";
-            var kcalFont = pickFittingFont(dc, kcalStr, innerMaxW, fValue, fLabel, fMicro);
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, card2Y + (isMono ? (cardH - 11) : (30.0 * s).toNumber()), kcalFont, kcalStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.setColor(isMono ? 0xFFFFFF : 0x94A3B8, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(leftColCx, sumY + (isMono ? 10 : (12.0 * s).toNumber()), fMicro, tr("FLECHAS", "ARROWS"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(rightColCx, sumY + (isMono ? 10 : (12.0 * s).toNumber()), fMicro, tr("PUNTAJE", "SCORE"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-            var bioFootFull = (heartRateBpm >= 35)
-                ? (heartRateBpm.toString() + " BPM · " + arrowsCount.toString() + tr(" FLECHAS", " ARROWS"))
-                : (arrowsCount.toString() + tr(" FLECHAS · ", " ARROWS · ") + bowPoundageLbs.toString() + " LBS");
-            var bioFootShort = (heartRateBpm >= 35)
-                ? (heartRateBpm.toString() + " BPM · " + arrowsCount.toString() + tr(" FL", " AR"))
-                : (arrowsCount.toString() + tr(" FL · ", " AR · ") + bowPoundageLbs.toString() + " LBS");
-            var bioFoot = (dc.getTextWidthInPixels(bioFootFull, fMicro) <= innerMaxW) ? bioFootFull : bioFootShort;
-            var bioFootY = isMono ? (card2Y + cardH + (isCompactMono ? 8 : 11)) : (177.0 * s).toNumber();
-            dc.setColor(isMono ? 0xFFFFFF : 0x94A3B8, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, bioFootY, fMicro, bioFoot, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        var arrValStr = arrowsCount.toString();
+        var arrFont = pickFittingFont(dc, arrValStr, halfW, fValue, fLabel, fMicro);
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(leftColCx, sumY + (isMono ? 25 : (30.0 * s).toNumber()), arrFont, arrValStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-        } else if (screenIdx == 3) {
-            var justSaved = (lastSavedFeedbackMs > 0) && (now < lastSavedFeedbackMs);
-            var warnUnlinked = (mFinishWarnUntilMs > 0) && (now < mFinishWarnUntilMs);
-            var confirmFinishArmed = (mConfirmFinishUntilMs > 0) && (now < mConfirmFinishUntilMs);
-            var confirmResetArmed = (mConfirmResetUntilMs > 0) && (now < mConfirmResetUntilMs);
+        var ptsValStr = totalScore.toString();
+        var ptsFont = pickFittingFont(dc, ptsValStr, halfW, fValue, fLabel, fMicro);
+        dc.setColor(isMono ? 0xFFFFFF : 0xFFE500, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(rightColCx, sumY + (isMono ? 25 : (30.0 * s).toNumber()), ptsFont, ptsValStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-            var sumStatus = warnUnlinked
-                ? (isMono ? tr("VINCULA APP", "LINK APP") : tr("VINCULA ANTES DE BORRAR", "LINK BEFORE SAVING"))
-                : (confirmFinishArmed
-                    ? (isMono ? tr("CONFIRMAR", "CONFIRM") : tr("CONFIRMAR GUARDAR", "CONFIRM SAVE"))
-                    : (confirmResetArmed
-                        ? (isMono ? tr("CONFIRMAR", "CONFIRM") : tr("CONFIRMAR NUEVA", "CONFIRM RESET"))
-                        : (justSaved
-                            ? tr("ENVIADO", "SAVED")
-                            : (isConnectedNow ? tr("RESUMEN · SYNC", "SUMMARY · SYNC") : tr("RESUMEN", "SUMMARY")))));
-            if (dc.getTextWidthInPixels(sumStatus, fMicro) > maxPillTxtW) {
-                sumStatus = warnUnlinked
-                    ? tr("VINCULA ANTES", "LINK FIRST")
-                    : (confirmFinishArmed ? tr("CONFIRMAR", "CONFIRM") : tr("RESUMEN", "SUMMARY"));
-            }
-            drawArchery101010Header(dc, w, h, s, sumStatus, false, isMono);
+        var divY = sumY + (isMono ? 37 : (45.0 * s).toNumber());
+        dc.setColor(isMono ? 0xFFFFFF : 0x1E293B, Graphics.COLOR_TRANSPARENT);
+        dc.drawLine(cx, sumY + 6, cx, divY - 3);
+        dc.drawLine(sumX + 8, divY, sumX + sumW - 8, divY);
 
-            var sumW = isMono ? (w - 12) : (164.0 * s).toNumber();
-            var sumX = cx - (sumW / 2);
-            var sumY = isMono ? 62 : (70.0 * s).toNumber();
-            var sumH = isMono ? (isCompactMono ? 55 : 62) : (72.0 * s).toNumber();
-            var sumInnerW = sumW - 10;
-            var halfW = (sumW / 2) - 6;
-            var leftColCx = sumX + (sumW / 4);
-            var rightColCx = sumX + ((sumW * 3) / 4);
+        var line2 = warnUnlinked
+            ? tr("VINCULA ANTES DE BORRAR", "LINK BEFORE SAVING")
+            : (formatWalkedPrimary(distanceWalkedM) + " · " + activeKcal.toString() + " kcal");
+        dc.setColor(isMono ? 0xFFFFFF : (warnUnlinked ? 0xFF1E1E : Graphics.COLOR_WHITE), Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, sumY + (isMono ? (sumH - 9) : (58.0 * s).toNumber()), fMicro, line2, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-            drawCrispBox(dc, sumX, sumY, sumW, sumH, isMono ? 5 : (10.0 * s).toNumber(), isMono ? 0x000000 : 0x07090E, isMono ? 0xFFFFFF : (isConnectedNow ? 0x00A8F3 : 0xFFE500), strokePx);
+        var ctaTotalW = isMono ? (w - 14) : (158.0 * s).toNumber();
+        var ctaGap = isMono ? 5 : (6.0 * s).toNumber();
+        var ctaBtnW = (ctaTotalW - ctaGap) / 2;
+        var ctaH = isMono ? (isCompactMono ? 20 : 23) : (26.0 * s).toNumber();
+        var ctaStartX = cx - (ctaTotalW / 2);
+        var ctaY = isMono ? (sumY + sumH + 4) : (152.0 * s).toNumber();
+        lastCtaY = ctaY;
+        lastCtaH = ctaH;
 
-            dc.setColor(isMono ? 0xFFFFFF : 0x94A3B8, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(leftColCx, sumY + (isMono ? 10 : (12.0 * s).toNumber()), fMicro, tr("FLECHAS", "ARROWS"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            dc.drawText(rightColCx, sumY + (isMono ? 10 : (12.0 * s).toNumber()), fMicro, tr("PUNTAJE", "SCORE"), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        var rstLbl = confirmResetArmed ? tr("CONFIRMAR", "CONFIRM") : tr("NUEVA", "RESET");
+        drawCrispBox(
+            dc,
+            ctaStartX,
+            ctaY,
+            ctaBtnW,
+            ctaH,
+            ctaH / 2,
+            isMono ? (confirmResetArmed ? 0xFFFFFF : 0x000000) : (confirmResetArmed ? 0x260709 : 0x0B0E15),
+            isMono ? 0xFFFFFF : (confirmResetArmed ? 0xFF1E1E : 0x475569),
+            strokePx
+        );
+        dc.setColor((isMono && confirmResetArmed) ? 0x000000 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(ctaStartX + (ctaBtnW / 2), ctaY + (ctaH / 2), fMicro, rstLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-            var arrValStr = arrowsCount.toString();
-            var arrFont = pickFittingFont(dc, arrValStr, halfW, fValue, fLabel, fMicro);
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(leftColCx, sumY + (isMono ? 25 : (30.0 * s).toNumber()), arrFont, arrValStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        var saveBtnX = ctaStartX + ctaBtnW + ctaGap;
+        var saveFullLbl = confirmFinishArmed ? tr("CONFIRMAR GUARDAR", "CONFIRM SAVE") : (justSaved ? tr("ENVIADO", "SAVED") : tr("GUARDAR", "SAVE"));
+        if (dc.getTextWidthInPixels(saveFullLbl, fMicro) > (ctaBtnW - 6)) {
+            saveFullLbl = confirmFinishArmed ? tr("CONFIRMAR", "CONFIRM") : (justSaved ? tr("ENVIADO", "SAVED") : tr("GUARDAR", "SAVE"));
+        }
+        var saveInv = isMono && (confirmFinishArmed || justSaved);
+        drawCrispBox(
+            dc,
+            saveBtnX,
+            ctaY,
+            ctaBtnW,
+            ctaH,
+            ctaH / 2,
+            isMono ? (saveInv ? 0xFFFFFF : 0x000000) : (confirmFinishArmed ? 0x151105 : 0x061523),
+            isMono ? 0xFFFFFF : ((confirmFinishArmed || justSaved) ? 0xFFE500 : 0x00A8F3),
+            strokePx
+        );
+        dc.setColor(saveInv ? 0x000000 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(saveBtnX + (ctaBtnW / 2), ctaY + (ctaH / 2), fMicro, saveFullLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+    }
 
-            var ptsValStr = totalScore.toString();
-            var ptsFont = pickFittingFont(dc, ptsValStr, halfW, fValue, fLabel, fMicro);
-            dc.setColor(isMono ? 0xFFFFFF : 0xFFE500, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(rightColCx, sumY + (isMono ? 25 : (30.0 * s).toNumber()), ptsFont, ptsValStr, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+    (:typecheck(false))
+    function drawScreen4Pairing(
+        dc as Graphics.Dc,
+        w as Lang.Number,
+        h as Lang.Number,
+        s as Lang.Float,
+        isMono as Lang.Boolean
+    ) as Void {
+        var fMicro = getMicroFont();
+        var fLabel = getLabelFont();
+        var fValue = getValueFont();
+        var cx = w / 2;
+        var strokePx = (w >= 340) ? 2 : 1;
+        var isCompactMono = (h <= 160);
+        var maxPillTxtW = isMono ? (w - 76) : (152.0 * s).toNumber();
 
-            var divY = sumY + (isMono ? 37 : (45.0 * s).toNumber());
-            dc.setColor(isMono ? 0xFFFFFF : 0x1E293B, Graphics.COLOR_TRANSPARENT);
-            dc.drawLine(cx, sumY + 6, cx, divY - 3);
-            dc.drawLine(sumX + 8, divY, sumX + sumW - 8, divY);
+        var pairHeader = isEditingCode
+            ? (tr("EDITAR ", "EDIT ") + (editDigitPos + 1).toString() + "/6")
+            : (isCloudSynced
+                ? tr("VINCULADO", "SYNCED")
+                : (mCloudErrorState.equals("EXPIRED")
+                    ? tr("CÓDIGO EXPIRADO", "CODE EXPIRED")
+                    : (mCloudErrorState.equals("INVALID")
+                        ? tr("CÓDIGO INVÁLIDO", "INVALID CODE")
+                        : (mCloudErrorState.equals("NO_BLE")
+                            ? tr("SIN TELÉFONO BLE", "NO PHONE BLE")
+                            : (mHandshakeInFlight
+                                ? tr("VINCULANDO", "LINKING")
+                                : (hasPairingCode
+                                    ? tr("CÓDIGO NUBE", "CLOUD CODE")
+                                    : (isTouchScreen ? tr("TOCA PARA VINCULAR", "TAP TO LINK") : tr("PULSA VINCULAR", "PRESS TO LINK"))))))));
 
-            var line2 = warnUnlinked
-                ? tr("VINCULA ANTES DE BORRAR", "LINK BEFORE SAVING")
-                : (walkedPrimaryStr + " · " + activeKcal.toString() + " kcal");
-            var line2Font = pickFittingFont(dc, line2, sumInnerW, fMicro, fMicro, fMicro);
-            dc.setColor(isMono ? 0xFFFFFF : (warnUnlinked ? 0xFF1E1E : Graphics.COLOR_WHITE), Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, sumY + (isMono ? (sumH - 9) : (58.0 * s).toNumber()), line2Font, line2, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        if (dc.getTextWidthInPixels(pairHeader, fMicro) > maxPillTxtW) {
+            pairHeader = isEditingCode
+                ? ("EDIT " + (editDigitPos + 1).toString() + "/6")
+                : (isCloudSynced
+                    ? tr("VINCULADO", "SYNCED")
+                    : (mCloudErrorState.equals("EXPIRED")
+                        ? tr("EXPIRADO", "EXPIRED")
+                        : (mCloudErrorState.equals("INVALID")
+                            ? tr("INVÁLIDO", "INVALID")
+                            : (mCloudErrorState.equals("NO_BLE")
+                                ? tr("SIN BLE", "NO BLE")
+                                : tr("VINCULAR", "LINK")))));
+        }
+        drawArchery101010Header(dc, w, h, s, pairHeader, false, isMono);
 
-            var ctaTotalW = isMono ? (w - 14) : (158.0 * s).toNumber();
-            var ctaGap = isMono ? 5 : (6.0 * s).toNumber();
-            var ctaBtnW = (ctaTotalW - ctaGap) / 2;
-            var ctaH = isMono ? (isCompactMono ? 20 : 23) : (26.0 * s).toNumber();
-            var ctaStartX = cx - (ctaTotalW / 2);
-            var ctaY = isMono ? (sumY + sumH + 4) : (152.0 * s).toNumber();
-            lastCtaY = ctaY;
-            lastCtaH = ctaH;
+        var dBoxW = isMono ? (isCompactMono ? 22 : 24) : (23.0 * s).toNumber();
+        var dBoxH = isMono ? (isCompactMono ? 27 : 31) : (38.0 * s).toNumber();
+        var dGap = isMono ? 3 : (4.0 * s).toNumber();
+        var dTotalW = (dBoxW * 6) + (dGap * 5);
+        var dStartX = cx - (dTotalW / 2);
+        var dStartY = isMono ? 62 : (69.0 * s).toNumber();
 
-            var rstLbl = confirmResetArmed ? tr("CONFIRMAR", "CONFIRM") : tr("NUEVA", "RESET");
-            drawCrispBox(
-                dc,
-                ctaStartX,
-                ctaY,
-                ctaBtnW,
-                ctaH,
-                ctaH / 2,
-                isMono ? (confirmResetArmed ? 0xFFFFFF : 0x000000) : (confirmResetArmed ? 0x260709 : 0x0B0E15),
-                isMono ? 0xFFFFFF : (confirmResetArmed ? 0xFF1E1E : 0x475569),
-                strokePx
-            );
-            dc.setColor((isMono && confirmResetArmed) ? 0x000000 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(ctaStartX + (ctaBtnW / 2), ctaY + (ctaH / 2), fMicro, rstLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        lastDigitStartX = dStartX;
+        lastDigitStartY = dStartY;
+        lastDigitW = dBoxW;
+        lastDigitH = dBoxH;
+        lastDigitGap = dGap;
 
-            var saveBtnX = ctaStartX + ctaBtnW + ctaGap;
-            var saveFullLbl = confirmFinishArmed ? tr("CONFIRMAR GUARDAR", "CONFIRM SAVE") : (justSaved ? tr("ENVIADO", "SAVED") : tr("GUARDAR", "SAVE"));
-            if (dc.getTextWidthInPixels(saveFullLbl, fMicro) > (ctaBtnW - 6)) {
-                saveFullLbl = confirmFinishArmed ? tr("CONFIRMAR", "CONFIRM") : (justSaved ? tr("ENVIADO", "SAVED") : tr("GUARDAR", "SAVE"));
-            }
-            var saveInv = isMono && (confirmFinishArmed || justSaved);
-            drawCrispBox(
-                dc,
-                saveBtnX,
-                ctaY,
-                ctaBtnW,
-                ctaH,
-                ctaH / 2,
-                isMono ? (saveInv ? 0xFFFFFF : 0x000000) : (confirmFinishArmed ? 0x151105 : 0x061523),
-                isMono ? 0xFFFFFF : ((confirmFinishArmed || justSaved) ? 0xFFE500 : 0x00A8F3),
-                strokePx
-            );
-            dc.setColor(saveInv ? 0x000000 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(saveBtnX + (ctaBtnW / 2), ctaY + (ctaH / 2), fMicro, saveFullLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        for (var di = 0; di < 6; di++) {
+            var dx = dStartX + di * (dBoxW + dGap);
+            var isCurDigit = isEditingCode && (di == editDigitPos);
+            var dFill = isMono
+                ? (isCurDigit ? 0xFFFFFF : 0x000000)
+                : (isCurDigit ? 0x081523 : 0x0B0E15);
+            var dBorder = isMono
+                ? 0xFFFFFF
+                : (isCurDigit ? 0x00A8F3 : (hasPairingCode ? 0xFFE500 : 0x475569));
+            var dTxtCol = isMono
+                ? (isCurDigit ? 0x000000 : 0xFFFFFF)
+                : (isCurDigit ? Graphics.COLOR_WHITE : (hasPairingCode ? 0xFFE500 : 0x94A3B8));
+            drawCrispBox(dc, dx, dStartY, dBoxW, dBoxH, isMono ? 3 : (5.0 * s).toNumber(), dFill, dBorder, strokePx);
+            dc.setColor(dTxtCol, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(dx + (dBoxW / 2), dStartY + (dBoxH / 2), fValue, pairingDigits[di].toString(), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        }
 
-        } else {
-            // SCREEN 4: 6-DIGIT CLOUD PAIRING -> 256-BIT SESSION TOKEN
-            var pairHeader = isEditingCode
-                ? (tr("EDITAR ", "EDIT ") + (editDigitPos + 1).toString() + "/6")
+        var ctrlY = isMono ? (dStartY + dBoxH + 4) : (116.0 * s).toNumber();
+        var ctrlH = isMono ? (isCompactMono ? 20 : 22) : (25.0 * s).toNumber();
+        var ctrlW = isMono ? (w - 14) : (156.0 * s).toNumber();
+        var cStartX = cx - (ctrlW / 2);
+        var smallW = isMono ? 30 : (36.0 * s).toNumber();
+        var btnGap = isMono ? 4 : (6.0 * s).toNumber();
+        var midW = ctrlW - (2 * smallW) - (2 * btnGap);
+        lastPairCtrlY = ctrlY;
+        lastPairCtrlH = ctrlH;
+
+        drawCrispBox(dc, cStartX, ctrlY, smallW, ctrlH, ctrlH / 2, isMono ? 0x000000 : 0x180709, isMono ? 0xFFFFFF : 0xFF1E1E, strokePx);
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cStartX + (smallW / 2), ctrlY + (ctrlH / 2), fLabel, "-", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        var midX = cStartX + smallW + btnGap;
+        var midLbl = isEditingCode ? tr("SIG >", "NEXT >") : tr("EDITAR", "EDIT");
+        if (dc.getTextWidthInPixels(midLbl, fMicro) > (midW - 6)) {
+            midLbl = "EDIT";
+        }
+        drawCrispBox(dc, midX, ctrlY, midW, ctrlH, ctrlH / 2, isMono ? 0x000000 : 0x0B0E15, isMono ? 0xFFFFFF : 0x475569, strokePx);
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(midX + (midW / 2), ctrlY + (ctrlH / 2), fMicro, midLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        var plusBtnX = midX + midW + btnGap;
+        drawCrispBox(dc, plusBtnX, ctrlY, smallW, ctrlH, ctrlH / 2, isMono ? 0x000000 : 0x061523, isMono ? 0xFFFFFF : 0x00A8F3, strokePx);
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(plusBtnX + (smallW / 2), ctrlY + (ctrlH / 2), fLabel, "+", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        var saveW = isMono ? (w - 14) : (156.0 * s).toNumber();
+        var saveH = isMono ? (isCompactMono ? 20 : 23) : (25.0 * s).toNumber();
+        var saveX = cx - (saveW / 2);
+        var saveY = isMono ? (ctrlY + ctrlH + 4) : (149.0 * s).toNumber();
+        lastPairSaveY = saveY;
+        lastPairSaveH = saveH;
+
+        var saveLbl = isEditingCode
+            ? tr("LISTO · VINCULAR", "DONE · LINK")
+            : (isCloudSynced
+                ? tr("VINCULADO · LIVE", "SYNCED · LIVE")
+                : (mCloudErrorState.equals("EXPIRED")
+                    ? tr("CÓDIGO EXPIRADO", "CODE EXPIRED")
+                    : (mCloudErrorState.equals("INVALID")
+                        ? tr("CÓDIGO INVÁLIDO", "INVALID CODE")
+                        : (mCloudErrorState.equals("NO_BLE")
+                            ? tr("SIN TELÉFONO BLE", "NO PHONE BLE")
+                            : (isTouchScreen ? tr("TOCA PARA VINCULAR", "TAP TO LINK") : tr("PULSA VINCULAR", "PRESS TO LINK"))))));
+        if (dc.getTextWidthInPixels(saveLbl, fMicro) > (saveW - 8)) {
+            saveLbl = isEditingCode
+                ? tr("LISTO", "DONE")
                 : (isCloudSynced
                     ? tr("VINCULADO", "SYNCED")
                     : (mCloudErrorState.equals("EXPIRED")
@@ -3771,136 +4012,54 @@ class Archery101010WatchView extends WatchUi.View {
                             ? tr("CÓDIGO INVÁLIDO", "INVALID CODE")
                             : (mCloudErrorState.equals("NO_BLE")
                                 ? tr("SIN TELÉFONO BLE", "NO PHONE BLE")
-                                : (mHandshakeInFlight
-                                    ? tr("VINCULANDO", "LINKING")
-                                    : (hasPairingCode
-                                        ? tr("CÓDIGO NUBE", "CLOUD CODE")
-                                        : (isTouchScreen ? tr("TOCA PARA VINCULAR", "TAP TO LINK") : tr("PULSA VINCULAR", "PRESS TO LINK"))))))));
+                                : tr("VINCULAR", "LINK")))));
+        }
+        var isErrCta = !isEditingCode && (mCloudErrorState.equals("EXPIRED") || mCloudErrorState.equals("INVALID"));
+        var saveInv4 = isMono && (isEditingCode || isCloudSynced);
+        drawCrispBox(
+            dc,
+            saveX,
+            saveY,
+            saveW,
+            saveH,
+            saveH / 2,
+            isMono ? (saveInv4 ? 0xFFFFFF : 0x000000) : (isErrCta ? 0x220709 : 0x061523),
+            isMono ? 0xFFFFFF : (isErrCta ? 0xFF1E1E : (isCloudSynced ? 0xFFE500 : 0x00A8F3)),
+            strokePx
+        );
+        dc.setColor(saveInv4 ? 0x000000 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, saveY + (saveH / 2), fMicro, saveLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+    }
 
-            if (dc.getTextWidthInPixels(pairHeader, fMicro) > maxPillTxtW) {
-                pairHeader = isEditingCode
-                    ? ("EDIT " + (editDigitPos + 1).toString() + "/6")
-                    : (isCloudSynced
-                        ? tr("VINCULADO", "SYNCED")
-                        : (mCloudErrorState.equals("EXPIRED")
-                            ? tr("EXPIRADO", "EXPIRED")
-                            : (mCloudErrorState.equals("INVALID")
-                                ? tr("INVÁLIDO", "INVALID")
-                                : (mCloudErrorState.equals("NO_BLE")
-                                    ? tr("SIN BLE", "NO BLE")
-                                    : tr("VINCULAR", "LINK")))));
-            }
-            drawArchery101010Header(dc, w, h, s, pairHeader, false, isMono);
+    (:typecheck(false))
+    function drawMainScreen(dc as Graphics.Dc) as Void {
+        recalculateMetrics();
+        var now = System.getTimer();
+        var w = dc.getWidth();
+        var h = dc.getHeight();
+        lastScreenWidth = w;
+        lastScreenHeight = h;
+        var minDim = (w < h) ? w : h;
+        var isMono = (w <= 180 || h <= 180);
+        var s = minDim / 240.0;
 
-            var dBoxW = isMono ? (isCompactMono ? 22 : 24) : (23.0 * s).toNumber();
-            var dBoxH = isMono ? (isCompactMono ? 27 : 31) : (38.0 * s).toNumber();
-            var dGap = isMono ? 3 : (4.0 * s).toNumber();
-            var dTotalW = (dBoxW * 6) + (dGap * 5);
-            var dStartX = cx - (dTotalW / 2);
-            var dStartY = isMono ? 62 : (69.0 * s).toNumber();
+        dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
+        dc.clear();
 
-            lastDigitStartX = dStartX;
-            lastDigitStartY = dStartY;
-            lastDigitW = dBoxW;
-            lastDigitH = dBoxH;
-            lastDigitGap = dGap;
-
-            for (var di = 0; di < 6; di++) {
-                var dx = dStartX + di * (dBoxW + dGap);
-                var isCurDigit = isEditingCode && (di == editDigitPos);
-                var dFill = isMono
-                    ? (isCurDigit ? 0xFFFFFF : 0x000000)
-                    : (isCurDigit ? 0x081523 : 0x0B0E15);
-                var dBorder = isMono
-                    ? 0xFFFFFF
-                    : (isCurDigit ? 0x00A8F3 : (hasPairingCode ? 0xFFE500 : 0x475569));
-                var dTxtCol = isMono
-                    ? (isCurDigit ? 0x000000 : 0xFFFFFF)
-                    : (isCurDigit ? Graphics.COLOR_WHITE : (hasPairingCode ? 0xFFE500 : 0x94A3B8));
-                drawCrispBox(dc, dx, dStartY, dBoxW, dBoxH, isMono ? 3 : (5.0 * s).toNumber(), dFill, dBorder, strokePx);
-                dc.setColor(dTxtCol, Graphics.COLOR_TRANSPARENT);
-                dc.drawText(dx + (dBoxW / 2), dStartY + (dBoxH / 2), fValue, pairingDigits[di].toString(), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            }
-
-            // Touch & Button Row: [-] | [EDITAR > / EDIT >] | [+]
-            var ctrlY = isMono ? (dStartY + dBoxH + 4) : (116.0 * s).toNumber();
-            var ctrlH = isMono ? (isCompactMono ? 20 : 22) : (25.0 * s).toNumber();
-            var ctrlW = isMono ? (w - 14) : (156.0 * s).toNumber();
-            var cStartX = cx - (ctrlW / 2);
-            var smallW = isMono ? 30 : (36.0 * s).toNumber();
-            var btnGap = isMono ? 4 : (6.0 * s).toNumber();
-            var midW = ctrlW - (2 * smallW) - (2 * btnGap);
-            lastPairCtrlY = ctrlY;
-            lastPairCtrlH = ctrlH;
-
-            drawCrispBox(dc, cStartX, ctrlY, smallW, ctrlH, ctrlH / 2, isMono ? 0x000000 : 0x180709, isMono ? 0xFFFFFF : 0xFF1E1E, strokePx);
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cStartX + (smallW / 2), ctrlY + (ctrlH / 2), fLabel, "-", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-
-            var midX = cStartX + smallW + btnGap;
-            var midLbl = isEditingCode ? tr("SIG >", "NEXT >") : tr("EDITAR", "EDIT");
-            if (dc.getTextWidthInPixels(midLbl, fMicro) > (midW - 6)) {
-                midLbl = "EDIT";
-            }
-            drawCrispBox(dc, midX, ctrlY, midW, ctrlH, ctrlH / 2, isMono ? 0x000000 : 0x0B0E15, isMono ? 0xFFFFFF : 0x475569, strokePx);
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(midX + (midW / 2), ctrlY + (ctrlH / 2), fMicro, midLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-
-            var plusBtnX = midX + midW + btnGap;
-            drawCrispBox(dc, plusBtnX, ctrlY, smallW, ctrlH, ctrlH / 2, isMono ? 0x000000 : 0x061523, isMono ? 0xFFFFFF : 0x00A8F3, strokePx);
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(plusBtnX + (smallW / 2), ctrlY + (ctrlH / 2), fLabel, "+", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-
-            // Full-width bottom CTA / Status Pill (shows complete status even on Instinct 2 subscreen displays)
-            var saveW = isMono ? (w - 14) : (156.0 * s).toNumber();
-            var saveH = isMono ? (isCompactMono ? 20 : 23) : (25.0 * s).toNumber();
-            var saveX = cx - (saveW / 2);
-            var saveY = isMono ? (ctrlY + ctrlH + 4) : (149.0 * s).toNumber();
-            lastPairSaveY = saveY;
-            lastPairSaveH = saveH;
-
-            var saveLbl = isEditingCode
-                ? tr("LISTO · VINCULAR", "DONE · LINK")
-                : (isCloudSynced
-                    ? tr("VINCULADO · LIVE", "SYNCED · LIVE")
-                    : (mCloudErrorState.equals("EXPIRED")
-                        ? tr("CÓDIGO EXPIRADO", "CODE EXPIRED")
-                        : (mCloudErrorState.equals("INVALID")
-                            ? tr("CÓDIGO INVÁLIDO", "INVALID CODE")
-                            : (mCloudErrorState.equals("NO_BLE")
-                                ? tr("SIN TELÉFONO BLE", "NO PHONE BLE")
-                                : (isTouchScreen ? tr("TOCA PARA VINCULAR", "TAP TO LINK") : tr("PULSA VINCULAR", "PRESS TO LINK"))))));
-            if (dc.getTextWidthInPixels(saveLbl, fMicro) > (saveW - 8)) {
-                saveLbl = isEditingCode
-                    ? tr("LISTO", "DONE")
-                    : (isCloudSynced
-                        ? tr("VINCULADO", "SYNCED")
-                        : (mCloudErrorState.equals("EXPIRED")
-                            ? tr("CÓDIGO EXPIRADO", "CODE EXPIRED")
-                            : (mCloudErrorState.equals("INVALID")
-                                ? tr("CÓDIGO INVÁLIDO", "INVALID CODE")
-                                : (mCloudErrorState.equals("NO_BLE")
-                                    ? tr("SIN TELÉFONO BLE", "NO PHONE BLE")
-                                    : tr("VINCULAR", "LINK")))));
-            }
-            var isErrCta = !isEditingCode && (mCloudErrorState.equals("EXPIRED") || mCloudErrorState.equals("INVALID"));
-            var saveInv4 = isMono && (isEditingCode || isCloudSynced);
-            drawCrispBox(
-                dc,
-                saveX,
-                saveY,
-                saveW,
-                saveH,
-                saveH / 2,
-                isMono ? (saveInv4 ? 0xFFFFFF : 0x000000) : (isErrCta ? 0x220709 : 0x061523),
-                isMono ? 0xFFFFFF : (isErrCta ? 0xFF1E1E : (isCloudSynced ? 0xFFE500 : 0x00A8F3)),
-                strokePx
-            );
-            dc.setColor(saveInv4 ? 0x000000 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, saveY + (saveH / 2), fMicro, saveLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        if (screenIdx == 0 && analysisMode) {
+            drawScreen0Analysis(dc, w, h, s, isMono, now);
+        } else if (screenIdx == 0) {
+            drawScreen0Counter(dc, w, h, s, isMono, now);
+        } else if (screenIdx == 1) {
+            drawScreen1Scorepad(dc, w, h, s, isMono);
+        } else if (screenIdx == 2) {
+            drawScreen2Biometrics(dc, w, h, s, isMono);
+        } else if (screenIdx == 3) {
+            drawScreen3Summary(dc, w, h, s, isMono, now);
+        } else {
+            drawScreen4Pairing(dc, w, h, s, isMono);
         }
 
-        bootMark("B_DOTS");
         drawPagerDots(dc, w, h, s, isMono);
     }
 }
