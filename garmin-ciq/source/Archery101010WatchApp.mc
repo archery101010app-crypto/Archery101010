@@ -31,11 +31,6 @@ class Archery101010WatchApp extends Application.AppBase {
     }
 
     function onStart(state) as Void {
-        if (Sensor has :setEnabledSensors) {
-            try {
-                Sensor.setEnabledSensors([Sensor.SENSOR_HEARTRATE] as Lang.Array<Sensor.SensorType>);
-            } catch (ex) {}
-        }
         if (Communications has :registerForPhoneAppMessages) {
             try {
                 var cb = method(:onPhoneMessage);
@@ -45,12 +40,16 @@ class Archery101010WatchApp extends Application.AppBase {
         }
     }
 
-    function onActive(state) as Void {
+    function enableHeartRateSensorSafe() as Void {
         if (Sensor has :setEnabledSensors) {
             try {
                 Sensor.setEnabledSensors([Sensor.SENSOR_HEARTRATE] as Lang.Array<Sensor.SensorType>);
             } catch (ex) {}
         }
+    }
+
+    function onActive(state) as Void {
+        enableHeartRateSensorSafe();
         var view = mView;
         if (view != null) {
             try {
@@ -66,6 +65,7 @@ class Archery101010WatchApp extends Application.AppBase {
         var view = mView;
         if (view != null) {
             try {
+                view.pauseSensorTimer();
                 view.unregisterHighFreqAccelerometer();
                 view.saveStateToStorage();
             } catch (ex) {}
@@ -261,8 +261,9 @@ class Archery101010WatchView extends WatchUi.View {
     hidden var mLastHrPushMs as Lang.Number = 0;
     hidden var mSensorTimer as Timer.Timer? = null;
 
-    // BrandLogo & Outfit Athletic Fonts
-    hidden var mBrandLogo as WatchUi.BitmapResource? = null;
+    // BrandLogo & Outfit Athletic Fonts (lazy-loaded in onLayout for Connect IQ 4/5/6 Graphics Pool safety)
+    hidden var mBrandResourcesLoaded as Lang.Boolean = false;
+    hidden var mBrandLogo as WatchUi.BitmapResource or Graphics.BitmapReference or Null = null;
     hidden var mFontMicro as Graphics.FontType? = null;
     hidden var mFontLabel as Graphics.FontType? = null;
     hidden var mFontValue as Graphics.FontType? = null;
@@ -298,16 +299,15 @@ class Archery101010WatchView extends WatchUi.View {
         mLastCloudPollMs = initNow;
         detectHardwareAndMemoryProfile();
         refreshDeviceLocaleAndUnits();
-        loadBrandResources();
         loadStateFromStorage();
         ensureWatchDeviceId();
         initStepBaseline();
-        syncHighFreqAccelerometer();
-        syncGpsTrackingState();
-        ensureSensorTimerRunning();
+    }
 
-        if (hasPairingCode && isValidPairingCode(pairingCode)) {
-            pollFirestoreCloud();
+    function onLayout(dc as Graphics.Dc) as Void {
+        if (!mBrandResourcesLoaded) {
+            mBrandResourcesLoaded = true;
+            loadBrandResources();
         }
     }
 
@@ -353,13 +353,17 @@ class Archery101010WatchView extends WatchUi.View {
 
     function ensureSensorTimerRunning() as Void {
         if (mSensorTimer == null) {
-            var t = new Timer.Timer();
-            t.start(method(:onSensorTick), 100, true);
-            mSensorTimer = t;
+            try {
+                var t = new Timer.Timer();
+                t.start(method(:onSensorTick), 200, true);
+                mSensorTimer = t;
+            } catch (ex) {
+                mSensorTimer = null;
+            }
         }
     }
 
-    function onAppStop() as Void {
+    function pauseSensorTimer() as Void {
         var t = mSensorTimer;
         if (t != null) {
             try {
@@ -367,15 +371,29 @@ class Archery101010WatchView extends WatchUi.View {
             } catch (ex) {}
             mSensorTimer = null;
         }
+    }
+
+    function onAppStop() as Void {
+        pauseSensorTimer();
         unregisterHighFreqAccelerometer();
         saveStateToStorage();
     }
 
     function onShow() as Void {
         refreshDeviceLocaleAndUnits();
-        ensureSensorTimerRunning();
+        mApp.enableHeartRateSensorSafe();
+        syncHighFreqAccelerometer();
         syncGpsTrackingState();
+        ensureSensorTimerRunning();
         markUserActivity(false);
+        if (hasPairingCode && isValidPairingCode(pairingCode) && !isCloudSynced) {
+            pollFirestoreCloud();
+        }
+    }
+
+    function onHide() as Void {
+        pauseSensorTimer();
+        saveStateToStorage();
     }
 
     function syncGpsTrackingState() as Void {
@@ -543,17 +561,10 @@ class Archery101010WatchView extends WatchUi.View {
         } catch (ex) {
             mBrandLogo = null;
         }
-        try {
-            mFontMicro = WatchUi.loadResource(Rez.Fonts.OutfitMicro);
-            mFontLabel = WatchUi.loadResource(Rez.Fonts.OutfitLabel);
-            mFontValue = WatchUi.loadResource(Rez.Fonts.OutfitValue);
-            mFontHero = WatchUi.loadResource(Rez.Fonts.OutfitHero);
-        } catch (ex) {
-            mFontMicro = Graphics.FONT_XTINY;
-            mFontLabel = Graphics.FONT_XTINY;
-            mFontValue = Graphics.FONT_SMALL;
-            mFontHero = Graphics.FONT_NUMBER_MEDIUM;
-        }
+        try { mFontMicro = WatchUi.loadResource(Rez.Fonts.OutfitMicro); } catch (ex) { mFontMicro = Graphics.FONT_XTINY; }
+        try { mFontLabel = WatchUi.loadResource(Rez.Fonts.OutfitLabel); } catch (ex) { mFontLabel = Graphics.FONT_XTINY; }
+        try { mFontValue = WatchUi.loadResource(Rez.Fonts.OutfitValue); } catch (ex) { mFontValue = Graphics.FONT_SMALL; }
+        try { mFontHero = WatchUi.loadResource(Rez.Fonts.OutfitHero); } catch (ex) { mFontHero = Graphics.FONT_NUMBER_MEDIUM; }
     }
 
     function initStepBaseline() as Void {
@@ -1063,18 +1074,6 @@ class Archery101010WatchView extends WatchUi.View {
                     var hrVal = hrInfo.heartRate;
                     if (hrVal != null) {
                         curHr = hrVal.toNumber();
-                    }
-                }
-                if (curHr == 0 && (Toybox has :ActivityMonitor) && (ActivityMonitor has :getHeartRateHistory)) {
-                    var hrIter = ActivityMonitor.getHeartRateHistory(1, true);
-                    if (hrIter != null) {
-                        var hrSample = hrIter.next();
-                        if (hrSample != null) {
-                            var histHr = hrSample.heartRate;
-                            if (histHr != null && histHr != ActivityMonitor.INVALID_HR_SAMPLE) {
-                                curHr = histHr.toNumber();
-                            }
-                        }
                     }
                 }
                 if (curHr >= 35 && curHr <= 240) {
