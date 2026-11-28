@@ -31,13 +31,84 @@ class Archery101010WatchApp extends Application.AppBase {
     }
 
     function onStart(state) as Void {
-        if (Communications has :registerForPhoneAppMessages) {
+        readBootDiagnostics();
+        bootStage("A_START");
+        if (!isBootSkipped("A_START") && (Communications has :registerForPhoneAppMessages)) {
             try {
                 var cb = method(:onPhoneMessage);
                 mPhoneMsgCallback = cb;
                 Communications.registerForPhoneAppMessages(cb);
             } catch (ex) {}
         }
+    }
+
+    // =========================================================================
+    // Self-Healing Boot Guard: Monkey C fatal VM errors (Unexpected Type, Symbol
+    // Not Found, Out Of Memory, Permission Required...) cannot be caught by
+    // try/catch. Each risky startup stage is recorded in Storage before running;
+    // if the previous launch died mid-stage, that stage is skipped on next launch
+    // and its code is shown on screen so the exact cause is visible on device.
+    // =========================================================================
+    hidden const BOOT_GUARD_VER = "2.176";
+    public var mBootPrevStage as Lang.String = "";
+    public var mBootSkips as Lang.String = ",";
+    public var mBootOk as Lang.Boolean = false;
+
+    function readBootDiagnostics() as Void {
+        if (!(Application has :Storage)) {
+            return;
+        }
+        try {
+            var ver = Application.Storage.getValue("bootGuardVer");
+            var skips = Application.Storage.getValue("bootSafeSkips");
+            if (ver instanceof Lang.String && ver.equals(BOOT_GUARD_VER) && skips instanceof Lang.String && skips.length() > 0) {
+                mBootSkips = skips;
+            } else {
+                mBootSkips = ",";
+            }
+            var prev = Application.Storage.getValue("bootStage");
+            if (prev instanceof Lang.String && prev.length() > 0 && !prev.equals("OK")) {
+                mBootPrevStage = prev;
+                if (mBootSkips.find("," + prev + ",") == null) {
+                    mBootSkips = mBootSkips + prev + ",";
+                }
+            }
+            Application.Storage.setValue("bootGuardVer", BOOT_GUARD_VER);
+            Application.Storage.setValue("bootSafeSkips", mBootSkips);
+        } catch (ex) {}
+    }
+
+    function bootStage(name as Lang.String) as Void {
+        if (mBootOk || !(Application has :Storage)) {
+            return;
+        }
+        try {
+            Application.Storage.setValue("bootStage", name);
+        } catch (ex) {}
+    }
+
+    function markBootOk() as Void {
+        if (mBootOk) {
+            return;
+        }
+        mBootOk = true;
+        if (Application has :Storage) {
+            try {
+                Application.Storage.setValue("bootStage", "OK");
+            } catch (ex) {}
+        }
+    }
+
+    function isBootSkipped(name as Lang.String) as Lang.Boolean {
+        return mBootSkips.find("," + name + ",") != null;
+    }
+
+    function bootDiagLabel() as Lang.String {
+        if (mBootSkips.length() <= 1) {
+            return "";
+        }
+        var lbl = mBootSkips.substring(1, mBootSkips.length() - 1);
+        return (lbl != null) ? lbl : "";
     }
 
     function enableHeartRateSensorSafe() as Void {
@@ -122,6 +193,7 @@ class Archery101010WatchApp extends Application.AppBase {
     }
 
     function getInitialView() {
+        bootStage("A_VIEW");
         var view = new Archery101010WatchView(self);
         mView = view;
         var delegate = new Archery101010WatchDelegate(view);
@@ -291,23 +363,42 @@ class Archery101010WatchView extends WatchUi.View {
     public var lastPairSaveY as Lang.Number = 149;
     public var lastPairSaveH as Lang.Number = 25;
 
+    hidden var mBootWindowUntilMs as Lang.Number = 0;
+
     function initialize(app as Archery101010WatchApp) {
         View.initialize();
         mApp = app;
         var initNow = System.getTimer();
         mLastActivityMs = initNow;
         mLastCloudPollMs = initNow;
-        detectHardwareAndMemoryProfile();
-        refreshDeviceLocaleAndUnits();
-        loadStateFromStorage();
-        ensureWatchDeviceId();
-        initStepBaseline();
+        mApp.bootStage("V_HW");
+        if (!mApp.isBootSkipped("V_HW")) {
+            detectHardwareAndMemoryProfile();
+            refreshDeviceLocaleAndUnits();
+        }
+        mApp.bootStage("V_STORE");
+        if (!mApp.isBootSkipped("V_STORE")) {
+            loadStateFromStorage();
+        }
+        mApp.bootStage("V_DEVID");
+        if (!mApp.isBootSkipped("V_DEVID")) {
+            ensureWatchDeviceId();
+        } else {
+            mWatchDeviceId = "GARMIN-" + (System.getTimer() % 100000000).toString();
+        }
+        mApp.bootStage("V_STEPS");
+        if (!mApp.isBootSkipped("V_STEPS")) {
+            initStepBaseline();
+        }
     }
 
     function onLayout(dc as Graphics.Dc) as Void {
         if (!mBrandResourcesLoaded) {
             mBrandResourcesLoaded = true;
-            loadBrandResources();
+            if (!mApp.isBootSkipped("L_RES") && !mApp.isBootSkipped("U_DRAW")) {
+                mApp.bootStage("L_RES");
+                loadBrandResources();
+            }
         }
     }
 
@@ -380,14 +471,49 @@ class Archery101010WatchView extends WatchUi.View {
     }
 
     function onShow() as Void {
-        refreshDeviceLocaleAndUnits();
-        mApp.enableHeartRateSensorSafe();
-        syncHighFreqAccelerometer();
-        syncGpsTrackingState();
-        ensureSensorTimerRunning();
-        markUserActivity(false);
-        if (hasPairingCode && isValidPairingCode(pairingCode) && !isCloudSynced) {
-            pollFirestoreCloud();
+        if (!mApp.mBootOk) {
+            mBootWindowUntilMs = System.getTimer() + 5000;
+        }
+        if (!mApp.isBootSkipped("V_HW")) {
+            refreshDeviceLocaleAndUnits();
+        }
+        mApp.bootStage("S_HR");
+        if (!mApp.isBootSkipped("S_HR")) {
+            mApp.enableHeartRateSensorSafe();
+        }
+        mApp.bootStage("S_ACCEL");
+        if (!mApp.isBootSkipped("S_ACCEL")) {
+            syncHighFreqAccelerometer();
+        }
+        mApp.bootStage("S_GPS");
+        if (!mApp.isBootSkipped("S_GPS")) {
+            syncGpsTrackingState();
+        }
+        mApp.bootStage("S_TIMER");
+        if (!mApp.isBootSkipped("S_TIMER")) {
+            ensureSensorTimerRunning();
+        }
+        mApp.bootStage("S_CLOUD");
+        if (!mApp.isBootSkipped("S_CLOUD")) {
+            markUserActivity(false);
+            if (hasPairingCode && isValidPairingCode(pairingCode) && !isCloudSynced) {
+                pollFirestoreCloud();
+            }
+        }
+        mApp.bootStage("U_WAIT");
+        if (mApp.isBootSkipped("S_TIMER")) {
+            // Without the sensor timer, close the boot window after the first frame
+            mBootWindowUntilMs = System.getTimer();
+        }
+    }
+
+    function isInBootWindow() as Lang.Boolean {
+        return !mApp.mBootOk && mBootWindowUntilMs > 0;
+    }
+
+    function closeBootWindowIfElapsed(now as Lang.Number) as Void {
+        if (!mApp.mBootOk && mBootWindowUntilMs > 0 && now >= mBootWindowUntilMs) {
+            mApp.markBootOk();
         }
     }
 
@@ -1029,8 +1155,11 @@ class Archery101010WatchView extends WatchUi.View {
 
     function onSensorTick() as Void {
         var now = System.getTimer();
+        var inBoot = isInBootWindow();
 
         // Always update ActivityMonitor steps
+        if (inBoot) { mApp.bootStage("T_STEPS"); }
+        if (!mApp.isBootSkipped("T_STEPS") && !mApp.isBootSkipped("V_STEPS")) {
         try {
             if (Toybox has :ActivityMonitor) {
                 var monInfo = ActivityMonitor.getInfo();
@@ -1063,9 +1192,11 @@ class Archery101010WatchView extends WatchUi.View {
                 }
             }
         } catch (ex) {}
+        }
 
         // Sample optical heart rate every ~2.0s
-        if (now < mLastHrSampleMs || (now - mLastHrSampleMs) >= 2000) {
+        if (inBoot) { mApp.bootStage("T_HR"); }
+        if (!mApp.isBootSkipped("T_HR") && (now < mLastHrSampleMs || (now - mLastHrSampleMs) >= 2000)) {
             mLastHrSampleMs = now;
             try {
                 var curHr = 0;
@@ -1097,7 +1228,8 @@ class Archery101010WatchView extends WatchUi.View {
         }
 
         // 3-Tier Adaptive Cloud Polling + Offline Queue Retry
-        if (hasPairingCode && isValidPairingCode(pairingCode) && !isEditingCode) {
+        if (inBoot) { mApp.bootStage("T_POLL"); }
+        if (!mApp.isBootSkipped("T_POLL") && hasPairingCode && isValidPairingCode(pairingCode) && !isEditingCode) {
             if (mHandshakeBlockedCode.length() == 0 || !mHandshakeBlockedCode.equals(pairingCode)) {
                 if (now < mLastCloudPollMs) {
                     mLastCloudPollMs = now;
@@ -1134,6 +1266,10 @@ class Archery101010WatchView extends WatchUi.View {
             } else {
                 WatchUi.requestUpdate();
             }
+        }
+        if (inBoot) {
+            mApp.bootStage("T_DONE");
+            closeBootWindowIfElapsed(now);
         }
     }
 
@@ -3004,6 +3140,50 @@ class Archery101010WatchView extends WatchUi.View {
 
     (:typecheck(false))
     function onUpdate(dc as Graphics.Dc) as Void {
+        var bootNow = System.getTimer();
+        var inBoot = isInBootWindow();
+        if (mApp.isBootSkipped("U_DRAW")) {
+            drawSafeModeScreen(dc);
+        } else {
+            if (inBoot) { mApp.bootStage("U_DRAW"); }
+            drawMainScreen(dc);
+            var diag = mApp.bootDiagLabel();
+            if (diag.length() > 0) {
+                var dw = dc.getWidth();
+                var dh = dc.getHeight();
+                dc.setColor(0x94A3B8, Graphics.COLOR_TRANSPARENT);
+                dc.drawText(dw / 2, dh - (dh / 9), Graphics.FONT_XTINY, "SAFE " + diag, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            }
+        }
+        if (inBoot) {
+            mApp.bootStage("U_DONE");
+            if (mApp.isBootSkipped("S_TIMER")) {
+                closeBootWindowIfElapsed(bootNow);
+            }
+        }
+    }
+
+    // Minimal system-font render used only if the full renderer crashed on a previous launch
+    (:typecheck(false))
+    function drawSafeModeScreen(dc as Graphics.Dc) as Void {
+        var w = dc.getWidth();
+        var h = dc.getHeight();
+        var cx = w / 2;
+        dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
+        dc.clear();
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, h / 5, Graphics.FONT_XTINY, "ARCHERY 101010", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(cx, h / 2 - (h / 10), Graphics.FONT_NUMBER_MEDIUM, arrowsCount.toString(), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.drawText(cx, h / 2 + (h / 12), Graphics.FONT_XTINY, isSpanish ? "FLECHAS" : "ARROWS", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        if (heartRateBpm >= 35) {
+            dc.drawText(cx, h / 2 + (h / 6), Graphics.FONT_XTINY, heartRateBpm.toString() + " BPM", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        }
+        dc.setColor(0xFFE500, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, h - (h / 5), Graphics.FONT_XTINY, "SAFE " + mApp.bootDiagLabel(), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+    }
+
+    (:typecheck(false))
+    function drawMainScreen(dc as Graphics.Dc) as Void {
         recalculateMetrics();
         var now = System.getTimer();
         var w = dc.getWidth();

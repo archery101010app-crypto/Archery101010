@@ -1,6 +1,6 @@
 {
   "name": "archery-app",
-  "version": "2.175.0",
+  "version": "2.176.0",
   "private": true,
   "engines": {
     "node": ">=22.6.0"
