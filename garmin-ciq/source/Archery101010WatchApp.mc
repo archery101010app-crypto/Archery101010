@@ -49,7 +49,7 @@ class Archery101010WatchApp extends Application.AppBase {
     // if the previous launch died mid-stage, that stage is skipped on next launch
     // and its code is shown on screen so the exact cause is visible on device.
     // =========================================================================
-    hidden const BOOT_GUARD_VER = "2.177";
+    hidden const BOOT_GUARD_VER = "2.178";
     public var mBootPrevStage as Lang.String = "";
     public var mBootSkips as Lang.String = ",";
     public var mBootOk as Lang.Boolean = false;
@@ -3071,6 +3071,7 @@ class Archery101010WatchView extends WatchUi.View {
             dc.drawText(topCx, logoTopY + 5, fMicro, "ARCHERY 101010", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         }
 
+        bootMark("B_PILL");
         var pillY = logoBottomY + (isMono ? 3 : ((compact ? 4.0 : 6.0) * s).toNumber());
         var fontH = dc.getFontHeight(fMicro);
         var minPillH = isMono ? 15 : ((compact ? 15.0 : 17.0) * s).toNumber();
@@ -3156,7 +3157,7 @@ class Archery101010WatchView extends WatchUi.View {
     function onUpdate(dc as Graphics.Dc) as Void {
         var bootNow = System.getTimer();
         var inBoot = isInBootWindow();
-        if (mApp.isBootSkipped("U_BODY")) {
+        if (mApp.isBootSkipped("U_BODY") || mApp.mBootSkips.find(",B_") != null) {
             drawSafeModeScreen(dc);
         } else {
             mDrawStage = mApp.isBootSkipped("U_FONT") ? "U_BODY" : "U_FONT";
@@ -3199,6 +3200,7 @@ class Archery101010WatchView extends WatchUi.View {
 
     (:typecheck(false))
     function drawMainScreen(dc as Graphics.Dc) as Void {
+        bootMark("B_PRE");
         recalculateMetrics();
         var now = System.getTimer();
         var w = dc.getWidth();
@@ -3323,6 +3325,7 @@ class Archery101010WatchView extends WatchUi.View {
             }
             drawArchery101010Header(dc, w, h, s, pillTxt, true, isMono);
 
+            bootMark("B_DIGIT");
             var d3 = (arrowsCount / 1000) % 10;
             var d2 = (arrowsCount / 100) % 10;
             var d1 = (arrowsCount / 10) % 10;
@@ -3346,6 +3349,7 @@ class Archery101010WatchView extends WatchUi.View {
                 dc.drawText(rx + (boxW / 2), startY + (boxH / 2), fHero, digits[i].toString(), Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
             }
 
+            bootMark("B_BTN");
             var rowY = isMono ? (startY + boxH + 4) : (118.0 * s).toNumber();
             var rowW = totalW;
             var btnGap = isMono ? 5 : (7.0 * s).toNumber();
@@ -3363,6 +3367,7 @@ class Archery101010WatchView extends WatchUi.View {
             dc.setColor(isMono ? 0x000000 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             dc.drawText(plusX + (btnW / 2), rowY + (btnH / 2), fValue, "+1", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
+            bootMark("B_TELEM");
             var telemStr = walkedPrimaryStr + " · " + activeKcal.toString() + " kcal";
             var telemY = isMono ? (rowY + btnH + (isCompactMono ? 9 : 11)) : (168.0 * s).toNumber();
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
@@ -3895,6 +3900,7 @@ class Archery101010WatchView extends WatchUi.View {
             dc.drawText(cx, saveY + (saveH / 2), fMicro, saveLbl, Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         }
 
+        bootMark("B_DOTS");
         drawPagerDots(dc, w, h, s, isMono);
     }
 }
