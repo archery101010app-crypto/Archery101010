@@ -45,6 +45,33 @@ class Archery101010WatchApp extends Application.AppBase {
         }
     }
 
+    function onActive(state) as Void {
+        if (Sensor has :setEnabledSensors) {
+            try {
+                Sensor.setEnabledSensors([Sensor.SENSOR_HEARTRATE] as Lang.Array<Sensor.SensorType>);
+            } catch (ex) {}
+        }
+        var view = mView;
+        if (view != null) {
+            try {
+                view.ensureSensorTimerRunning();
+                view.syncHighFreqAccelerometer();
+                view.syncGpsTrackingState();
+            } catch (ex) {}
+        }
+    }
+
+    function onInactive(state) as Void {
+        setGpsLocationActive(false);
+        var view = mView;
+        if (view != null) {
+            try {
+                view.unregisterHighFreqAccelerometer();
+                view.saveStateToStorage();
+            } catch (ex) {}
+        }
+    }
+
     function setGpsLocationActive(enable as Lang.Boolean) as Void {
         if (enable && !mGpsEnabled) {
             try {
@@ -530,19 +557,29 @@ class Archery101010WatchView extends WatchUi.View {
     }
 
     function initStepBaseline() as Void {
-        if (Toybox has :ActivityMonitor) {
-            var monInfo = ActivityMonitor.getInfo();
-            if (monInfo != null && (monInfo has :steps)) {
-                var rawSteps = monInfo.steps;
-                if (rawSteps != null) {
-                    mLastObservedSteps = rawSteps;
-                    if (stepsCount > 0 && rawSteps >= stepsCount) {
-                        mBaselineSteps = rawSteps - stepsCount;
-                    } else {
-                        mBaselineSteps = rawSteps;
+        try {
+            if (Toybox has :ActivityMonitor) {
+                var monInfo = ActivityMonitor.getInfo();
+                if (monInfo != null && (monInfo has :steps)) {
+                    var rawSteps = monInfo.steps;
+                    if (rawSteps != null) {
+                        mLastObservedSteps = rawSteps;
+                        if (stepsCount > 0 && rawSteps >= stepsCount) {
+                            mBaselineSteps = rawSteps - stepsCount;
+                        } else {
+                            mBaselineSteps = rawSteps;
+                        }
                     }
                 }
             }
+        } catch (ex) {}
+    }
+
+    function safeVibrate(profiles as Lang.Array<Attention.VibeProfile>) as Void {
+        if (Attention has :vibrate) {
+            try {
+                Attention.vibrate(profiles);
+            } catch (ex) {}
         }
     }
 
@@ -766,9 +803,7 @@ class Archery101010WatchView extends WatchUi.View {
         mLastActivityMs = now;
         mLastCloudPollMs = now;
         saveStateToStorage();
-        if (Attention has :vibrate) {
-            Attention.vibrate([new Attention.VibeProfile(70, 60)]);
-        }
+        safeVibrate([new Attention.VibeProfile(70, 60)]);
         pollFirestoreCloud();
         WatchUi.requestUpdate();
     }
@@ -785,9 +820,7 @@ class Archery101010WatchView extends WatchUi.View {
         } else {
             pairingDigits[editDigitPos] = (cur + delta + 10) % 10;
         }
-        if (Attention has :vibrate) {
-            Attention.vibrate([new Attention.VibeProfile(35, 25)]);
-        }
+        safeVibrate([new Attention.VibeProfile(35, 25)]);
         WatchUi.requestUpdate();
     }
 
@@ -813,13 +846,15 @@ class Archery101010WatchView extends WatchUi.View {
         mConfirmFinishUntilMs = 0;
         mConfirmResetUntilMs = 0;
         mConfirmExitUntilMs = 0;
-        if (Toybox has :ActivityMonitor) {
-            var monInfo = ActivityMonitor.getInfo();
-            if (monInfo != null && (monInfo has :steps) && monInfo.steps != null) {
-                mBaselineSteps = monInfo.steps;
-                mLastObservedSteps = monInfo.steps;
+        try {
+            if (Toybox has :ActivityMonitor) {
+                var monInfo = ActivityMonitor.getInfo();
+                if (monInfo != null && (monInfo has :steps) && monInfo.steps != null) {
+                    mBaselineSteps = monInfo.steps;
+                    mLastObservedSteps = monInfo.steps;
+                }
             }
-        }
+        } catch (ex) {}
         syncGpsTrackingState();
         saveStateToStorage();
         WatchUi.requestUpdate();
@@ -866,13 +901,11 @@ class Archery101010WatchView extends WatchUi.View {
                         && ((mAutoFollowAxSum / mAutoFollowCnt) <= 820.0);
                     if (followOk && (mLastAutoShotMs == 0 || now < mLastAutoShotMs || (now - mLastAutoShotMs) >= 5500)) {
                         mLastAutoShotMs = now;
-                        if (Attention has :vibrate) {
-                            Attention.vibrate([
+                        safeVibrate([
                                 new Attention.VibeProfile(70, 50),
                                 new Attention.VibeProfile(0, 40),
                                 new Attention.VibeProfile(85, 75)
                             ]);
-                        }
                         finalizeAnalysisWindow(trigMs - 9500, now, false, true);
                     }
                 }
@@ -987,36 +1020,38 @@ class Archery101010WatchView extends WatchUi.View {
         var now = System.getTimer();
 
         // Always update ActivityMonitor steps
-        if (Toybox has :ActivityMonitor) {
-            var monInfo = ActivityMonitor.getInfo();
-            if (monInfo != null && (monInfo has :steps)) {
-                var curMonSteps = monInfo.steps;
-                if (curMonSteps != null) {
-                    var baseSteps = mBaselineSteps;
-                    if (baseSteps == null || curMonSteps < baseSteps) {
-                        baseSteps = curMonSteps;
-                        mBaselineSteps = baseSteps;
-                    }
-                    var lastObs = mLastObservedSteps;
-                    if (lastObs != null && curMonSteps > lastObs) {
-                        mLastObservedSteps = curMonSteps;
-                        mLastStepTickMs = now;
-                        var deltaSteps = curMonSteps - baseSteps;
-                        if (deltaSteps > stepsCount) {
-                            stepsCount = deltaSteps;
+        try {
+            if (Toybox has :ActivityMonitor) {
+                var monInfo = ActivityMonitor.getInfo();
+                if (monInfo != null && (monInfo has :steps)) {
+                    var curMonSteps = monInfo.steps;
+                    if (curMonSteps != null) {
+                        var baseSteps = mBaselineSteps;
+                        if (baseSteps == null || curMonSteps < baseSteps) {
+                            baseSteps = curMonSteps;
+                            mBaselineSteps = baseSteps;
                         }
-                        recalculateMetrics();
-                        if ((stepsCount - mLastTelemetryPushSteps) >= 3 && hasPairingCode && isValidPairingCode(pairingCode)) {
-                            mLastTelemetryPushSteps = stepsCount;
-                            sendTelemetryPing();
+                        var lastObs = mLastObservedSteps;
+                        if (lastObs != null && curMonSteps > lastObs) {
+                            mLastObservedSteps = curMonSteps;
+                            mLastStepTickMs = now;
+                            var deltaSteps = curMonSteps - baseSteps;
+                            if (deltaSteps > stepsCount) {
+                                stepsCount = deltaSteps;
+                            }
+                            recalculateMetrics();
+                            if ((stepsCount - mLastTelemetryPushSteps) >= 3 && hasPairingCode && isValidPairingCode(pairingCode)) {
+                                mLastTelemetryPushSteps = stepsCount;
+                                sendTelemetryPing();
+                            }
+                            WatchUi.requestUpdate();
+                        } else if (lastObs == null) {
+                            mLastObservedSteps = curMonSteps;
                         }
-                        WatchUi.requestUpdate();
-                    } else if (lastObs == null) {
-                        mLastObservedSteps = curMonSteps;
                     }
                 }
             }
-        }
+        } catch (ex) {}
 
         // Sample optical heart rate every ~2.0s
         if (now < mLastHrSampleMs || (now - mLastHrSampleMs) >= 2000) {
@@ -1079,18 +1114,20 @@ class Archery101010WatchView extends WatchUi.View {
 
         // Fallback single-sample accel check when high-freq listener is unavailable during Analysis mode
         if (analysisMode && !mHighFreqAccelActive) {
-            var info = Sensor.getInfo();
-            if (info != null && (info has :accel)) {
-                var accelArr = info.accel;
-                if (accelArr != null && accelArr.size() >= 3) {
-                    processAccelSampleMg(
-                        accelArr[0].toFloat(),
-                        accelArr[1].toFloat(),
-                        accelArr[2].toFloat(),
-                        now
-                    );
+            try {
+                var info = Sensor.getInfo();
+                if (info != null && (info has :accel)) {
+                    var accelArr = info.accel;
+                    if (accelArr != null && accelArr.size() >= 3 && accelArr[0] != null && accelArr[1] != null && accelArr[2] != null) {
+                        processAccelSampleMg(
+                            accelArr[0].toFloat(),
+                            accelArr[1].toFloat(),
+                            accelArr[2].toFloat(),
+                            now
+                        );
+                    }
                 }
-            }
+            } catch (ex) {}
         }
         if (analysisMode && manualAnalysisRecording) {
             if ((now - manualAnalysisStartTimerMs) >= 24000) {
@@ -1103,70 +1140,79 @@ class Archery101010WatchView extends WatchUi.View {
 
     (:typecheck(false))
     function handleIncomingPhoneData(data) as Void {
-        if (data instanceof Lang.Dictionary) {
-            isBleConnected = true;
-            var bleAct = !(data.hasKey("sessionActive") && data["sessionActive"] == false);
-            var bleSid = (data.hasKey("sessionId") && data["sessionId"] != null) ? data["sessionId"].toString() : currentSessionId;
-            var bleArr = data.hasKey("arrowsCount") ? data["arrowsCount"].toNumber() : arrowsCount;
-            var bleScore = data.hasKey("totalScore") ? data["totalScore"].toNumber() : totalScore;
-            var bleEnd = data.hasKey("currentEndIndex") ? (data["currentEndIndex"].toNumber() + 1) : currentEnd;
-            var nextBleSig = (bleAct ? "1|" : "0|") + bleSid + "|" + bleArr.toString() + "|" + bleScore.toString() + "|" + bleEnd.toString();
-            if (mLastBleStateSig.length() == 0) {
-                mLastBleStateSig = nextBleSig;
-            } else if (!nextBleSig.equals(mLastBleStateSig)) {
-                mLastBleStateSig = nextBleSig;
-                mLastActivityMs = System.getTimer();
-            }
+        try {
+            if (data instanceof Lang.Dictionary) {
+                isBleConnected = true;
+                var bleAct = !(data.hasKey("sessionActive") && data["sessionActive"] == false);
+                var bleSid = (data.hasKey("sessionId") && data["sessionId"] != null) ? data["sessionId"].toString() : currentSessionId;
+                var bleArr = (data.hasKey("arrowsCount") && data["arrowsCount"] != null) ? data["arrowsCount"].toNumber() : arrowsCount;
+                if (bleArr == null) { bleArr = arrowsCount; }
+                var bleScore = (data.hasKey("totalScore") && data["totalScore"] != null) ? data["totalScore"].toNumber() : totalScore;
+                if (bleScore == null) { bleScore = totalScore; }
+                var bleEndRaw = (data.hasKey("currentEndIndex") && data["currentEndIndex"] != null) ? data["currentEndIndex"].toNumber() : null;
+                var bleEnd = (bleEndRaw != null) ? (bleEndRaw + 1) : currentEnd;
+                var nextBleSig = (bleAct ? "1|" : "0|") + bleSid + "|" + bleArr.toString() + "|" + bleScore.toString() + "|" + bleEnd.toString();
+                if (mLastBleStateSig.length() == 0) {
+                    mLastBleStateSig = nextBleSig;
+                } else if (!nextBleSig.equals(mLastBleStateSig)) {
+                    mLastBleStateSig = nextBleSig;
+                    mLastActivityMs = System.getTimer();
+                }
 
-            if (!bleAct) {
-                if (mPendingCmdQueue.size() == 0) {
-                    resetAllCounters("");
+                if (!bleAct) {
+                    if (mPendingCmdQueue.size() == 0) {
+                        resetAllCounters("");
+                    }
+                    return;
                 }
-                return;
-            }
-            if (bleSid.length() > 0 && currentSessionId.length() > 0 && !bleSid.equals(currentSessionId)) {
-                if (mPendingCmdQueue.size() == 0) {
-                    resetAllCounters(bleSid);
+                if (bleSid.length() > 0 && currentSessionId.length() > 0 && !bleSid.equals(currentSessionId)) {
+                    if (mPendingCmdQueue.size() == 0) {
+                        resetAllCounters(bleSid);
+                    }
+                } else if (bleSid.length() > 0) {
+                    currentSessionId = bleSid;
                 }
-            } else if (bleSid.length() > 0) {
-                currentSessionId = bleSid;
-            }
-            if (mPendingCmdQueue.size() == 0 && !mAwaitingPhoneSync) {
-                if (data.hasKey("arrowsCount")) {
-                    arrowsCount = bleArr;
+                if (mPendingCmdQueue.size() == 0 && !mAwaitingPhoneSync) {
+                    if (data.hasKey("arrowsCount") && data["arrowsCount"] != null) {
+                        arrowsCount = bleArr;
+                    }
+                    if (data.hasKey("totalScore") && data["totalScore"] != null) {
+                        totalScore = bleScore;
+                    }
+                    if (data.hasKey("currentEndIndex") && data["currentEndIndex"] != null) {
+                        currentEnd = bleEnd;
+                    }
                 }
-                if (data.hasKey("totalScore")) {
-                    totalScore = bleScore;
+                if (data.hasKey("distanceM") && data["distanceM"] != null) {
+                    var dmV = data["distanceM"].toNumber();
+                    if (dmV != null && dmV > 0) { distanceM = dmV; }
                 }
-                if (data.hasKey("currentEndIndex")) {
-                    currentEnd = bleEnd;
+                if (data.hasKey("gpsActive")) {
+                    mRemoteGpsActive = (data["gpsActive"] == true);
                 }
-            }
-            if (data.hasKey("distanceM")) {
-                distanceM = data["distanceM"].toNumber();
-            }
-            if (data.hasKey("gpsActive")) {
-                mRemoteGpsActive = (data["gpsActive"] == true);
-            }
-            if (data.hasKey("arrowsPerEnd")) {
-                arrowsPerEnd = data["arrowsPerEnd"].toNumber();
-            }
-            if (data.hasKey("endsCount")) {
-                endsCount = data["endsCount"].toNumber();
-            }
-            if (data.hasKey("distanceWalkedM")) {
-                var incomingM = data["distanceWalkedM"].toNumber();
-                if (incomingM > distanceWalkedM) {
-                    distanceWalkedM = incomingM;
+                if (data.hasKey("arrowsPerEnd") && data["arrowsPerEnd"] != null) {
+                    var apeV = data["arrowsPerEnd"].toNumber();
+                    if (apeV != null && apeV > 0) { arrowsPerEnd = apeV; }
                 }
+                if (data.hasKey("endsCount") && data["endsCount"] != null) {
+                    var ecV = data["endsCount"].toNumber();
+                    if (ecV != null && ecV > 0) { endsCount = ecV; }
+                }
+                if (data.hasKey("distanceWalkedM") && data["distanceWalkedM"] != null) {
+                    var incomingM = data["distanceWalkedM"].toNumber();
+                    if (incomingM != null && incomingM > distanceWalkedM) {
+                        distanceWalkedM = incomingM;
+                    }
+                }
+                if (data.hasKey("activeKcal") && data["activeKcal"] != null) {
+                    var kcV = data["activeKcal"].toNumber();
+                    if (kcV != null && kcV >= 0) { activeKcal = kcV; }
+                }
+                syncGpsTrackingState();
+                saveStateToStorage();
+                WatchUi.requestUpdate();
             }
-            if (data.hasKey("activeKcal")) {
-                activeKcal = data["activeKcal"].toNumber();
-            }
-            syncGpsTrackingState();
-            saveStateToStorage();
-            WatchUi.requestUpdate();
-        }
+        } catch (ex) {}
     }
 
     function updateGpsPosition(info as Position.Info?) as Void {
@@ -1257,10 +1303,7 @@ class Archery101010WatchView extends WatchUi.View {
         arrowsCount = arrowsCount + delta;
         if (arrowsCount < 0) { arrowsCount = 0; }
         mAwaitingPhoneSync = true;
-        if (Attention has :vibrate) {
-            var vibe = [new Attention.VibeProfile(isAuto ? 85 : 55, isAuto ? 110 : 50)];
-            Attention.vibrate(vibe);
-        }
+        safeVibrate([new Attention.VibeProfile(isAuto ? 85 : 55, isAuto ? 110 : 50)]);
         recalculateMetrics();
         syncGpsTrackingState();
         var evt = (delta >= 0) ? "INCREMENT_ARROW" : "DECREMENT_ARROW";
@@ -1283,9 +1326,7 @@ class Archery101010WatchView extends WatchUi.View {
         totalScore = totalScore + pts;
         arrowsCount = arrowsCount + 1;
         mAwaitingPhoneSync = true;
-        if (Attention has :vibrate) {
-            Attention.vibrate([new Attention.VibeProfile(65, 60)]);
-        }
+        safeVibrate([new Attention.VibeProfile(65, 60)]);
         recalculateMetrics();
         syncGpsTrackingState();
         enqueueWatchCommand("SCORE_INPUT", val, 1);
@@ -1309,9 +1350,7 @@ class Archery101010WatchView extends WatchUi.View {
             arrowsCount = arrowsCount - 1;
         }
         mAwaitingPhoneSync = true;
-        if (Attention has :vibrate) {
-            Attention.vibrate([new Attention.VibeProfile(50, 40)]);
-        }
+        safeVibrate([new Attention.VibeProfile(50, 40)]);
         recalculateMetrics();
         enqueueWatchCommand("UNDO_ARROW", "", -1);
         saveStateToStorage();
@@ -1330,9 +1369,7 @@ class Archery101010WatchView extends WatchUi.View {
             currentEnd = currentEnd + 1;
         }
         mAwaitingPhoneSync = true;
-        if (Attention has :vibrate) {
-            Attention.vibrate([new Attention.VibeProfile(70, 60)]);
-        }
+        safeVibrate([new Attention.VibeProfile(70, 60)]);
         enqueueWatchCommand("NEXT_END", "", 0);
         saveStateToStorage();
         WatchUi.requestUpdate();
@@ -1358,13 +1395,11 @@ class Archery101010WatchView extends WatchUi.View {
         if (!hasValidActiveLink()) {
             mConfirmFinishUntilMs = 0;
             mFinishWarnUntilMs = now + 4200;
-            if (Attention has :vibrate) {
-                Attention.vibrate([
+            safeVibrate([
                     new Attention.VibeProfile(80, 50),
                     new Attention.VibeProfile(0, 45),
                     new Attention.VibeProfile(80, 50)
                 ]);
-            }
             WatchUi.requestUpdate();
             return;
         }
@@ -1372,9 +1407,7 @@ class Archery101010WatchView extends WatchUi.View {
         // Step 1 of 2-step confirmation: arm for 5 seconds
         if (now >= mConfirmFinishUntilMs) {
             mConfirmFinishUntilMs = now + 5000;
-            if (Attention has :vibrate) {
-                Attention.vibrate([new Attention.VibeProfile(55, 45)]);
-            }
+            safeVibrate([new Attention.VibeProfile(55, 45)]);
             WatchUi.requestUpdate();
             return;
         }
@@ -1382,9 +1415,7 @@ class Archery101010WatchView extends WatchUi.View {
         // Step 2 confirmed: enqueue persistent FINISH_SESSION_FROM_WATCH snapshot first, persist to Storage, then reset active counters
         mConfirmFinishUntilMs = 0;
         mLastLocalActionMs = now;
-        if (Attention has :vibrate) {
-            Attention.vibrate([new Attention.VibeProfile(85, 110)]);
-        }
+        safeVibrate([new Attention.VibeProfile(85, 110)]);
         lastSavedFeedbackMs = now + 3200;
         enqueueWatchCommand("FINISH_SESSION_FROM_WATCH", "", 0);
         saveQueueToStorage();
@@ -1399,17 +1430,13 @@ class Archery101010WatchView extends WatchUi.View {
 
         if (arrowsCount > 0 && now >= mConfirmResetUntilMs) {
             mConfirmResetUntilMs = now + 5000;
-            if (Attention has :vibrate) {
-                Attention.vibrate([new Attention.VibeProfile(55, 45)]);
-            }
+            safeVibrate([new Attention.VibeProfile(55, 45)]);
             WatchUi.requestUpdate();
             return;
         }
 
         mConfirmResetUntilMs = 0;
-        if (Attention has :vibrate) {
-            Attention.vibrate([new Attention.VibeProfile(55, 50)]);
-        }
+        safeVibrate([new Attention.VibeProfile(55, 50)]);
         lastSavedFeedbackMs = 0;
         mAwaitingPhoneSync = false;
         resetAllCounters("");
@@ -1452,9 +1479,7 @@ class Archery101010WatchView extends WatchUi.View {
         screenIdx = 0;
         mLastLocalActionMs = nowT;
         markUserActivity(true);
-        if (Attention has :vibrate) {
-            Attention.vibrate([new Attention.VibeProfile(75, 70)]);
-        }
+        safeVibrate([new Attention.VibeProfile(75, 70)]);
         if (notifyPhone) {
             enqueueWatchCommand("ANALYSIS_MANUAL_START", "", 0);
         }
@@ -1482,13 +1507,11 @@ class Archery101010WatchView extends WatchUi.View {
         manualAnalysisStartTimerMs = 0;
         mLastLocalActionMs = nowT;
         markUserActivity(true);
-        if (Attention has :vibrate) {
-            Attention.vibrate([
+        safeVibrate([
                 new Attention.VibeProfile(70, 55),
                 new Attention.VibeProfile(0, 45),
                 new Attention.VibeProfile(90, 90)
             ]);
-        }
         finalizeAnalysisWindow(startTimer, endTimer, notifyPhone, false);
     }
 
@@ -2156,21 +2179,37 @@ class Archery101010WatchView extends WatchUi.View {
         }
 
         var head = mPendingCmdQueue[0];
+        if (head == null || !(head instanceof Lang.Dictionary) || !head.hasKey("id") || head["id"] == null || !head.hasKey("t") || head["t"] == null) {
+            mPendingCmdQueue = (mPendingCmdQueue.size() > 1)
+                ? (mPendingCmdQueue.slice(1, mPendingCmdQueue.size()) as Lang.Array<Lang.Dictionary>)
+                : ([] as Lang.Array<Lang.Dictionary>);
+            saveQueueToStorage();
+            return;
+        }
         var cmdId = head["id"].toString();
-        var seqNum = head["seq"].toNumber();
-        var tsStr = head["ts"].toString();
+        var seqNumRaw = (head.hasKey("seq") && head["seq"] != null) ? head["seq"].toNumber() : mCmdSeq;
+        var seqNum = (seqNumRaw != null) ? seqNumRaw : mCmdSeq;
+        var tsStr = (head.hasKey("ts") && head["ts"] != null) ? head["ts"].toString() : (Time.now().value().toLong() * 1000l).toString();
         var evtType = head["t"].toString();
-        var valStr = head.hasKey("v") ? head["v"].toString() : "";
-        var deltaNum = head.hasKey("d") ? head["d"].toNumber() : 0;
-        var scNum = head.hasKey("sc") ? head["sc"].toNumber() : totalScore;
+        var valStr = (head.hasKey("v") && head["v"] != null) ? head["v"].toString() : "";
+        var deltaNum = (head.hasKey("d") && head["d"] != null) ? head["d"].toNumber() : 0;
+        if (deltaNum == null) { deltaNum = 0; }
+        var scNum = (head.hasKey("sc") && head["sc"] != null) ? head["sc"].toNumber() : totalScore;
+        if (scNum == null) { scNum = totalScore; }
 
         var isFinishSnap = evtType.equals("FINISH_SESSION_FROM_WATCH");
-        var stNum = (isFinishSnap && head.hasKey("st")) ? head["st"].toNumber() : stepsCount;
-        var dmNum = (isFinishSnap && head.hasKey("dm")) ? head["dm"].toNumber() : distanceWalkedM;
-        var kcNum = (isFinishSnap && head.hasKey("kc")) ? head["kc"].toNumber() : activeKcal;
-        var hrNum = head.hasKey("hr") ? head["hr"].toNumber() : heartRateBpm;
-        var ahrNum = head.hasKey("ahr") ? head["ahr"].toNumber() : avgHeartRateBpm;
-        var mhrNum = head.hasKey("mhr") ? head["mhr"].toNumber() : maxHeartRateBpm;
+        var stNum = (isFinishSnap && head.hasKey("st") && head["st"] != null) ? head["st"].toNumber() : stepsCount;
+        if (stNum == null) { stNum = stepsCount; }
+        var dmNum = (isFinishSnap && head.hasKey("dm") && head["dm"] != null) ? head["dm"].toNumber() : distanceWalkedM;
+        if (dmNum == null) { dmNum = distanceWalkedM; }
+        var kcNum = (isFinishSnap && head.hasKey("kc") && head["kc"] != null) ? head["kc"].toNumber() : activeKcal;
+        if (kcNum == null) { kcNum = activeKcal; }
+        var hrNum = (head.hasKey("hr") && head["hr"] != null) ? head["hr"].toNumber() : heartRateBpm;
+        if (hrNum == null) { hrNum = heartRateBpm; }
+        var ahrNum = (head.hasKey("ahr") && head["ahr"] != null) ? head["ahr"].toNumber() : avgHeartRateBpm;
+        if (ahrNum == null) { ahrNum = avgHeartRateBpm; }
+        var mhrNum = (head.hasKey("mhr") && head["mhr"] != null) ? head["mhr"].toNumber() : maxHeartRateBpm;
+        if (mhrNum == null) { mhrNum = maxHeartRateBpm; }
 
         var cmdFields = {
             "type" => { "stringValue" => evtType },
@@ -2515,7 +2554,8 @@ class Archery101010WatchView extends WatchUi.View {
             return (n != null) ? n : fallback;
         }
         if (node.hasKey("doubleValue") && node["doubleValue"] != null) {
-            return node["doubleValue"].toNumber();
+            var dn = node["doubleValue"].toNumber();
+            return (dn != null) ? dn : fallback;
         }
         return fallback;
     }
@@ -2860,17 +2900,24 @@ class Archery101010WatchView extends WatchUi.View {
         var logoTopY = isMono ? 6 : ((compact ? 19.0 : 22.0) * s).toNumber();
         var logoBottomY = logoTopY + (isMono ? 11 : (12.0 * s).toNumber());
         var logoRes = mBrandLogo;
+        var drewLogo = false;
         if (logoRes != null) {
-            var lw = logoRes.getWidth();
-            var lh = logoRes.getHeight();
-            var lx = topCx - (lw / 2);
-            if (isMono && (lx + lw) > safeTopRightX) {
-                lx = safeTopRightX - lw;
+            try {
+                var lw = logoRes.getWidth();
+                var lh = logoRes.getHeight();
+                var lx = topCx - (lw / 2);
+                if (isMono && (lx + lw) > safeTopRightX) {
+                    lx = safeTopRightX - lw;
+                }
+                if (lx < 4) { lx = 4; }
+                dc.drawBitmap(lx, logoTopY, logoRes);
+                logoBottomY = logoTopY + lh;
+                drewLogo = true;
+            } catch (ex) {
+                drewLogo = false;
             }
-            if (lx < 4) { lx = 4; }
-            dc.drawBitmap(lx, logoTopY, logoRes);
-            logoBottomY = logoTopY + lh;
-        } else {
+        }
+        if (!drewLogo) {
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             dc.drawText(topCx, logoTopY + 5, fMicro, "ARCHERY 101010", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         }
@@ -3156,13 +3203,15 @@ class Archery101010WatchView extends WatchUi.View {
                 var logoRes1 = mBrandLogo;
                 var logoBot1 = 16;
                 if (logoRes1 != null) {
-                    var lw1 = logoRes1.getWidth();
-                    var lh1 = logoRes1.getHeight();
-                    var lx1 = topCenter - (lw1 / 2);
-                    if ((lx1 + lw1) > safeRight) { lx1 = safeRight - lw1; }
-                    if (lx1 < 4) { lx1 = 4; }
-                    dc.drawBitmap(lx1, 5, logoRes1);
-                    logoBot1 = 5 + lh1;
+                    try {
+                        var lw1 = logoRes1.getWidth();
+                        var lh1 = logoRes1.getHeight();
+                        var lx1 = topCenter - (lw1 / 2);
+                        if ((lx1 + lw1) > safeRight) { lx1 = safeRight - lw1; }
+                        if (lx1 < 4) { lx1 = 4; }
+                        dc.drawBitmap(lx1, 5, logoRes1);
+                        logoBot1 = 5 + lh1;
+                    } catch (ex) {}
                 }
 
                 var tagY = logoBot1 + 2;
@@ -3195,12 +3244,19 @@ class Archery101010WatchView extends WatchUi.View {
                 var logoTopY = (19.0 * s).toNumber();
                 var logoBottomY = logoTopY + (11.0 * s).toNumber();
                 var logoResC = mBrandLogo;
+                var drewLogoC = false;
                 if (logoResC != null) {
-                    var lw = logoResC.getWidth();
-                    var lh = logoResC.getHeight();
-                    dc.drawBitmap(cx - (lw / 2), logoTopY, logoResC);
-                    logoBottomY = logoTopY + lh;
-                } else {
+                    try {
+                        var lw = logoResC.getWidth();
+                        var lh = logoResC.getHeight();
+                        dc.drawBitmap(cx - (lw / 2), logoTopY, logoResC);
+                        logoBottomY = logoTopY + lh;
+                        drewLogoC = true;
+                    } catch (ex) {
+                        drewLogoC = false;
+                    }
+                }
+                if (!drewLogoC) {
                     dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
                     dc.drawText(cx, logoTopY + (5.0 * s).toNumber(), fMicro, "ARCHERY 101010", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
                 }
@@ -3664,9 +3720,7 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
             if (!mView.isPadCursorActive) {
                 mView.isPadCursorActive = true;
                 mView.markUserActivity(true);
-                if (Attention has :vibrate) {
-                    Attention.vibrate([new Attention.VibeProfile(45, 30)]);
-                }
+                mView.safeVibrate([new Attention.VibeProfile(45, 30)]);
                 WatchUi.requestUpdate();
             } else if (mView.selectedScoreIdx >= 0 && mView.selectedScoreIdx < 12) {
                 var val = mView.scoreLabels[mView.selectedScoreIdx];
@@ -3704,9 +3758,7 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
         if (mView.screenIdx == 1 && mView.isPadCursorActive) {
             mView.selectedScoreIdx = (mView.selectedScoreIdx + 1) % 14;
             mView.markUserActivity(true);
-            if (Attention has :vibrate) {
-                Attention.vibrate([new Attention.VibeProfile(30, 20)]);
-            }
+            mView.safeVibrate([new Attention.VibeProfile(30, 20)]);
             WatchUi.requestUpdate();
             return true;
         }
@@ -3728,9 +3780,7 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
         if (mView.screenIdx == 1 && mView.isPadCursorActive) {
             mView.selectedScoreIdx = (mView.selectedScoreIdx + 13) % 14;
             mView.markUserActivity(true);
-            if (Attention has :vibrate) {
-                Attention.vibrate([new Attention.VibeProfile(30, 20)]);
-            }
+            mView.safeVibrate([new Attention.VibeProfile(30, 20)]);
             WatchUi.requestUpdate();
             return true;
         }
@@ -3812,9 +3862,7 @@ class Archery101010WatchDelegate extends WatchUi.BehaviorDelegate {
         if (mView.arrowsCount > 0 || mView.mPendingCmdQueue.size() > 0 || mView.manualAnalysisRecording) {
             if (now >= mView.mConfirmExitUntilMs) {
                 mView.mConfirmExitUntilMs = now + 3500;
-                if (Attention has :vibrate) {
-                    Attention.vibrate([new Attention.VibeProfile(55, 50)]);
-                }
+                mView.safeVibrate([new Attention.VibeProfile(55, 50)]);
                 WatchUi.requestUpdate();
                 return true;
             }
