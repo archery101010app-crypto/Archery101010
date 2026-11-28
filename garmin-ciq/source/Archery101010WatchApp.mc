@@ -49,7 +49,7 @@ class Archery101010WatchApp extends Application.AppBase {
     // if the previous launch died mid-stage, that stage is skipped on next launch
     // and its code is shown on screen so the exact cause is visible on device.
     // =========================================================================
-    hidden const BOOT_GUARD_VER = "2.176";
+    hidden const BOOT_GUARD_VER = "2.177";
     public var mBootPrevStage as Lang.String = "";
     public var mBootSkips as Lang.String = ",";
     public var mBootOk as Lang.Boolean = false;
@@ -364,6 +364,13 @@ class Archery101010WatchView extends WatchUi.View {
     public var lastPairSaveH as Lang.Number = 25;
 
     hidden var mBootWindowUntilMs as Lang.Number = 0;
+    hidden var mDrawStage as Lang.String = "U_FONT";
+
+    function bootMark(name as Lang.String) as Void {
+        if (isInBootWindow()) {
+            mApp.bootStage(name);
+        }
+    }
 
     function initialize(app as Archery101010WatchApp) {
         View.initialize();
@@ -395,7 +402,7 @@ class Archery101010WatchView extends WatchUi.View {
     function onLayout(dc as Graphics.Dc) as Void {
         if (!mBrandResourcesLoaded) {
             mBrandResourcesLoaded = true;
-            if (!mApp.isBootSkipped("L_RES") && !mApp.isBootSkipped("U_DRAW")) {
+            if (!mApp.isBootSkipped("L_RES") && !mApp.isBootSkipped("U_BODY")) {
                 mApp.bootStage("L_RES");
                 loadBrandResources();
             }
@@ -682,10 +689,15 @@ class Archery101010WatchView extends WatchUi.View {
 
     (:typecheck(false))
     function loadBrandResources() as Void {
-        try {
-            mBrandLogo = WatchUi.loadResource(Rez.Drawables.BrandLogo);
-        } catch (ex) {
-            mBrandLogo = null;
+        if (!mApp.isBootSkipped("U_LOGO")) {
+            try {
+                mBrandLogo = WatchUi.loadResource(Rez.Drawables.BrandLogo);
+            } catch (ex) {
+                mBrandLogo = null;
+            }
+        }
+        if (mApp.isBootSkipped("U_FONT")) {
+            return;
         }
         try { mFontMicro = WatchUi.loadResource(Rez.Fonts.OutfitMicro); } catch (ex) { mFontMicro = Graphics.FONT_XTINY; }
         try { mFontLabel = WatchUi.loadResource(Rez.Fonts.OutfitLabel); } catch (ex) { mFontLabel = Graphics.FONT_XTINY; }
@@ -3025,7 +3037,7 @@ class Archery101010WatchView extends WatchUi.View {
         isMono as Lang.Boolean
     ) as Void {
         var strokePx = (w >= 340) ? 2 : 1;
-        var fMicro = (mFontMicro != null) ? mFontMicro : Graphics.FONT_XTINY;
+        var fMicro = (mFontMicro != null && !mApp.isBootSkipped("U_FONT")) ? mFontMicro : Graphics.FONT_XTINY;
 
         // Instinct 2 / 2S / 2X physical circular subscreen sits at top-right (x >= w - 62, y < 62)
         var safeTopRightX = isMono ? (w - 63) : w;
@@ -3034,9 +3046,10 @@ class Archery101010WatchView extends WatchUi.View {
 
         var logoTopY = isMono ? 6 : ((compact ? 19.0 : 22.0) * s).toNumber();
         var logoBottomY = logoTopY + (isMono ? 11 : (12.0 * s).toNumber());
-        var logoRes = mBrandLogo;
+        var logoRes = mApp.isBootSkipped("U_LOGO") ? null : mBrandLogo;
         var drewLogo = false;
         if (logoRes != null) {
+            bootMark("U_LOGO");
             try {
                 var lw = logoRes.getWidth();
                 var lh = logoRes.getHeight();
@@ -3052,6 +3065,7 @@ class Archery101010WatchView extends WatchUi.View {
                 drewLogo = false;
             }
         }
+        bootMark(mDrawStage);
         if (!drewLogo) {
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             dc.drawText(topCx, logoTopY + 5, fMicro, "ARCHERY 101010", Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
@@ -3142,10 +3156,11 @@ class Archery101010WatchView extends WatchUi.View {
     function onUpdate(dc as Graphics.Dc) as Void {
         var bootNow = System.getTimer();
         var inBoot = isInBootWindow();
-        if (mApp.isBootSkipped("U_DRAW")) {
+        if (mApp.isBootSkipped("U_BODY")) {
             drawSafeModeScreen(dc);
         } else {
-            if (inBoot) { mApp.bootStage("U_DRAW"); }
+            mDrawStage = mApp.isBootSkipped("U_FONT") ? "U_BODY" : "U_FONT";
+            if (inBoot) { mApp.bootStage(mDrawStage); }
             drawMainScreen(dc);
             var diag = mApp.bootDiagLabel();
             if (diag.length() > 0) {
@@ -3198,10 +3213,10 @@ class Archery101010WatchView extends WatchUi.View {
         var strokePx = (w >= 340) ? 2 : 1;
         var isConnectedNow = (isCloudSynced || isBleConnected);
 
-        var fMicro = (mFontMicro != null) ? mFontMicro : Graphics.FONT_XTINY;
-        var fLabel = (mFontLabel != null) ? mFontLabel : Graphics.FONT_XTINY;
-        var fValue = (mFontValue != null) ? mFontValue : Graphics.FONT_SMALL;
-        var fHero = (mFontHero != null) ? mFontHero : Graphics.FONT_NUMBER_MEDIUM;
+        var fMicro = (mFontMicro != null && !mApp.isBootSkipped("U_FONT")) ? mFontMicro : Graphics.FONT_XTINY;
+        var fLabel = (mFontLabel != null && !mApp.isBootSkipped("U_FONT")) ? mFontLabel : Graphics.FONT_XTINY;
+        var fValue = (mFontValue != null && !mApp.isBootSkipped("U_FONT")) ? mFontValue : Graphics.FONT_SMALL;
+        var fHero = (mFontHero != null && !mApp.isBootSkipped("U_FONT")) ? mFontHero : Graphics.FONT_NUMBER_MEDIUM;
 
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
         dc.clear();
@@ -3379,9 +3394,10 @@ class Archery101010WatchView extends WatchUi.View {
                 var topAvailW = safeRight - leftX;
                 var topCenter = leftX + (topAvailW / 2);
 
-                var logoRes1 = mBrandLogo;
+                var logoRes1 = mApp.isBootSkipped("U_LOGO") ? null : mBrandLogo;
                 var logoBot1 = 16;
                 if (logoRes1 != null) {
+                    bootMark("U_LOGO");
                     try {
                         var lw1 = logoRes1.getWidth();
                         var lh1 = logoRes1.getHeight();
@@ -3391,6 +3407,7 @@ class Archery101010WatchView extends WatchUi.View {
                         dc.drawBitmap(lx1, 5, logoRes1);
                         logoBot1 = 5 + lh1;
                     } catch (ex) {}
+                    bootMark(mDrawStage);
                 }
 
                 var tagY = logoBot1 + 2;
@@ -3422,9 +3439,10 @@ class Archery101010WatchView extends WatchUi.View {
             } else {
                 var logoTopY = (19.0 * s).toNumber();
                 var logoBottomY = logoTopY + (11.0 * s).toNumber();
-                var logoResC = mBrandLogo;
+                var logoResC = mApp.isBootSkipped("U_LOGO") ? null : mBrandLogo;
                 var drewLogoC = false;
                 if (logoResC != null) {
+                    bootMark("U_LOGO");
                     try {
                         var lw = logoResC.getWidth();
                         var lh = logoResC.getHeight();
@@ -3434,6 +3452,7 @@ class Archery101010WatchView extends WatchUi.View {
                     } catch (ex) {
                         drewLogoC = false;
                     }
+                    bootMark(mDrawStage);
                 }
                 if (!drewLogoC) {
                     dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
