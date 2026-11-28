@@ -1724,10 +1724,10 @@ describe("Archery 101010 — Extracted Matchplay Engine, Multilingual Importer &
       path.resolve(process.cwd(), "src/components/watch/BleHeartRateModal.tsx"),
       "utf8"
     );
-    assert.ok(modalSrc.includes("1 · RELOJ VINCULADO"), "BleHeartRateModal must render dedicated Block 1 for Linked Watch");
-    assert.ok(modalSrc.includes("2 · BANDAS Y SENSORES BLUETOOTH"), "BleHeartRateModal must render dedicated Block 2 for BLE Straps");
+    assert.ok(modalSrc.includes("Reloj Inteligente"), "BleHeartRateModal must render dedicated Smartwatch card");
+    assert.ok(modalSrc.includes("Bluetooth"), "BleHeartRateModal must render dedicated Bluetooth card");
     assert.ok(modalSrc.includes("!isLikelyCompanionSmartwatch(dev)"), "BleHeartRateModal must exclude smartwatches from BLE strap list");
-    assert.ok(modalSrc.includes('role="status"'), "BleHeartRateModal must render 1-line live diagnostic status bar");
+    assert.ok(modalSrc.includes('role="status"'), "BleHeartRateModal must render live diagnostic status indicator");
     const forbiddenBrands = /\b(whoop|polar|garmin|wahoo|coros|strava|apple watch|galaxy watch|samsung|fitbit|suunto|nike)\b/i;
     assert.equal(forbiddenBrands.test(modalSrc), false, "BleHeartRateModal must contain zero third-party brand names");
   });

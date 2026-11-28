@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useId, useRef, useState } from "react";
-import { Watch, X } from "lucide-react";
+import { Activity, RotateCcw, Watch, X } from "lucide-react";
 import { useLanguage } from "@/lib/contexts/LanguageContext";
 import { registerModalDismiss } from "@/lib/navigation/backNavigation";
 import {
@@ -277,118 +277,83 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
     ? t("bleHrScanning")
     : tx("EN ESPERA", "STANDBY");
 
-  // Single-line crystal-clear live diagnostic (zero ambiguity, zero truncation)
+  // Concise 1-line status indicator for Hero Pulse card (zero clutter, zero truncation)
   const diagnostic = (() => {
     if (!status.supported && tappedUnsupported) {
       return {
         dotColor: "bg-[#FF1E1E]",
-        text: tx(
-          "Activa el Bluetooth de tu teléfono para conectar.",
-          "Turn on Bluetooth on your phone to connect."
-        )
+        text: tx("Activa el Bluetooth", "Turn on Bluetooth")
       };
     }
-    if (isWearConnected) {
+    if (isWearConnected || (isBleStrapConnected && status.currentBpm >= 30)) {
       return {
         dotColor: "bg-[#00C853]",
-        text: hasCloudWatchConnected && !hasNativeWatchConnected
-          ? tx(
-              "Reloj conectado por nube · recibiendo pulso en vivo.",
-              "Watch connected via cloud · receiving live pulse."
-            )
-          : tx(
-              "Reloj conectado · recibiendo pulso en vivo.",
-              "Watch connected · receiving live pulse."
-            )
-      };
-    }
-    if (isBleStrapConnected && status.currentBpm >= 30) {
-      return {
-        dotColor: "bg-[#00C853]",
-        text: tx(
-          "Banda Bluetooth conectada · recibiendo pulso en vivo.",
-          "Bluetooth band connected · receiving live pulse."
-        )
+        text: tx("En vivo", "Live")
       };
     }
     if (status.contactDetected === false) {
       return {
         dotColor: "bg-[#FFE500]",
-        text: tx(
-          "Ajusta el reloj o banda sobre la piel para leer el pulso.",
-          "Adjust the watch or band against your skin to read pulse."
-        )
+        text: tx("Ajusta sobre la piel", "Adjust against skin")
       };
     }
     if (isWatchWarmingUp) {
       return {
-        dotColor: "bg-[#00BFFF]",
-        text: tx(
-          "Reloj sincronizado · activando sensor óptico en tu muñeca.",
-          "Watch synced · activating optical sensor on your wrist."
-        )
+        dotColor: "bg-[#00A8F3]",
+        text: tx("Midiendo pulso", "Measuring pulse")
       };
     }
     if (status.errorCode === "WEAR_HR_PERMISSION_DENIED") {
       return {
         dotColor: "bg-[#FF1E1E]",
-        text: tx(
-          "Permite el sensor de pulso en la app del reloj.",
-          "Allow the heart rate sensor in the watch app."
-        )
+        text: tx("Permite pulso en reloj", "Allow pulse on watch")
       };
     }
     if (status.errorCode === "WEAR_HR_NO_SENSOR") {
       return {
         dotColor: "bg-[#FF1E1E]",
-        text: tx(
-          "El reloj conectado no reporta sensor de pulso disponible.",
-          "Connected watch reports no available pulse sensor."
-        )
+        text: tx("Sin sensor disponible", "No sensor available")
       };
     }
     if (status.errorCode === "PERMISSION_DENIED") {
       return {
         dotColor: "bg-[#FF1E1E]",
-        text: tx(
-          "Permite el acceso a Bluetooth en Ajustes del teléfono.",
-          "Allow Bluetooth access in phone Settings."
-        )
+        text: tx("Permite Bluetooth", "Allow Bluetooth")
       };
     }
     if (status.errorCode === "LOCATION_SERVICES_OFF") {
       return {
         dotColor: "bg-[#FFE500]",
-        text: tx(
-          "Activa la Ubicación del teléfono para detectar bandas.",
-          "Turn on phone Location to detect bands."
-        )
+        text: tx("Activa Ubicación", "Turn on Location")
       };
     }
     if (status.errorCode === "HR_BROADCAST_NOT_ENABLED") {
       return {
         dotColor: "bg-[#FFE500]",
-        text: tx(
-          "Activa Transmitir pulso en los ajustes de tu banda.",
-          "Enable Broadcast heart rate in your band settings."
-        )
+        text: tx("Activa transmitir pulso", "Enable HR broadcast")
       };
     }
-    if (isWatchSyncInFlight || isWatchReachable) {
+    if (isScanning) {
       return {
-        dotColor: "bg-[#00BFFF]",
-        text: tx(
-          "Reloj vinculado · abre ARCHERY 101010 en la muñeca para leer pulso.",
-          "Watch linked · open ARCHERY 101010 on wrist to read pulse."
-        )
+        dotColor: "bg-[#00A8F3]",
+        text: t("bleHrScanning")
+      };
+    }
+    if (isWatchSyncInFlight || isConnecting) {
+      return {
+        dotColor: "bg-[#00A8F3]",
+        text: tx("Sincronizando", "Syncing")
+      };
+    }
+    if (isWatchReachable) {
+      return {
+        dotColor: "bg-[#00A8F3]",
+        text: tx("Reloj vinculado", "Watch linked")
       };
     }
     return {
-      dotColor: "bg-[#8E96A4]",
-      text: tx(
-        "Sin vínculo activo · sincroniza tu reloj arriba o conecta una banda.",
-        "No active link · sync your watch above or connect a band."
-      )
+      dotColor: "bg-[#00A8F3]",
+      text: tx("En espera", "Standby")
     };
   })();
 
@@ -405,15 +370,15 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
       ref={dialogRef}
       {...({ closedby: "any" } as any)}
       aria-labelledby={titleId}
-      className="m-auto w-[calc(100vw-14px)] max-w-[420px] max-h-[94dvh] p-0 bg-transparent border-0 text-white font-sans overflow-y-auto overscroll-contain outline-none open:block"
+      className="m-auto w-[calc(100vw-16px)] max-w-[412px] max-h-[94dvh] p-0 bg-transparent border-0 text-white font-sans overflow-y-auto overscroll-contain outline-none open:block"
     >
       <div
         dir={isEs ? "ltr" : undefined}
-        className="w-full bg-[#04060A] border border-white/[0.15] rounded-[28px] p-4 sm:p-5 flex flex-col gap-3.5 relative select-none font-sans"
+        className="w-full bg-[#06080C] border border-white/[0.12] rounded-[28px] p-4 sm:p-5 flex flex-col gap-3.5 relative select-none font-sans"
       >
         {/* Top 101010 tricolor line */}
         <div
-          className="absolute top-0 left-12 right-12 h-[2.5px]"
+          className="absolute top-0 left-12 right-12 h-[2px]"
           style={{
             background:
               "linear-gradient(90deg, transparent, #00A8F3 25%, #FF1E1E 50%, #FFE500 75%, transparent)"
@@ -422,39 +387,27 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
 
         {/* Single-Line Brand Header */}
         <div className="w-full flex items-center justify-between gap-2">
-          <div dir="ltr" className="flex items-center gap-2 min-w-0">
+          <div dir="ltr" className="flex items-center gap-2.5 min-w-0">
             <img
               src="/images/brand_logo_header.png"
               srcSet="/images/brand_logo_header.png 1x, /images/brand_logo_full.png 2x"
               alt="ARCHERY 101010"
-              className={`${
-                isEs ? "h-[12.5px] min-[385px]:h-[13.5px]" : "h-[11px] min-[385px]:h-[12.5px]"
-              } w-auto object-contain shrink-0 select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]`}
+              className="h-[13.5px] sm:h-[14px] w-auto object-contain shrink-0 select-none pointer-events-none [image-rendering:-webkit-optimize-contrast]"
               draggable={false}
             />
             <span
-              className={`inline-flex items-center gap-1.5 rounded-full min-h-[25px] px-2.5 py-0.5 border text-[10px] min-[385px]:text-[10.8px] font-bold tracking-[0.04em] uppercase leading-tight ${
-                isEs ? "shrink-0 whitespace-nowrap" : "min-w-0"
-              } tabular-nums ${
+              className={`inline-flex items-center gap-1.5 rounded-full min-h-[26px] px-2.5 py-0.5 border text-[10.5px] font-bold tracking-[0.06em] uppercase leading-tight tabular-nums ${
                 isConnected
                   ? "bg-[#051810] border-[#00C853]/65 text-white"
-                  : isScanning || isConnecting || isWatchSyncInFlight || isWatchWarmingUp
-                  ? "bg-[#05121E] border-[#00BFFF]/65 text-white"
-                  : "bg-[#0B0E15] border-white/[0.16] text-white"
+                  : "bg-[#0B0F17] border-[#00A8F3]/45 text-white"
               }`}
             >
               <span
                 className={`w-[6px] h-[6px] rounded-full shrink-0 ${
-                  isConnected
-                    ? "bg-[#00C853]"
-                    : isScanning || isConnecting || isWatchSyncInFlight || isWatchWarmingUp
-                    ? "bg-[#00BFFF]"
-                    : "bg-[#8E96A4]"
+                  isConnected ? "bg-[#00C853]" : "bg-[#00A8F3]"
                 }`}
               />
-              <span className={isEs ? undefined : "max-w-[128px] break-words leading-tight"}>
-                {statusBadgeText}
-              </span>
+              <span>{isConnected ? statusBadgeText : tx("PULSO", "PULSE")}</span>
             </span>
           </div>
 
@@ -462,34 +415,31 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
             type="button"
             onClick={handleCloseClick}
             aria-label={tx("Cerrar sensor de pulso", "Close heart rate sensor")}
-            className="min-w-[40px] min-h-[40px] w-10 h-10 rounded-full bg-[#10131B] border border-white/[0.16] text-white flex items-center justify-center hover:bg-white/10 transition cursor-pointer shrink-0"
+            className="min-w-[38px] min-h-[38px] w-[38px] h-[38px] rounded-full bg-[#0E121B] border border-white/[0.12] text-white flex items-center justify-center hover:bg-white/10 transition cursor-pointer shrink-0"
           >
-            <X size={18} aria-hidden="true" />
+            <X size={17} aria-hidden="true" />
           </button>
         </div>
 
-        {/* Title Block */}
-        <h2
-          id={titleId}
-          className="text-[22px] sm:text-[24px] font-bold text-white tracking-normal leading-tight"
-        >
-          {t("bleHrTitle")}
-        </h2>
-
-        {/* Matte Titanium Live Heart Rate Telemetry Chassis */}
-        <div className="bg-[#0B0E15] border border-white/[0.14] rounded-[22px] p-3.5 sm:p-4 flex flex-col gap-2.5">
+        {/* Hero Pulse Readout Card */}
+        <div className="bg-[#0A0D14] border border-white/[0.10] rounded-[22px] p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[13px] font-extrabold tracking-[0.07em] uppercase text-white">
+            <h2
+              id={titleId}
+              className="text-[11.5px] font-extrabold tracking-[0.08em] uppercase text-white leading-tight"
+            >
               {t("cardHeartRate")}
-            </span>
-            <div className="flex items-center gap-2 min-w-0">
-              {status.deviceName && (
-                <span className="text-[12.5px] font-bold text-[#00BFFF] break-words leading-tight max-w-[175px] tabular-nums">
-                  {status.deviceName}
-                </span>
-              )}
+            </h2>
+            <div
+              role="status"
+              className="inline-flex items-center gap-1.5 min-w-0"
+            >
+              <span className={`w-[6px] h-[6px] rounded-full shrink-0 ${diagnostic.dotColor}`} />
+              <span className="text-[12px] font-semibold text-white leading-tight break-words">
+                {status.deviceName && isConnected ? status.deviceName : diagnostic.text}
+              </span>
               {typeof status.batteryPct === "number" && (
-                <span className="text-[12px] font-bold text-white bg-[#121621] border border-white/[0.16] px-2 py-0.5 rounded-lg tabular-nums shrink-0">
+                <span className="text-[11px] font-bold text-white bg-[#121621] border border-white/[0.14] px-1.5 py-0.5 rounded-md tabular-nums shrink-0">
                   {status.batteryPct}%
                 </span>
               )}
@@ -498,284 +448,222 @@ export default function BleHeartRateModal({ isOpen, userUid, onClose }: BleHeart
 
           <div
             className={`grid ${
-              isEs ? "grid-cols-[1.05fr_1fr_1fr]" : "grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)]"
-            } gap-2.5 items-center pt-0.5`}
+              isEs ? "grid-cols-[1.15fr_1fr_1fr]" : "grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)]"
+            } gap-2.5 items-center`}
           >
-            <div dir="ltr" className="flex items-baseline gap-1.5">
-              <span
-                className={`font-sans ${
-                  isEs ? "text-[42px]" : "text-[36px] min-[385px]:text-[42px]"
-                } font-extrabold leading-none text-white tabular-nums`}
-              >
-                {isConnected && status.currentBpm >= 30 ? status.currentBpm : "—"}
+            <div dir="ltr" className="flex items-baseline gap-2 pl-0.5">
+              <span className="font-sans text-[42px] font-extrabold leading-none tracking-[0.04em] text-white tabular-nums">
+                {isConnected && status.currentBpm >= 30 ? status.currentBpm : "--"}
               </span>
-              <span className="text-[14px] font-extrabold uppercase tracking-wider text-[#FF1E1E]">
+              <span className="text-[13px] font-extrabold uppercase tracking-[0.06em] text-[#FF1E1E]">
                 BPM
               </span>
             </div>
 
-            <div
-              className={`bg-[#05070B] border border-white/[0.13] rounded-2xl px-2.5 py-2 text-center flex flex-col justify-center gap-0.5 min-h-[58px]${
-                isEs ? "" : " min-w-0"
-              }`}
-            >
-              <span
-                className={
-                  isEs
-                    ? "text-[11px] font-bold tracking-[0.06em] uppercase text-white block"
-                    : "break-words leading-tight w-full text-center text-[10px] min-[385px]:text-[11px] font-bold tracking-[0.06em] uppercase text-white block"
-                }
-              >
+            <div className="bg-[#06080C] border border-white/[0.10] rounded-2xl px-2 py-2.5 text-center flex flex-col justify-center gap-0.5 min-h-[58px] min-w-0">
+              <span className="text-[10px] font-bold tracking-[0.07em] uppercase text-white leading-tight break-words block">
                 {isEs ? tx("PROMEDIO", "AVERAGE") : t("cardAverage")}
               </span>
-              <span className="text-[17px] font-extrabold text-white tabular-nums leading-tight block">
-                {status.avgHeartRateBpm >= 30 ? status.avgHeartRateBpm : "—"}
+              <span className="text-[18px] font-extrabold tracking-[0.04em] text-white tabular-nums leading-tight block">
+                {status.avgHeartRateBpm >= 30 ? status.avgHeartRateBpm : "--"}
               </span>
             </div>
 
-            <div
-              className={`bg-[#05070B] border border-white/[0.13] rounded-2xl px-2.5 py-2 text-center flex flex-col justify-center gap-0.5 min-h-[58px]${
-                isEs ? "" : " min-w-0"
-              }`}
-            >
-              <span
-                className={
-                  isEs
-                    ? "text-[11px] font-bold tracking-[0.06em] uppercase text-white block"
-                    : "break-words leading-tight w-full text-center text-[10px] min-[385px]:text-[11px] font-bold tracking-[0.06em] uppercase text-white block"
-                }
-              >
+            <div className="bg-[#06080C] border border-white/[0.10] rounded-2xl px-2 py-2.5 text-center flex flex-col justify-center gap-0.5 min-h-[58px] min-w-0">
+              <span className="text-[10px] font-bold tracking-[0.07em] uppercase text-white leading-tight break-words block">
                 {tx("MÁXIMO", "PEAK")}
               </span>
-              <span className="text-[17px] font-extrabold text-[#FFE500] tabular-nums leading-tight block">
-                {status.maxHeartRateBpm >= 30 ? status.maxHeartRateBpm : "—"}
+              <span className="text-[18px] font-extrabold tracking-[0.04em] text-[#FFE500] tabular-nums leading-tight block">
+                {status.maxHeartRateBpm >= 30 ? status.maxHeartRateBpm : "--"}
               </span>
             </div>
-          </div>
-
-          {/* Clear 1-Line Live Diagnostic Bar */}
-          <div
-            role="status"
-            className="bg-[#06080D] border border-white/[0.10] rounded-xl px-3 py-2 flex items-center gap-2"
-          >
-            <span className={`w-2 h-2 rounded-full shrink-0 ${diagnostic.dotColor}`} />
-            <span className="text-[12.5px] font-semibold text-white leading-snug break-words">
-              {diagnostic.text}
-            </span>
           </div>
         </div>
 
-        {/* BLOCK 1: DEDICATED LINKED WATCH SECTION (ARCHERY 101010 WATCH APP) */}
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[12px] font-extrabold uppercase tracking-[0.08em] text-[#00BFFF] px-0.5">
-            {tx("1 · RELOJ VINCULADO (ARCHERY 101010)", "1 · LINKED WATCH (ARCHERY 101010)")}
-          </span>
-          <div className="bg-[#0B0E15] border border-white/[0.14] rounded-2xl px-3.5 py-3 flex flex-col gap-2.5">
-            <div className="flex items-center justify-between gap-2.5">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-[#07131F] border border-[#00BFFF]/40 flex items-center justify-center shrink-0">
-                  <Watch size={17} className="text-[#00BFFF]" aria-hidden="true" />
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[14.5px] font-bold text-white leading-tight break-words">
-                    {tx("Reloj Inteligente", "Smartwatch")}
-                  </span>
-                  <span
-                    className={`text-[11.5px] font-bold uppercase tracking-wider leading-tight break-words mt-0.5 tabular-nums ${
-                      isWearConnected
-                        ? "text-[#00C853]"
-                        : isWatchReachable
-                        ? "text-[#00BFFF]"
-                        : "text-[#94A3B8]"
-                    }`}
-                  >
-                    {isWearConnected
-                      ? `${tx("● En vivo", "● Live")} · ${status.currentBpm} BPM`
-                      : hasNativeWatchConnected && isWatchWarmingUp
-                      ? tx("● Conectado por Bluetooth · Midiendo", "● Connected via Bluetooth · Measuring")
-                      : hasNativeWatchConnected
-                      ? tx("● Conectado por Bluetooth", "● Connected via Bluetooth")
-                      : hasCloudWatchConnected
-                      ? tx("● Conectado por código", "● Connected via code")
-                      : cloudStatus.pairingCode
-                      ? `${tx("Código activo", "Active code")}: ${cloudStatus.pairingCode.slice(0, 3)} ${cloudStatus.pairingCode.slice(3)}`
-                      : tx("App del reloj", "Watch app")}
-                  </span>
-                </div>
+        {/* Option 1: Smartwatch Card */}
+        <div className="bg-[#0A0D14] border border-white/[0.10] rounded-[22px] p-3.5 flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-[42px] h-[42px] rounded-[14px] bg-[#07121E] border border-[#00A8F3]/40 flex items-center justify-center shrink-0">
+                <Watch size={20} className="text-[#00A8F3]" aria-hidden="true" />
               </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[16px] font-bold text-white leading-tight break-words">
+                  {tx("Reloj Inteligente", "Smartwatch")}
+                </span>
+                <span
+                  className={`text-[12.5px] font-medium leading-tight break-words mt-0.5 tabular-nums ${
+                    isWearConnected
+                      ? "text-[#00C853]"
+                      : isWatchReachable
+                      ? "text-[#00A8F3]"
+                      : "text-[#CBD5E1]"
+                  }`}
+                >
+                  {isWearConnected
+                    ? `${tx("● En vivo", "● Live")} · ${status.currentBpm} BPM`
+                    : hasNativeWatchConnected && isWatchWarmingUp
+                    ? tx("Midiendo en muñeca", "Measuring on wrist")
+                    : isWatchReachable
+                    ? tx("Conectado", "Connected")
+                    : tx("Sensor de muñeca", "Wrist sensor")}
+                </span>
+              </div>
+            </div>
 
+            <button
+              type="button"
+              disabled={isWatchSyncInFlight}
+              onClick={handleSyncWatchPulseClick}
+              className={`min-h-[40px] px-3.5 rounded-[13px] font-extrabold text-[12px] uppercase tracking-[0.05em] shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-65 ${
+                isWearConnected
+                  ? "bg-[#051810] border border-[#00C853]/65 text-white"
+                  : "bg-[#00A8F3] hover:brightness-105 text-[#020305]"
+              }`}
+            >
+              {isWearConnected
+                ? tx("En vivo", "Live")
+                : isWatchSyncInFlight
+                ? tx("Sincronizando", "Syncing")
+                : isWatchWarmingUp
+                ? tx("Reintentar", "Retry")
+                : tx("Sincronizar", "Sync")}
+            </button>
+          </div>
+
+          {!isWearConnected && cloudStatus.pairingCode && (
+            <div className="bg-[#06080C] border border-white/[0.09] rounded-[15px] px-3 py-2.5 flex items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="text-[10.5px] font-bold uppercase tracking-[0.07em] text-white shrink-0">
+                  {tx("CÓDIGO", "CODE")}
+                </span>
+                <span
+                  dir="ltr"
+                  className="text-[19px] font-extrabold tracking-[0.12em] text-[#FFE500] tabular-nums leading-none"
+                >
+                  {`${cloudStatus.pairingCode.slice(0, 3)} ${cloudStatus.pairingCode.slice(3)}`}
+                </span>
+              </div>
               <button
                 type="button"
                 disabled={isWatchSyncInFlight}
-                onClick={handleSyncWatchPulseClick}
-                className={`min-h-[40px] px-3.5 rounded-xl font-bold text-[12.5px] uppercase tracking-wider shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-65 ${
-                  isWearConnected
-                    ? "bg-[#051810] border border-[#00C853]/65 text-white"
-                    : "bg-[#00BFFF] hover:brightness-105 text-black"
-                }`}
+                onClick={handleRefreshPairingCodeClick}
+                className="min-h-[30px] px-2.5 rounded-[9px] bg-[#10141E] border border-white/[0.14] text-white text-[11px] font-bold uppercase tracking-[0.05em] inline-flex items-center gap-1 shrink-0 cursor-pointer hover:bg-white/10 transition disabled:opacity-60"
               >
-                {isWearConnected
-                  ? tx("En vivo", "Live")
-                  : isWatchSyncInFlight
-                  ? tx("Sincronizando", "Syncing")
-                  : isWatchWarmingUp
-                  ? tx("Reintentar", "Retry")
-                  : tx("Sincronizar", "Sync")}
-              </button>
-            </div>
-
-            {!isWearConnected && cloudStatus.pairingCode && (
-              <div className="bg-[#06080D] border border-white/[0.11] rounded-xl px-3 py-2 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#94A3B8] leading-tight break-words">
-                      {tx(
-                        "Código para pantalla VINCULAR (pantalla 5) del reloj",
-                        "Code for watch LINK screen (screen 5)"
-                      )}
-                    </span>
-                    <span
-                      dir="ltr"
-                      className="text-[18px] font-extrabold tracking-[0.14em] text-[#FFE500] tabular-nums leading-tight mt-0.5"
-                    >
-                      {`${cloudStatus.pairingCode.slice(0, 3)} ${cloudStatus.pairingCode.slice(3)}`}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={isWatchSyncInFlight}
-                    onClick={handleRefreshPairingCodeClick}
-                    className="min-h-[34px] px-2.5 rounded-lg bg-[#11151F] border border-white/[0.14] text-white text-[11.5px] font-bold uppercase tracking-wider shrink-0 cursor-pointer hover:bg-white/10 transition disabled:opacity-60"
-                  >
-                    {tx("Nuevo", "New")}
-                  </button>
-                </div>
-                <span className="text-[11px] font-medium text-[#CBD5E1] leading-snug break-words">
-                  {tx(
-                    "Con la app compañera Bluetooth activa en tu teléfono, abre ARCHERY 101010 en tu Reloj Deportivo GPS o Reloj Inteligente e ingresa este código.",
-                    "With the Bluetooth companion app active on your phone, open ARCHERY 101010 on your GPS Sports Watch or Smartwatch and enter this code."
-                  )}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* BLOCK 2: DEDICATED BLUETOOTH CHEST STRAPS & ARMBANDS SECTION */}
-        {status.transport === "native_android" && !isBleStrapConnected && (
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between px-0.5 gap-2">
-              <span className="text-[12px] font-extrabold uppercase tracking-[0.08em] text-white">
-                {tx("2 · BANDAS Y SENSORES BLUETOOTH", "2 · BLUETOOTH BANDS & SENSORS")}
-              </span>
-              <span className="text-[12px] font-bold text-[#94A3B8] tabular-nums shrink-0">
-                {isScanning
-                  ? t("bleHrScanning")
-                  : `${bleStrapDevices.length} ${tx("disp.", "dev.")}`}
-              </span>
-            </div>
-
-            {bleStrapDevices.length === 0 ? (
-              <div className="bg-[#090C12] border border-white/[0.11] rounded-2xl px-3.5 py-3 text-center text-[13.5px] font-medium text-[#CBD5E1] leading-snug">
-                {isScanning
-                  ? tx(
-                      "Buscando bandas pectorales o brazaletes Bluetooth",
-                      "Scanning for Bluetooth chest straps or armbands"
-                    )
-                  : tx(
-                      "Exclusivo para bandas pectorales o brazaletes con pulso Bluetooth.",
-                      "For Bluetooth chest straps or heart rate armbands only."
-                    )}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2 max-h-[168px] overflow-y-auto pr-0.5">
-                {bleStrapDevices.map((dev) => {
-                  const isThisConnecting = isConnecting && status.deviceId === dev.id;
-                  return (
-                    <div
-                      key={dev.id}
-                      className="bg-[#0B0E15] border border-white/[0.14] rounded-2xl px-3.5 py-2.5 flex items-center justify-between gap-2.5"
-                    >
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-[15px] font-bold text-white break-words leading-tight">
-                          {dev.name}
-                        </span>
-                        <div className={`flex items-center gap-1.5 mt-0.5${isEs ? "" : " min-w-0"}`}>
-                          {dev.hasHrService ? (
-                            <span className="text-[11.5px] font-bold uppercase tracking-wider text-[#00C853]">
-                              {tx("● PULSO ACTIVO", "● HR READY")}
-                            </span>
-                          ) : (
-                            <span className="text-[11.5px] font-bold uppercase tracking-wider text-[#94A3B8]">
-                              BLUETOOTH LE
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        disabled={isThisConnecting}
-                        onClick={() => connectBleHeartRateDevice(dev.id, dev.name)}
-                        className={`min-h-[40px] px-3.5 rounded-xl bg-[#141925] border border-white/[0.16] hover:border-[#00BFFF]/60 text-white font-bold text-[13px] uppercase tracking-wider shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-60${
-                          isEs ? "" : " max-w-[132px] break-words leading-tight"
-                        }`}
-                      >
-                        {isThisConnecting ? tx("Conectando", "Connecting") : t("bleHrConnect")}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Footer Actions — 100% In-App */}
-        <div className="flex items-center gap-2.5 pt-0.5">
-          {isConnected ? (
-            <>
-              <button
-                type="button"
-                onClick={() => disconnectBleHeartRateDevice(true)}
-                className="flex-1 min-h-[50px] rounded-2xl bg-[#180709] border border-[#FF1E1E]/65 text-white font-bold text-[14.5px] uppercase tracking-wider cursor-pointer active:scale-[0.99] transition"
-              >
-                {t("bleHrDisconnect")}
-              </button>
-              <button
-                type="button"
-                onClick={handleCloseClick}
-                className="flex-1 min-h-[50px] rounded-2xl bg-[#00BFFF] hover:brightness-105 text-black font-bold text-[15px] uppercase tracking-wider cursor-pointer active:scale-[0.99] transition"
-              >
-                {tx("Listo", "Done")}
-              </button>
-            </>
-          ) : (
-            <div className="w-full flex items-center gap-2.5">
-              {Boolean(status.deviceId) &&
-                status.source === "ble" &&
-                (isReconnecting || isExplicitConnecting) && (
-                  <button
-                    type="button"
-                    onClick={() => disconnectBleHeartRateDevice(true)}
-                    className="min-h-[50px] px-4 rounded-2xl bg-[#180709] border border-[#FF1E1E]/65 text-white font-bold text-[13.5px] uppercase tracking-wider shrink-0 cursor-pointer active:scale-[0.99] transition"
-                  >
-                    {tx("Olvidar", "Forget")}
-                  </button>
-                )}
-              <button
-                type="button"
-                disabled={isExplicitConnecting || isScanning}
-                onClick={handleScanOrPairClick}
-                className="flex-1 min-h-[50px] rounded-2xl bg-[#141925] border border-white/[0.16] hover:border-[#00BFFF]/55 text-white font-bold text-[14.5px] uppercase tracking-[0.04em] cursor-pointer active:scale-[0.99] transition disabled:opacity-60"
-              >
-                {isScanning
-                  ? t("bleHrScanning")
-                  : tx("Buscar banda Bluetooth", "Scan Bluetooth band")}
+                <RotateCcw size={11} aria-hidden="true" />
+                <span>{tx("Nuevo", "New")}</span>
               </button>
             </div>
           )}
         </div>
+
+        {/* Option 2: Bluetooth Card */}
+        <div className="bg-[#0A0D14] border border-white/[0.10] rounded-[22px] p-3.5 flex flex-col gap-2.5">
+          <div className="flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-[42px] h-[42px] rounded-[14px] bg-[#0E121B] border border-white/[0.14] flex items-center justify-center shrink-0">
+                <Activity size={20} className="text-white" aria-hidden="true" />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[16px] font-bold text-white leading-tight break-words">
+                  Bluetooth
+                </span>
+                {isBleStrapConnected && status.deviceName && (
+                  <span className="text-[12px] font-semibold text-[#00C853] leading-tight break-words mt-0.5">
+                    {status.deviceName}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {isBleStrapConnected ? (
+              <button
+                type="button"
+                onClick={() => disconnectBleHeartRateDevice(true)}
+                className="min-h-[40px] px-3.5 rounded-[13px] bg-[#180709] border border-[#FF1E1E]/65 text-white font-extrabold text-[12px] uppercase tracking-[0.05em] shrink-0 cursor-pointer active:scale-95 transition"
+              >
+                {t("bleHrDisconnect")}
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 shrink-0">
+                {Boolean(status.deviceId) &&
+                  status.source === "ble" &&
+                  (isReconnecting || isExplicitConnecting) && (
+                    <button
+                      type="button"
+                      onClick={() => disconnectBleHeartRateDevice(true)}
+                      className="min-h-[40px] px-3 rounded-[13px] bg-[#180709] border border-[#FF1E1E]/65 text-white font-extrabold text-[11.5px] uppercase tracking-[0.04em] cursor-pointer active:scale-95 transition"
+                    >
+                      {tx("Olvidar", "Forget")}
+                    </button>
+                  )}
+                <button
+                  type="button"
+                  disabled={isExplicitConnecting || isScanning}
+                  onClick={handleScanOrPairClick}
+                  className="min-h-[40px] px-4 rounded-[13px] bg-[#121722] border border-white/[0.16] hover:border-[#00A8F3]/55 text-white font-extrabold text-[12px] uppercase tracking-[0.05em] cursor-pointer active:scale-95 transition disabled:opacity-60"
+                >
+                  {isScanning ? t("bleHrScanning") : tx("Buscar", "Scan")}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {!isBleStrapConnected && bleStrapDevices.length > 0 && (
+            <div className="flex flex-col gap-2 max-h-[156px] overflow-y-auto pt-0.5 pr-0.5">
+              {bleStrapDevices.map((dev) => {
+                const isThisConnecting = isConnecting && status.deviceId === dev.id;
+                return (
+                  <div
+                    key={dev.id}
+                    className="bg-[#06080C] border border-white/[0.10] rounded-2xl px-3 py-2.5 flex items-center justify-between gap-2.5"
+                  >
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[14.5px] font-bold text-white break-words leading-tight">
+                        {dev.name}
+                      </span>
+                      <span
+                        className={`text-[11px] font-bold uppercase tracking-wider mt-0.5 ${
+                          dev.hasHrService ? "text-[#00C853]" : "text-[#94A3B8]"
+                        }`}
+                      >
+                        {dev.hasHrService ? tx("● PULSO ACTIVO", "● HR READY") : "BLUETOOTH LE"}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isThisConnecting}
+                      onClick={() => connectBleHeartRateDevice(dev.id, dev.name)}
+                      className="min-h-[36px] px-3 rounded-xl bg-[#141925] border border-white/[0.16] hover:border-[#00A8F3]/60 text-white font-bold text-[12px] uppercase tracking-wider shrink-0 cursor-pointer active:scale-95 transition disabled:opacity-60"
+                    >
+                      {isThisConnecting ? tx("Conectando", "Connecting") : t("bleHrConnect")}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {isWearConnected && (
+          <div className="flex items-center gap-2.5 pt-0.5">
+            <button
+              type="button"
+              onClick={() => disconnectBleHeartRateDevice(true)}
+              className="flex-1 min-h-[46px] rounded-2xl bg-[#180709] border border-[#FF1E1E]/65 text-white font-bold text-[13.5px] uppercase tracking-wider cursor-pointer active:scale-[0.99] transition"
+            >
+              {t("bleHrDisconnect")}
+            </button>
+            <button
+              type="button"
+              onClick={handleCloseClick}
+              className="flex-1 min-h-[46px] rounded-2xl bg-[#00A8F3] hover:brightness-105 text-[#020305] font-extrabold text-[14px] uppercase tracking-wider cursor-pointer active:scale-[0.99] transition"
+            >
+              {tx("Listo", "Done")}
+            </button>
+          </div>
+        )}
       </div>
     </dialog>
   );

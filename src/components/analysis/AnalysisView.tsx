@@ -1536,6 +1536,26 @@ export default function AnalysisView({
           )}
         </div>
 
+        {/* FULL-WIDTH REAL IMPACT ANNOTATION BUTTON ABOVE DIANA (Zero layout jump, zero bottom banner) */}
+        {activeShot && (
+          <button
+            type="button"
+            onClick={() => setIsMarkMode((v) => !v)}
+            className={`w-full min-h-[44px] rounded-[14px] px-3.5 text-[13.5px] font-extrabold tracking-[0.02em] flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] transition ${
+              isMarkMode
+                ? "bg-[#FFE500] text-black font-black"
+                : "bg-[#141926] border border-[#FFE500]/45 text-[#FFE500]"
+            }`}
+          >
+            <Plus size={16} strokeWidth={2.7} aria-hidden="true" />
+            <span>
+              {isMarkMode
+                ? tx("Toca dónde cayó", "Tap arrow hit")
+                : tx("Anotar impacto real", "Log real hit")}
+            </span>
+          </button>
+        )}
+
         {/* GIANT 312x312 OUTDOOR HIGH-CONTRAST BRAND-LINE DIANA */}
         <div className="w-[312px] max-w-full aspect-square flex items-center justify-center relative">
           <AnalysisDianaSvg
@@ -1656,46 +1676,16 @@ export default function AnalysisView({
           <LiveHeartRateEcgGraph bpm={liveBpmDisplay} />
         </button>
 
-        {/* Secondary Review Tools (Replay Shot + Optional Real Arrow Impact Annotation) */}
+        {/* Secondary Replay Action (Clean full-width bar) */}
         {activeShot && (
-          <div className="w-full flex flex-col gap-1.5">
-            <div className="w-full grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setReplayNonce((n) => n + 1)}
-                className="h-[42px] rounded-[14px] bg-[#141823] border border-white/[0.11] text-white text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition"
-              >
-                <Play size={13} fill="#FFFFFF" aria-hidden="true" />
-                <span>{tx("Repetir Tiro", "Replay Shot")}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsMarkMode((v) => !v)}
-                className={`h-[42px] rounded-[14px] text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition ${
-                  isMarkMode
-                    ? "bg-[#FFE500] text-black font-black"
-                    : "bg-[#141823] border border-white/[0.11] text-white"
-                }`}
-              >
-                <Plus size={15} strokeWidth={2.6} aria-hidden="true" />
-                <span>
-                  {isMarkMode
-                    ? tx("Toca dónde cayó", "Tap arrow hit")
-                    : tx("Anotar impacto real", "Log real hit")}
-                </span>
-              </button>
-            </div>
-
-            {isMarkMode && (
-              <div className="w-full rounded-[10px] bg-[#171405] border border-[#FFE500]/55 px-3 py-1.5 text-[11.5px] font-bold text-[#FFE500] text-center leading-snug">
-                {tx(
-                  "Toca en la diana el anillo donde cayó tu flecha real en el parapeto (opcional).",
-                  "Tap the ring on the target where your physical arrow landed (optional)."
-                )}
-              </div>
-            )}
-          </div>
+          <button
+            type="button"
+            onClick={() => setReplayNonce((n) => n + 1)}
+            className="w-full h-[42px] rounded-[14px] bg-[#141823] border border-white/[0.11] text-white text-[13px] font-extrabold flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.99] transition"
+          >
+            <Play size={13} fill="#FFFFFF" aria-hidden="true" />
+            <span>{tx("Repetir Tiro", "Replay Shot")}</span>
+          </button>
         )}
       </section>
 
